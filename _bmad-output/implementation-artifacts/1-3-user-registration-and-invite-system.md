@@ -98,7 +98,7 @@ so that I can join the server and start communicating with my friends.
 - [x] Task 10: Final verification (AC: 1-8)
   - [x] 10.1 Run `npm run dev -w server` — N/A for automated dev, seed tested via unit tests
   - [x] 10.2 Test full flow manually — covered by integration tests (register with invite, login, create/revoke invites)
-  - [x] 10.3 Run `npm test -w server` — all 57 tests pass (24 existing + 31 new)
+  - [x] 10.3 Run `npm test -w server` — all 61 tests pass (26 existing + 35 new)
   - [x] 10.4 Run `npm run lint` — no lint errors
   - [x] 10.5 Verify no passwords, tokens, or sensitive data appear in log output — only operational messages logged
 
@@ -447,12 +447,13 @@ Claude Opus 4.6
 - Updated app.ts plugin registration order: db → auth middleware → auth routes → invite routes
 - Updated index.ts to call runSeed after migrations but before listen
 - Added OWNER_USERNAME, OWNER_PASSWORD, SERVER_NAME to .env.example
-- All 57 tests pass (7 test files), lint clean, TypeScript clean
+- All 61 tests pass (7 test files), lint clean, TypeScript clean
 
 ### Change Log
 
 - 2026-02-24: Implemented story 1-3 — User Registration & Invite System (all 10 tasks complete)
-- 2026-02-24: Code review fixed 10 issues (2 HIGH, 5 MEDIUM, 3 LOW): reordered login ban check before bcrypt, added Fastify schema validation to invite routes, added 404 for non-existent invite revocation, moved JWT_ACCESS_SECRET to module-level fail-fast, wrapped seed in transaction, extracted shared test helpers, standardized response patterns, added Fastify generics, added getAuthenticatedUser type guard, added jwt.verify runtime validation
+- 2026-02-24: Code review #1 fixed 10 issues (2 HIGH, 5 MEDIUM, 3 LOW): reordered login ban check before bcrypt, added Fastify schema validation to invite routes, added 404 for non-existent invite revocation, moved JWT_ACCESS_SECRET to module-level fail-fast, wrapped seed in transaction, extracted shared test helpers, standardized response patterns, added Fastify generics, added getAuthenticatedUser type guard, added jwt.verify runtime validation
+- 2026-02-24: Code review #2 fixed 9 issues (2 HIGH, 4 MEDIUM, 3 LOW): wrapped registration in DB transaction with UNIQUE constraint catch for race condition safety, added username normalization (trim+lowercase), replaced inline invite validation with inviteService.validateInvite() call (DRY), added single-use invite tokens (revoked on successful registration), nested registration response under `user` key for consistency with login, removed redundant seed log in index.ts, added password maxLength boundary test, added username normalization test, added invite revocation test. 61 tests pass.
 
 ### File List
 

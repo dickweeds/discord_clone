@@ -8,7 +8,8 @@ vi.stubEnv('DATABASE_PATH', ':memory:');
 
 import { setupApp, seedOwner, seedInvite } from '../../test/helpers.js';
 import { hashPassword } from './authService.js';
-import { users, bans } from '../../db/schema.js';
+import { users, bans, invites } from '../../db/schema.js';
+import { eq } from 'drizzle-orm';
 
 describe('authRoutes', () => {
   let app: FastifyInstance;
@@ -35,10 +36,64 @@ describe('authRoutes', () => {
 
       expect(response.statusCode).toBe(201);
       const body = response.json();
-      expect(body.data.username).toBe('jordan');
-      expect(body.data.role).toBe('user');
-      expect(body.data.id).toBeDefined();
-      expect(body.data.createdAt).toBeDefined();
+      expect(body.data.user.username).toBe('jordan');
+      expect(body.data.user.role).toBe('user');
+      expect(body.data.user.id).toBeDefined();
+      expect(body.data.user.createdAt).toBeDefined();
+    });
+
+    it('should normalize username by trimming and lowercasing', async () => {
+      app = await setupApp();
+      const { id: ownerId } = await seedOwner(app);
+      seedInvite(app, ownerId);
+
+      const response = await app.inject({
+        method: 'POST',
+        url: '/api/auth/register',
+        payload: {
+          username: '  Jordan  ',
+          password: 'password123',
+          inviteToken: 'valid-invite-token',
+        },
+      });
+
+      expect(response.statusCode).toBe(201);
+      expect(response.json().data.user.username).toBe('jordan');
+    });
+
+    it('should revoke invite token after successful registration', async () => {
+      app = await setupApp();
+      const { id: ownerId } = await seedOwner(app);
+      seedInvite(app, ownerId);
+
+      await app.inject({
+        method: 'POST',
+        url: '/api/auth/register',
+        payload: {
+          username: 'jordan',
+          password: 'password123',
+          inviteToken: 'valid-invite-token',
+        },
+      });
+
+      // Verify invite is now revoked
+      const invite = app.db.select().from(invites)
+        .where(eq(invites.token, 'valid-invite-token')).get();
+      expect(invite!.revoked).toBe(true);
+
+      // Trying to use the same invite again should fail
+      const response = await app.inject({
+        method: 'POST',
+        url: '/api/auth/register',
+        payload: {
+          username: 'anotheruser',
+          password: 'password123',
+          inviteToken: 'valid-invite-token',
+        },
+      });
+
+      expect(response.statusCode).toBe(400);
+      expect(response.json().error.code).toBe('INVALID_INVITE');
     });
 
     it('should return 400 INVALID_INVITE for invalid invite token', async () => {
@@ -63,8 +118,6 @@ describe('authRoutes', () => {
       const { id: ownerId } = await seedOwner(app);
       seedInvite(app, ownerId, 'revoked-token');
 
-      const { eq } = await import('drizzle-orm');
-      const { invites } = await import('../../db/schema.js');
       app.db.update(invites)
         .set({ revoked: true })
         .where(eq(invites.token, 'revoked-token'))
@@ -87,27 +140,28 @@ describe('authRoutes', () => {
     it('should return 409 USERNAME_TAKEN for duplicate username', async () => {
       app = await setupApp();
       const { id: ownerId } = await seedOwner(app);
-      seedInvite(app, ownerId);
+      seedInvite(app, ownerId, 'invite-1');
+      seedInvite(app, ownerId, 'invite-2');
 
-      // Register first user
+      // Register first user (revokes invite-1)
       await app.inject({
         method: 'POST',
         url: '/api/auth/register',
         payload: {
           username: 'jordan',
           password: 'password123',
-          inviteToken: 'valid-invite-token',
+          inviteToken: 'invite-1',
         },
       });
 
-      // Try to register with same username
+      // Try to register with same username using invite-2
       const response = await app.inject({
         method: 'POST',
         url: '/api/auth/register',
         payload: {
           username: 'jordan',
           password: 'differentpass123',
-          inviteToken: 'valid-invite-token',
+          inviteToken: 'invite-2',
         },
       });
 
@@ -156,6 +210,24 @@ describe('authRoutes', () => {
         url: '/api/auth/register',
         payload: {
           username: 'jordan',
+        },
+      });
+
+      expect(response.statusCode).toBe(400);
+    });
+
+    it('should return 400 for password exceeding 72 characters', async () => {
+      app = await setupApp();
+      const { id: ownerId } = await seedOwner(app);
+      seedInvite(app, ownerId);
+
+      const response = await app.inject({
+        method: 'POST',
+        url: '/api/auth/register',
+        payload: {
+          username: 'jordan',
+          password: 'a'.repeat(73),
+          inviteToken: 'valid-invite-token',
         },
       });
 

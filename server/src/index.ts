@@ -13,7 +13,6 @@ async function start(): Promise<void> {
     app.log.info('Database migrations completed');
 
     await runSeed(app.db, app.log);
-    app.log.info('Database seeding completed');
 
     await app.listen({ port: PORT, host: HOST });
     app.log.info(`Server listening on ${HOST}:${PORT}`);

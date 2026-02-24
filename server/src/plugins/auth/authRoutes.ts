@@ -3,6 +3,7 @@ import { eq } from 'drizzle-orm';
 import type { FastifyInstance } from 'fastify';
 import { users, invites, bans } from '../../db/schema.js';
 import { hashPassword, verifyPassword, generateAccessToken } from './authService.js';
+import { validateInvite } from '../invites/inviteService.js';
 
 interface RegisterBody {
   username: string;
@@ -31,16 +32,18 @@ export default fp(async (fastify: FastifyInstance) => {
       },
     },
   }, async (request, reply) => {
-    const { username, password, inviteToken } = request.body;
+    const { username: rawUsername, password, inviteToken } = request.body;
+    const username = rawUsername.trim().toLowerCase();
 
-    // 1. Validate invite token
-    const invite = fastify.db
-      .select()
-      .from(invites)
-      .where(eq(invites.token, inviteToken))
-      .get();
+    if (username.length === 0) {
+      return reply.status(400).send({
+        error: { code: 'INVALID_USERNAME', message: 'Username cannot be blank.' },
+      });
+    }
 
-    if (!invite || invite.revoked) {
+    // 1. Validate invite token (using shared service — no duplicated logic)
+    const inviteResult = validateInvite(fastify.db, inviteToken);
+    if (!inviteResult.valid) {
       return reply.status(400).send({
         error: {
           code: 'INVALID_INVITE',
@@ -49,15 +52,62 @@ export default fp(async (fastify: FastifyInstance) => {
       });
     }
 
-    // 2. Check bans (lightweight username-based check — must run before username uniqueness)
-    const bannedUser = fastify.db
-      .select({ userId: bans.user_id })
-      .from(bans)
-      .innerJoin(users, eq(bans.user_id, users.id))
-      .where(eq(users.username, username))
-      .get();
+    // 2. Hash password before entering transaction (async, yields event loop)
+    const passwordHash = await hashPassword(password);
 
-    if (bannedUser) {
+    // 3. All DB mutations in a transaction for atomicity
+    const result = fastify.db.transaction((tx) => {
+      // 3a. Check bans (lightweight username-based check)
+      const bannedUser = tx
+        .select({ userId: bans.user_id })
+        .from(bans)
+        .innerJoin(users, eq(bans.user_id, users.id))
+        .where(eq(users.username, username))
+        .get();
+
+      if (bannedUser) {
+        return { error: 'REGISTRATION_BLOCKED' } as const;
+      }
+
+      // 3b. Check username uniqueness (fast-path before INSERT)
+      const existingUser = tx
+        .select()
+        .from(users)
+        .where(eq(users.username, username))
+        .get();
+
+      if (existingUser) {
+        return { error: 'USERNAME_TAKEN' } as const;
+      }
+
+      // 3c. Insert user
+      try {
+        const newUser = tx
+          .insert(users)
+          .values({
+            username,
+            password_hash: passwordHash,
+            role: 'user',
+          })
+          .returning()
+          .get();
+
+        // 3d. Revoke invite token (single-use)
+        tx.update(invites)
+          .set({ revoked: true })
+          .where(eq(invites.token, inviteToken))
+          .run();
+
+        return { error: null, user: newUser } as const;
+      } catch (err: unknown) {
+        if (err instanceof Error && err.message.includes('UNIQUE constraint failed: users.username')) {
+          return { error: 'USERNAME_TAKEN' } as const;
+        }
+        throw err;
+      }
+    });
+
+    if (result.error === 'REGISTRATION_BLOCKED') {
       return reply.status(403).send({
         error: {
           code: 'REGISTRATION_BLOCKED',
@@ -66,14 +116,7 @@ export default fp(async (fastify: FastifyInstance) => {
       });
     }
 
-    // 3. Check username uniqueness
-    const existingUser = fastify.db
-      .select()
-      .from(users)
-      .where(eq(users.username, username))
-      .get();
-
-    if (existingUser) {
+    if (result.error === 'USERNAME_TAKEN') {
       return reply.status(409).send({
         error: {
           code: 'USERNAME_TAKEN',
@@ -82,26 +125,14 @@ export default fp(async (fastify: FastifyInstance) => {
       });
     }
 
-    // 4. Hash password
-    const passwordHash = await hashPassword(password);
-
-    // 5. Insert user
-    const newUser = fastify.db
-      .insert(users)
-      .values({
-        username,
-        password_hash: passwordHash,
-        role: 'user',
-      })
-      .returning()
-      .get();
-
     return reply.status(201).send({
       data: {
-        id: newUser.id,
-        username: newUser.username,
-        role: newUser.role,
-        createdAt: newUser.created_at.toISOString(),
+        user: {
+          id: result.user.id,
+          username: result.user.username,
+          role: result.user.role,
+          createdAt: result.user.created_at.toISOString(),
+        },
       },
     });
   });
