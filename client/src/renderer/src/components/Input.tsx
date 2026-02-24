@@ -4,7 +4,7 @@ interface InputProps extends React.InputHTMLAttributes<HTMLInputElement> {
   label?: string;
 }
 
-export function Input({ label, className = '', id, ...props }: InputProps): JSX.Element {
+export function Input({ label, className = '', id, ...props }: InputProps): React.ReactNode {
   const generatedId = useId();
   const inputId = id ?? generatedId;
 

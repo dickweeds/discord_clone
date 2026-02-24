@@ -6,7 +6,7 @@ interface DropdownMenuProps {
   children: React.ReactNode;
 }
 
-export function DropdownMenu({ trigger, children }: DropdownMenuProps): JSX.Element {
+export function DropdownMenu({ trigger, children }: DropdownMenuProps): React.ReactNode {
   return (
     <RadixDropdownMenu.Root>
       <RadixDropdownMenu.Trigger asChild>{trigger}</RadixDropdownMenu.Trigger>
@@ -22,7 +22,7 @@ export function DropdownMenu({ trigger, children }: DropdownMenuProps): JSX.Elem
 export function DropdownMenuItem({
   children,
   ...props
-}: RadixDropdownMenu.DropdownMenuItemProps): JSX.Element {
+}: RadixDropdownMenu.DropdownMenuItemProps): React.ReactNode {
   return (
     <RadixDropdownMenu.Item
       className="cursor-pointer rounded px-2 py-1.5 text-sm text-text-secondary outline-none hover:bg-bg-hover hover:text-text-primary"

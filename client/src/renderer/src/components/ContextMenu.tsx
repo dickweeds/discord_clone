@@ -6,7 +6,7 @@ interface ContextMenuProps {
   children: React.ReactNode;
 }
 
-export function ContextMenu({ trigger, children }: ContextMenuProps): JSX.Element {
+export function ContextMenu({ trigger, children }: ContextMenuProps): React.ReactNode {
   return (
     <RadixContextMenu.Root>
       <RadixContextMenu.Trigger asChild>{trigger}</RadixContextMenu.Trigger>
@@ -22,7 +22,7 @@ export function ContextMenu({ trigger, children }: ContextMenuProps): JSX.Elemen
 export function ContextMenuItem({
   children,
   ...props
-}: RadixContextMenu.ContextMenuItemProps): JSX.Element {
+}: RadixContextMenu.ContextMenuItemProps): React.ReactNode {
   return (
     <RadixContextMenu.Item
       className="cursor-pointer rounded px-2 py-1.5 text-sm text-text-secondary outline-none hover:bg-bg-hover hover:text-text-primary"

@@ -6,7 +6,7 @@ interface TooltipProps {
   children: React.ReactNode;
 }
 
-export function Tooltip({ content, children }: TooltipProps): JSX.Element {
+export function Tooltip({ content, children }: TooltipProps): React.ReactNode {
   return (
     <RadixTooltip.Root>
       <RadixTooltip.Trigger asChild>{children}</RadixTooltip.Trigger>

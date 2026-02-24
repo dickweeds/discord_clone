@@ -8,7 +8,7 @@ interface ModalProps {
   children: React.ReactNode;
 }
 
-export function Modal({ open, onOpenChange, title, children }: ModalProps): JSX.Element {
+export function Modal({ open, onOpenChange, title, children }: ModalProps): React.ReactNode {
   return (
     <Dialog.Root open={open} onOpenChange={onOpenChange}>
       <Dialog.Portal>

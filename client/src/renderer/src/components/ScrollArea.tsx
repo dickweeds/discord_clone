@@ -6,7 +6,7 @@ interface ScrollAreaProps {
   className?: string;
 }
 
-export function ScrollArea({ children, className = '' }: ScrollAreaProps): JSX.Element {
+export function ScrollArea({ children, className = '' }: ScrollAreaProps): React.ReactNode {
   return (
     <RadixScrollArea.Root className={`overflow-hidden ${className}`}>
       <RadixScrollArea.Viewport className="h-full w-full rounded">

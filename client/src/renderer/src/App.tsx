@@ -1,7 +1,8 @@
+import React from 'react';
 import { HashRouter, Routes, Route } from 'react-router';
 import { Tooltip as RadixTooltip } from 'radix-ui';
 
-function Home(): JSX.Element {
+function Home(): React.ReactNode {
   return (
     <div className="flex h-screen items-center justify-center bg-bg-primary">
       <h1 className="text-2xl font-bold text-text-primary">Discord Clone</h1>
@@ -9,7 +10,7 @@ function Home(): JSX.Element {
   );
 }
 
-function App(): JSX.Element {
+function App(): React.ReactNode {
   return (
     <RadixTooltip.Provider>
       <HashRouter>

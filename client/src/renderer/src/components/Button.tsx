@@ -11,7 +11,7 @@ export function Button({
   className = '',
   children,
   ...props
-}: ButtonProps): JSX.Element {
+}: ButtonProps): React.ReactNode {
   const baseStyles = 'inline-flex items-center justify-center rounded-default font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-primary';
   const variantStyles = {
     primary: 'bg-accent-primary text-text-primary hover:bg-accent-hover',
