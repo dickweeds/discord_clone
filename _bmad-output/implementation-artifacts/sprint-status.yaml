@@ -1,0 +1,88 @@
+# generated: 2026-02-24
+# project: discord_clone
+# project_key: NOKEY
+# tracking_system: file-system
+# story_location: _bmad-output/implementation-artifacts
+
+# STATUS DEFINITIONS:
+# ==================
+# Epic Status:
+#   - backlog: Epic not yet started
+#   - in-progress: Epic actively being worked on
+#   - done: All stories in epic completed
+#
+# Epic Status Transitions:
+#   - backlog → in-progress: Automatically when first story is created (via create-story)
+#   - in-progress → done: Manually when all stories reach 'done' status
+#
+# Story Status:
+#   - backlog: Story only exists in epic file
+#   - ready-for-dev: Story file created in stories folder
+#   - in-progress: Developer actively working on implementation
+#   - review: Ready for code review (via Dev's code-review workflow)
+#   - done: Story completed
+#
+# Retrospective Status:
+#   - optional: Can be completed but not required
+#   - done: Retrospective has been completed
+#
+# WORKFLOW NOTES:
+# ===============
+# - Epic transitions to 'in-progress' automatically when first story is created
+# - Stories can be worked in parallel if team capacity allows
+# - SM typically creates next story after previous one is 'done' to incorporate learnings
+# - Dev moves story to 'review', then runs code-review (fresh context, different LLM recommended)
+
+generated: 2026-02-24
+project: discord_clone
+project_key: NOKEY
+tracking_system: file-system
+story_location: _bmad-output/implementation-artifacts
+
+development_status:
+  # Epic 1: Project Foundation & User Authentication
+  epic-1: backlog
+  1-1-project-scaffold-and-monorepo-setup: backlog
+  1-2-database-schema-and-core-server-configuration: backlog
+  1-3-user-registration-and-invite-system: backlog
+  1-4-user-login-logout-and-session-management: backlog
+  1-5-e2e-encryption-foundation: backlog
+  1-6-discord-familiar-app-shell-and-navigation: backlog
+  epic-1-retrospective: optional
+
+  # Epic 2: Real-Time Text Communication
+  epic-2: backlog
+  2-1-websocket-connection-and-real-time-transport: backlog
+  2-2-encrypted-text-messaging: backlog
+  2-3-message-feed-and-channel-navigation-ui: backlog
+  2-4-persistent-message-history-and-scrollback: backlog
+  epic-2-retrospective: optional
+
+  # Epic 3: Voice Communication
+  epic-3: backlog
+  3-1-voice-server-infrastructure: backlog
+  3-2-voice-channel-join-leave-and-presence: backlog
+  3-3-real-time-voice-audio-and-speaking-indicators: backlog
+  3-4-audio-device-management-and-voice-controls: backlog
+  epic-3-retrospective: optional
+
+  # Epic 4: Video Communication
+  epic-4: backlog
+  4-1-video-camera-toggle-and-streaming: backlog
+  4-2-video-grid-display: backlog
+  epic-4-retrospective: optional
+
+  # Epic 5: Server Administration & User Management
+  epic-5: backlog
+  5-1-channel-management: backlog
+  5-2-user-management-and-administration: backlog
+  epic-5-retrospective: optional
+
+  # Epic 6: Desktop App Polish & Production Deployment
+  epic-6: backlog
+  6-1-connection-resilience-and-error-handling: backlog
+  6-2-auto-update-system: backlog
+  6-3-privacy-enforcement-and-zero-telemetry: backlog
+  6-4-production-deployment-infrastructure: backlog
+  6-5-ci-cd-pipeline-and-cross-platform-distribution: backlog
+  epic-6-retrospective: optional
