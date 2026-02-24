@@ -16,7 +16,8 @@
     "radix-ui": "^1.4.3",
     "react": "^19.1.0",
     "react-dom": "^19.1.0",
-    "react-router": "^7.13.0"
+    "react-router": "^7.13.0",
+    "zustand": "^5.0.11"
   },
   "devDependencies": {
     "@electron-toolkit/preload": "^3.0.1",

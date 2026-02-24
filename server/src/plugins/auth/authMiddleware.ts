@@ -5,6 +5,7 @@ import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 const PUBLIC_ROUTES = [
   '/api/auth/login',
   '/api/auth/register',
+  '/api/auth/refresh',
   '/api/health',
 ];
 

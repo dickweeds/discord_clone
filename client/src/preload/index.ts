@@ -1,7 +1,16 @@
-import { contextBridge } from 'electron';
+import { contextBridge, ipcRenderer } from 'electron';
 import { electronAPI } from '@electron-toolkit/preload';
 
-const api = {};
+const api = {
+  secureStorage: {
+    set: (key: string, value: string): Promise<void> =>
+      ipcRenderer.invoke('secure-storage:set', key, value),
+    get: (key: string): Promise<string | null> =>
+      ipcRenderer.invoke('secure-storage:get', key),
+    delete: (key: string): Promise<void> =>
+      ipcRenderer.invoke('secure-storage:delete', key),
+  },
+};
 
 if (process.contextIsolated) {
   try {

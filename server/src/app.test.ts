@@ -3,6 +3,7 @@ import { type FastifyInstance } from 'fastify';
 
 vi.hoisted(() => {
   process.env.JWT_ACCESS_SECRET = 'test-secret-key-for-testing';
+  process.env.JWT_REFRESH_SECRET = 'test-refresh-secret-key-for-testing';
 });
 vi.stubEnv('DATABASE_PATH', ':memory:');
 

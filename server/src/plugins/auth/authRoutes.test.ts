@@ -3,13 +3,23 @@ import type { FastifyInstance } from 'fastify';
 
 vi.hoisted(() => {
   process.env.JWT_ACCESS_SECRET = 'test-secret-key-for-testing';
+  process.env.JWT_REFRESH_SECRET = 'test-refresh-secret-key-for-testing';
 });
 vi.stubEnv('DATABASE_PATH', ':memory:');
 
 import { setupApp, seedOwner, seedInvite } from '../../test/helpers.js';
-import { hashPassword } from './authService.js';
-import { users, bans, invites } from '../../db/schema.js';
+import { hashPassword, generateRefreshToken, hashToken } from './authService.js';
+import { users, bans, invites, sessions } from '../../db/schema.js';
 import { eq } from 'drizzle-orm';
+
+async function loginUser(app: FastifyInstance, username: string, password: string) {
+  const response = await app.inject({
+    method: 'POST',
+    url: '/api/auth/login',
+    payload: { username, password },
+  });
+  return response.json().data;
+}
 
 describe('authRoutes', () => {
   let app: FastifyInstance;
@@ -236,7 +246,7 @@ describe('authRoutes', () => {
   });
 
   describe('POST /api/auth/login', () => {
-    it('should login with valid credentials and return access token', async () => {
+    it('should login with valid credentials and return access + refresh tokens', async () => {
       app = await setupApp();
       await seedOwner(app);
 
@@ -252,8 +262,26 @@ describe('authRoutes', () => {
       expect(response.statusCode).toBe(200);
       const body = response.json();
       expect(body.data.accessToken).toBeDefined();
+      expect(body.data.refreshToken).toBeDefined();
       expect(body.data.user.username).toBe('owner');
       expect(body.data.user.role).toBe('owner');
+    });
+
+    it('should normalize username on login (trim + lowercase)', async () => {
+      app = await setupApp();
+      await seedOwner(app);
+
+      const response = await app.inject({
+        method: 'POST',
+        url: '/api/auth/login',
+        payload: {
+          username: '  Owner  ',
+          password: 'ownerPass123',
+        },
+      });
+
+      expect(response.statusCode).toBe(200);
+      expect(response.json().data.user.username).toBe('owner');
     });
 
     it('should return 401 for wrong password', async () => {
@@ -289,7 +317,7 @@ describe('authRoutes', () => {
       expect(response.json().error.code).toBe('INVALID_CREDENTIALS');
     });
 
-    it('should return 403 for banned user', async () => {
+    it('should return 403 for banned user (ban checked before password)', async () => {
       app = await setupApp();
       const { id: ownerId } = await seedOwner(app);
 
@@ -317,6 +345,205 @@ describe('authRoutes', () => {
 
       expect(response.statusCode).toBe(403);
       expect(response.json().error.code).toBe('ACCOUNT_BANNED');
+    });
+
+    it('should create a session in the database on login', async () => {
+      app = await setupApp();
+      await seedOwner(app);
+
+      const loginData = await loginUser(app, 'owner', 'ownerPass123');
+      const tokenHash = hashToken(loginData.refreshToken);
+
+      const session = app.db.select().from(sessions)
+        .where(eq(sessions.refresh_token_hash, tokenHash)).get();
+      expect(session).toBeDefined();
+      expect(session!.user_id).toBe(loginData.user.id);
+    });
+  });
+
+  describe('POST /api/auth/refresh', () => {
+    it('should return new token pair with valid refresh token', async () => {
+      app = await setupApp();
+      await seedOwner(app);
+
+      const loginData = await loginUser(app, 'owner', 'ownerPass123');
+
+      const response = await app.inject({
+        method: 'POST',
+        url: '/api/auth/refresh',
+        payload: { refreshToken: loginData.refreshToken },
+      });
+
+      expect(response.statusCode).toBe(200);
+      const body = response.json();
+      expect(body.data.accessToken).toBeDefined();
+      expect(body.data.refreshToken).toBeDefined();
+      // New tokens should be different from old ones
+      expect(body.data.refreshToken).not.toBe(loginData.refreshToken);
+    });
+
+    it('should rotate tokens (old refresh token becomes invalid after use)', async () => {
+      app = await setupApp();
+      await seedOwner(app);
+
+      const loginData = await loginUser(app, 'owner', 'ownerPass123');
+      const oldRefreshToken = loginData.refreshToken;
+
+      // First refresh should succeed
+      const response1 = await app.inject({
+        method: 'POST',
+        url: '/api/auth/refresh',
+        payload: { refreshToken: oldRefreshToken },
+      });
+      expect(response1.statusCode).toBe(200);
+
+      // Second refresh with the same (old) token should fail
+      const response2 = await app.inject({
+        method: 'POST',
+        url: '/api/auth/refresh',
+        payload: { refreshToken: oldRefreshToken },
+      });
+      expect(response2.statusCode).toBe(401);
+      expect(response2.json().error.code).toBe('INVALID_REFRESH_TOKEN');
+    });
+
+    it('should return 401 for invalid refresh token', async () => {
+      app = await setupApp();
+
+      const response = await app.inject({
+        method: 'POST',
+        url: '/api/auth/refresh',
+        payload: { refreshToken: 'not-a-valid-jwt' },
+      });
+
+      expect(response.statusCode).toBe(401);
+      expect(response.json().error.code).toBe('INVALID_REFRESH_TOKEN');
+    });
+
+    it('should return 401 for expired session', async () => {
+      app = await setupApp();
+      const { id: ownerId } = await seedOwner(app);
+
+      // Create a refresh token and session manually with expired date
+      const refreshToken = generateRefreshToken({ userId: ownerId, role: 'owner' });
+      const tokenHash = hashToken(refreshToken);
+      app.db.insert(sessions).values({
+        user_id: ownerId,
+        refresh_token_hash: tokenHash,
+        expires_at: new Date(Date.now() - 1000), // expired
+      }).run();
+
+      const response = await app.inject({
+        method: 'POST',
+        url: '/api/auth/refresh',
+        payload: { refreshToken },
+      });
+
+      expect(response.statusCode).toBe(401);
+      expect(response.json().error.code).toBe('INVALID_REFRESH_TOKEN');
+    });
+
+    it('should not require auth middleware (public route)', async () => {
+      app = await setupApp();
+
+      // Call refresh without Authorization header — should get 401 from our handler, not from middleware
+      const response = await app.inject({
+        method: 'POST',
+        url: '/api/auth/refresh',
+        payload: { refreshToken: 'some-token' },
+      });
+
+      // Should get INVALID_REFRESH_TOKEN (our endpoint), not UNAUTHORIZED (middleware)
+      expect(response.statusCode).toBe(401);
+      expect(response.json().error.code).toBe('INVALID_REFRESH_TOKEN');
+    });
+
+    it('should return 400 for missing refreshToken field', async () => {
+      app = await setupApp();
+
+      const response = await app.inject({
+        method: 'POST',
+        url: '/api/auth/refresh',
+        payload: {},
+      });
+
+      expect(response.statusCode).toBe(400);
+    });
+  });
+
+  describe('POST /api/auth/logout', () => {
+    it('should return 204 and delete the session', async () => {
+      app = await setupApp();
+      await seedOwner(app);
+
+      const loginData = await loginUser(app, 'owner', 'ownerPass123');
+
+      const response = await app.inject({
+        method: 'POST',
+        url: '/api/auth/logout',
+        headers: { authorization: `Bearer ${loginData.accessToken}` },
+        payload: { refreshToken: loginData.refreshToken },
+      });
+
+      expect(response.statusCode).toBe(204);
+
+      // Verify session was deleted
+      const tokenHash = hashToken(loginData.refreshToken);
+      const session = app.db.select().from(sessions)
+        .where(eq(sessions.refresh_token_hash, tokenHash)).get();
+      expect(session).toBeUndefined();
+    });
+
+    it('should return 204 even if session not found (idempotent)', async () => {
+      app = await setupApp();
+      const { token: ownerToken } = await seedOwner(app);
+
+      const response = await app.inject({
+        method: 'POST',
+        url: '/api/auth/logout',
+        headers: { authorization: `Bearer ${ownerToken}` },
+        payload: { refreshToken: 'nonexistent-refresh-token-value' },
+      });
+
+      expect(response.statusCode).toBe(204);
+    });
+
+    it('should return 401 without auth (requires access token)', async () => {
+      app = await setupApp();
+
+      const response = await app.inject({
+        method: 'POST',
+        url: '/api/auth/logout',
+        payload: { refreshToken: 'some-token' },
+      });
+
+      expect(response.statusCode).toBe(401);
+      expect(response.json().error.code).toBe('UNAUTHORIZED');
+    });
+
+    it('should invalidate the refresh token after logout', async () => {
+      app = await setupApp();
+      await seedOwner(app);
+
+      const loginData = await loginUser(app, 'owner', 'ownerPass123');
+
+      // Logout
+      await app.inject({
+        method: 'POST',
+        url: '/api/auth/logout',
+        headers: { authorization: `Bearer ${loginData.accessToken}` },
+        payload: { refreshToken: loginData.refreshToken },
+      });
+
+      // Try to refresh with the now-deleted session's token
+      const refreshResponse = await app.inject({
+        method: 'POST',
+        url: '/api/auth/refresh',
+        payload: { refreshToken: loginData.refreshToken },
+      });
+
+      expect(refreshResponse.statusCode).toBe(401);
+      expect(refreshResponse.json().error.code).toBe('INVALID_REFRESH_TOKEN');
     });
   });
 });

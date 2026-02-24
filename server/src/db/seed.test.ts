@@ -3,6 +3,7 @@ import { eq } from 'drizzle-orm';
 
 vi.hoisted(() => {
   process.env.JWT_ACCESS_SECRET = 'test-secret-key-for-testing';
+  process.env.JWT_REFRESH_SECRET = 'test-refresh-secret-key-for-testing';
 });
 
 import { createDatabase } from './connection.js';

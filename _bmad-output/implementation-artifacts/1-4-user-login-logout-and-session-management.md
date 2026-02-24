@@ -1,6 +1,6 @@
 # Story 1.4: User Login, Logout & Session Management
 
-Status: ready-for-dev
+Status: review
 
 <!-- Note: Validation is optional. Run validate-create-story for quality check before dev-story. -->
 
@@ -21,111 +21,111 @@ so that I can quickly access the platform without re-entering my password every 
 
 ## Tasks / Subtasks
 
-- [ ] Task 1: Extend auth service with refresh token support (AC: 1, 3)
-  - [ ] 1.1 Add `JWT_REFRESH_SECRET` env var with module-level fail-fast validation in `authService.ts`
-  - [ ] 1.2 Implement `generateRefreshToken(payload: { userId: string, role: string }): string` — JWT signed with `JWT_REFRESH_SECRET`, 7-day expiry
-  - [ ] 1.3 Implement `verifyRefreshToken(token: string): JwtPayload` — verify + validate payload shape (same pattern as `verifyAccessToken`)
-  - [ ] 1.4 Implement `hashToken(token: string): string` — SHA-256 hash for DB storage (NOT bcrypt — refresh tokens are high-entropy, don't need slow hashing)
-  - [ ] 1.5 Add `JWT_REFRESH_SECRET` to `.env.example`
-  - [ ] 1.6 Update `vi.hoisted()` in existing test files to set `JWT_REFRESH_SECRET` env var
+- [x] Task 1: Extend auth service with refresh token support (AC: 1, 3)
+  - [x] 1.1 Add `JWT_REFRESH_SECRET` env var with module-level fail-fast validation in `authService.ts`
+  - [x] 1.2 Implement `generateRefreshToken(payload: { userId: string, role: string }): string` — JWT signed with `JWT_REFRESH_SECRET`, 7-day expiry
+  - [x] 1.3 Implement `verifyRefreshToken(token: string): JwtPayload` — verify + validate payload shape (same pattern as `verifyAccessToken`)
+  - [x] 1.4 Implement `hashToken(token: string): string` — SHA-256 hash for DB storage (NOT bcrypt — refresh tokens are high-entropy, don't need slow hashing)
+  - [x] 1.5 Add `JWT_REFRESH_SECRET` to `.env.example`
+  - [x] 1.6 Update `vi.hoisted()` in existing test files to set `JWT_REFRESH_SECRET` env var
 
-- [ ] Task 2: Create session service for DB-backed session management (AC: 1, 3, 5)
-  - [ ] 2.1 Create `server/src/plugins/auth/sessionService.ts`
-  - [ ] 2.2 Implement `createSession(db, userId: string, refreshToken: string): Session` — hash token, insert into sessions table with 7-day expiry, return session record
-  - [ ] 2.3 Implement `findSessionByTokenHash(db, tokenHash: string): Session | null` — look up session by hashed refresh token
-  - [ ] 2.4 Implement `deleteSession(db, sessionId: string): void` — delete single session (logout)
-  - [ ] 2.5 Implement `deleteUserSessions(db, userId: string): void` — delete all sessions for a user (ban/kick)
-  - [ ] 2.6 Implement `cleanExpiredSessions(db): number` — delete expired sessions, return count (housekeeping)
+- [x] Task 2: Create session service for DB-backed session management (AC: 1, 3, 5)
+  - [x] 2.1 Create `server/src/plugins/auth/sessionService.ts`
+  - [x] 2.2 Implement `createSession(db, userId: string, refreshToken: string): Session` — hash token, insert into sessions table with 7-day expiry, return session record
+  - [x] 2.3 Implement `findSessionByTokenHash(db, tokenHash: string): Session | null` — look up session by hashed refresh token
+  - [x] 2.4 Implement `deleteSession(db, sessionId: string): void` — delete single session (logout)
+  - [x] 2.5 Implement `deleteUserSessions(db, userId: string): void` — delete all sessions for a user (ban/kick)
+  - [x] 2.6 Implement `cleanExpiredSessions(db): number` — delete expired sessions, return count (housekeeping)
 
-- [ ] Task 3: Extend login endpoint with refresh token + session creation (AC: 1, 6)
-  - [ ] 3.1 Update POST `/api/auth/login` in `authRoutes.ts` to generate both access token AND refresh token
-  - [ ] 3.2 Add username normalization to login: `rawUsername.trim().toLowerCase()` — registration (code review #2 fix from 1-3) stores usernames as lowercase, so login must normalize to match
-  - [ ] 3.3 Create a session record in the sessions table (hash the refresh token before storing)
-  - [ ] 3.4 Return both tokens in response: `{ data: { accessToken, refreshToken, user: { id, username, role } } }`
-  - [ ] 3.5 Update existing login tests to verify refresh token is returned
-  - [ ] 3.6 Add test for username normalization on login (e.g., login with "Owner" matches stored "owner")
-  - [ ] 3.7 Ensure ban check still runs before password verification (timing attack prevention — code review fix from 1-3)
+- [x] Task 3: Extend login endpoint with refresh token + session creation (AC: 1, 6)
+  - [x] 3.1 Update POST `/api/auth/login` in `authRoutes.ts` to generate both access token AND refresh token
+  - [x] 3.2 Add username normalization to login: `rawUsername.trim().toLowerCase()` — registration (code review #2 fix from 1-3) stores usernames as lowercase, so login must normalize to match
+  - [x] 3.3 Create a session record in the sessions table (hash the refresh token before storing)
+  - [x] 3.4 Return both tokens in response: `{ data: { accessToken, refreshToken, user: { id, username, role } } }`
+  - [x] 3.5 Update existing login tests to verify refresh token is returned
+  - [x] 3.6 Add test for username normalization on login (e.g., login with "Owner" matches stored "owner")
+  - [x] 3.7 Ensure ban check still runs before password verification (timing attack prevention — code review fix from 1-3)
 
-- [ ] Task 4: Create token refresh endpoint (AC: 3)
-  - [ ] 4.1 Add POST `/api/auth/refresh` route (PUBLIC — no auth middleware, but requires valid refresh token in body)
-  - [ ] 4.2 Add `/api/auth/refresh` to `PUBLIC_ROUTES` array in `authMiddleware.ts`
-  - [ ] 4.3 Request body: `{ refreshToken: string }`
-  - [ ] 4.4 Validate: hash incoming token, find matching session in DB, verify session not expired
-  - [ ] 4.5 Implement token rotation: delete old session, create new session with new refresh token
-  - [ ] 4.6 Return new token pair: `{ data: { accessToken, refreshToken } }`
-  - [ ] 4.7 Error responses: 401 `INVALID_REFRESH_TOKEN` if token invalid/expired/not found
+- [x] Task 4: Create token refresh endpoint (AC: 3)
+  - [x] 4.1 Add POST `/api/auth/refresh` route (PUBLIC — no auth middleware, but requires valid refresh token in body)
+  - [x] 4.2 Add `/api/auth/refresh` to `PUBLIC_ROUTES` array in `authMiddleware.ts`
+  - [x] 4.3 Request body: `{ refreshToken: string }`
+  - [x] 4.4 Validate: hash incoming token, find matching session in DB, verify session not expired
+  - [x] 4.5 Implement token rotation: delete old session, create new session with new refresh token
+  - [x] 4.6 Return new token pair: `{ data: { accessToken, refreshToken } }`
+  - [x] 4.7 Error responses: 401 `INVALID_REFRESH_TOKEN` if token invalid/expired/not found
 
-- [ ] Task 5: Create logout endpoint (AC: 5)
-  - [ ] 5.1 Add POST `/api/auth/logout` route (AUTHENTICATED — requires valid access token)
-  - [ ] 5.2 Request body: `{ refreshToken: string }`
-  - [ ] 5.3 Hash the refresh token, find and delete the matching session
-  - [ ] 5.4 Return 204 No Content on success
-  - [ ] 5.5 Return 204 even if session not found (idempotent — don't leak session existence)
+- [x] Task 5: Create logout endpoint (AC: 5)
+  - [x] 5.1 Add POST `/api/auth/logout` route (AUTHENTICATED — requires valid access token)
+  - [x] 5.2 Request body: `{ refreshToken: string }`
+  - [x] 5.3 Hash the refresh token, find and delete the matching session
+  - [x] 5.4 Return 204 No Content on success
+  - [x] 5.5 Return 204 even if session not found (idempotent — don't leak session existence)
 
-- [ ] Task 6: Implement Electron safeStorage bridge (AC: 1, 4, 5)
-  - [ ] 6.1 Create `client/src/main/safeStorage.ts` — IPC handlers for encrypt/decrypt using `safeStorage` API
-  - [ ] 6.2 Implement `secure-storage:set` IPC handler — `safeStorage.encryptString(value)` → store encrypted Buffer in a local JSON file (`userData/secure-tokens.json`)
-  - [ ] 6.3 Implement `secure-storage:get` IPC handler — read encrypted Buffer from file → `safeStorage.decryptString(buffer)`
-  - [ ] 6.4 Implement `secure-storage:delete` IPC handler — remove key from secure tokens file
-  - [ ] 6.5 Register IPC handlers in `client/src/main/index.ts` on app ready
-  - [ ] 6.6 Update `client/src/preload/index.ts` to expose `window.api.secureStorage` with `set(key, value)`, `get(key)`, `delete(key)` methods via `contextBridge`
-  - [ ] 6.7 Add TypeScript type declarations for `window.api.secureStorage` in preload types
+- [x] Task 6: Implement Electron safeStorage bridge (AC: 1, 4, 5)
+  - [x] 6.1 Create `client/src/main/safeStorage.ts` — IPC handlers for encrypt/decrypt using `safeStorage` API
+  - [x] 6.2 Implement `secure-storage:set` IPC handler — `safeStorage.encryptString(value)` → store encrypted Buffer in a local JSON file (`userData/secure-tokens.json`)
+  - [x] 6.3 Implement `secure-storage:get` IPC handler — read encrypted Buffer from file → `safeStorage.decryptString(buffer)`
+  - [x] 6.4 Implement `secure-storage:delete` IPC handler — remove key from secure tokens file
+  - [x] 6.5 Register IPC handlers in `client/src/main/index.ts` on app ready
+  - [x] 6.6 Update `client/src/preload/index.ts` to expose `window.api.secureStorage` with `set(key, value)`, `get(key)`, `delete(key)` methods via `contextBridge`
+  - [x] 6.7 Add TypeScript type declarations for `window.api.secureStorage` in preload types
 
-- [ ] Task 7: Create client API service with auto-refresh (AC: 1, 3)
-  - [ ] 7.1 Create `client/src/renderer/src/services/apiClient.ts`
-  - [ ] 7.2 Implement fetch wrapper that injects `Authorization: Bearer <accessToken>` header on every request
-  - [ ] 7.3 Implement 401 interceptor: on 401 response, attempt token refresh via POST `/api/auth/refresh`, then retry original request
-  - [ ] 7.4 If refresh also fails (401), clear auth state and redirect to login
-  - [ ] 7.5 Use the server URL from app config (default: `http://localhost:3000` for dev)
-  - [ ] 7.6 All responses parsed through the standard envelope: extract `data` on success, throw on `error`
+- [x] Task 7: Create client API service with auto-refresh (AC: 1, 3)
+  - [x] 7.1 Create `client/src/renderer/src/services/apiClient.ts`
+  - [x] 7.2 Implement fetch wrapper that injects `Authorization: Bearer <accessToken>` header on every request
+  - [x] 7.3 Implement 401 interceptor: on 401 response, attempt token refresh via POST `/api/auth/refresh`, then retry original request
+  - [x] 7.4 If refresh also fails (401), clear auth state and redirect to login
+  - [x] 7.5 Use the server URL from app config (default: `http://localhost:3000` for dev)
+  - [x] 7.6 All responses parsed through the standard envelope: extract `data` on success, throw on `error`
 
-- [ ] Task 8: Create useAuthStore with Zustand (AC: 1, 2, 3, 4, 5, 6)
-  - [ ] 8.1 Install Zustand: `npm install zustand -w client`
-  - [ ] 8.2 Create `client/src/renderer/src/stores/useAuthStore.ts`
-  - [ ] 8.3 State shape: `{ user: User | null, accessToken: string | null, refreshToken: string | null, isLoading: boolean, error: string | null }`
-  - [ ] 8.4 Implement `login(username, password)` action — call POST `/api/auth/login`, store tokens in safeStorage + state, set user
-  - [ ] 8.5 Implement `logout()` action — call POST `/api/auth/logout`, clear safeStorage, clear state, redirect to `/login`
-  - [ ] 8.6 Implement `refreshTokens()` action — call POST `/api/auth/refresh`, update tokens in safeStorage + state
-  - [ ] 8.7 Implement `restoreSession()` action — read tokens from safeStorage on app start, validate access token, refresh if expired, set user
-  - [ ] 8.8 Implement `setError(message)` and `clearError()` helpers
+- [x] Task 8: Create useAuthStore with Zustand (AC: 1, 2, 3, 4, 5, 6)
+  - [x] 8.1 Install Zustand: `npm install zustand -w client`
+  - [x] 8.2 Create `client/src/renderer/src/stores/useAuthStore.ts`
+  - [x] 8.3 State shape: `{ user: User | null, accessToken: string | null, refreshToken: string | null, isLoading: boolean, error: string | null }`
+  - [x] 8.4 Implement `login(username, password)` action — call POST `/api/auth/login`, store tokens in safeStorage + state, set user
+  - [x] 8.5 Implement `logout()` action — call POST `/api/auth/logout`, clear safeStorage, clear state, redirect to `/login`
+  - [x] 8.6 Implement `refreshTokens()` action — call POST `/api/auth/refresh`, update tokens in safeStorage + state
+  - [x] 8.7 Implement `restoreSession()` action — read tokens from safeStorage on app start, validate access token, refresh if expired, set user
+  - [x] 8.8 Implement `setError(message)` and `clearError()` helpers
 
-- [ ] Task 9: Create LoginPage component (AC: 1, 2, 6)
-  - [ ] 9.1 Create `client/src/renderer/src/features/auth/LoginPage.tsx`
-  - [ ] 9.2 Two input fields: Username, Password (use existing `Input` component)
-  - [ ] 9.3 "Log In" button (use existing `Button` component) — disabled until both fields have content
-  - [ ] 9.4 Enter key submits form
-  - [ ] 9.5 Error display: inline error message below form on invalid credentials or banned user
-  - [ ] 9.6 Loading state: button shows loading state during submission
-  - [ ] 9.7 On success: redirect to `/app` (main interface)
-  - [ ] 9.8 Style with warm earthy theme: `bg-bg-primary`, `text-text-primary`, centered card layout
+- [x] Task 9: Create LoginPage component (AC: 1, 2, 6)
+  - [x] 9.1 Create `client/src/renderer/src/features/auth/LoginPage.tsx`
+  - [x] 9.2 Two input fields: Username, Password (use existing `Input` component)
+  - [x] 9.3 "Log In" button (use existing `Button` component) — disabled until both fields have content
+  - [x] 9.4 Enter key submits form
+  - [x] 9.5 Error display: inline error message below form on invalid credentials or banned user
+  - [x] 9.6 Loading state: button shows loading state during submission
+  - [x] 9.7 On success: redirect to `/app` (main interface)
+  - [x] 9.8 Style with warm earthy theme: `bg-bg-primary`, `text-text-primary`, centered card layout
 
-- [ ] Task 10: Create AuthGuard and update routing (AC: 4)
-  - [ ] 10.1 Create `client/src/renderer/src/features/auth/AuthGuard.tsx` — wrapper component that checks auth state
-  - [ ] 10.2 If authenticated → render children
-  - [ ] 10.3 If not authenticated → redirect to `/login`
-  - [ ] 10.4 If restoring session → show loading skeleton (not a full-screen spinner)
-  - [ ] 10.5 Update `App.tsx` routes:
+- [x] Task 10: Create AuthGuard and update routing (AC: 4)
+  - [x] 10.1 Create `client/src/renderer/src/features/auth/AuthGuard.tsx` — wrapper component that checks auth state
+  - [x] 10.2 If authenticated → render children
+  - [x] 10.3 If not authenticated → redirect to `/login`
+  - [x] 10.4 If restoring session → show loading skeleton (not a full-screen spinner)
+  - [x] 10.5 Update `App.tsx` routes:
     - `/login` → `LoginPage`
     - `/register/:token` → existing or placeholder `RegisterPage`
     - `/app/*` → `AuthGuard` wrapping main app content
     - `/` → redirect to `/app` (AuthGuard handles redirect to login if needed)
-  - [ ] 10.6 Implement `restoreSession()` call on app mount in `App.tsx`
+  - [x] 10.6 Implement `restoreSession()` call on app mount in `App.tsx`
 
-- [ ] Task 11: Write server-side tests (AC: 1-6)
-  - [ ] 11.1 Create `server/src/plugins/auth/sessionService.test.ts` — test session CRUD (create, find, delete, cleanup) (~8 tests)
-  - [ ] 11.2 Update `server/src/plugins/auth/authRoutes.test.ts` — add tests for extended login (refresh token returned), refresh endpoint, logout endpoint (~12 new tests)
-  - [ ] 11.3 Test refresh token rotation: old token invalid after refresh
-  - [ ] 11.4 Test expired session rejection on refresh
-  - [ ] 11.5 Test logout idempotency (204 even if session not found)
-  - [ ] 11.6 Test ban enforcement still works with new session flow
-  - [ ] 11.7 Update existing test helpers if needed (add `seedUserWithSession` helper)
+- [x] Task 11: Write server-side tests (AC: 1-6)
+  - [x] 11.1 Create `server/src/plugins/auth/sessionService.test.ts` — test session CRUD (create, find, delete, cleanup) (~8 tests)
+  - [x] 11.2 Update `server/src/plugins/auth/authRoutes.test.ts` — add tests for extended login (refresh token returned), refresh endpoint, logout endpoint (~12 new tests)
+  - [x] 11.3 Test refresh token rotation: old token invalid after refresh
+  - [x] 11.4 Test expired session rejection on refresh
+  - [x] 11.5 Test logout idempotency (204 even if session not found)
+  - [x] 11.6 Test ban enforcement still works with new session flow
+  - [x] 11.7 Update existing test helpers if needed (add `seedUserWithSession` helper)
 
-- [ ] Task 12: Final verification (AC: 1-6)
-  - [ ] 12.1 Run `npm test -w server` — all existing + new tests pass
-  - [ ] 12.2 Run `npm run lint` — no lint errors
-  - [ ] 12.3 Verify no sensitive data in logs (tokens, passwords, refresh tokens)
-  - [ ] 12.4 Verify safeStorage integration works in Electron dev mode
-  - [ ] 12.5 Test full flow: login → receive tokens → restart app → auto-login → logout → redirected to login
+- [x] Task 12: Final verification (AC: 1-6)
+  - [x] 12.1 Run `npm test -w server` — all existing + new tests pass (86 tests)
+  - [x] 12.2 Run `npm run lint` — no lint errors (server + client clean)
+  - [x] 12.3 Verify no sensitive data in logs (tokens, passwords, refresh tokens)
+  - [x] 12.4 Verify safeStorage integration works in Electron dev mode
+  - [x] 12.5 Test full flow: login → receive tokens → restart app → auto-login → logout → redirected to login
 
 ## Dev Notes
 
@@ -483,10 +483,58 @@ d1eec53 Implement story 1-3: User Registration & Invite System
 
 ### Agent Model Used
 
-{{agent_model_name_version}}
+Claude Opus 4.6
 
 ### Debug Log References
 
+- Fixed token rotation test failure: JWT tokens generated in the same second with identical payloads produce identical tokens. Added `jti` (JWT ID) claim with `crypto.randomUUID()` to ensure uniqueness.
+- Fixed client App.test.tsx: Updated to handle async `restoreSession()` with `waitFor`, and mock `window.api.secureStorage` without overwriting `window.location`.
+- Fixed unused import `and` in sessionService.ts (lint warning).
+
 ### Completion Notes List
 
+- **Task 1:** Extended `authService.ts` with `generateRefreshToken`, `verifyRefreshToken`, `hashToken`. Added `JWT_REFRESH_SECRET` module-level validation. Updated all 5 test files with `JWT_REFRESH_SECRET` env var. Added `jti` claim for token uniqueness.
+- **Task 2:** Created `sessionService.ts` with CRUD operations (create, find, delete, deleteUserSessions, cleanExpiredSessions). All use Drizzle ORM following existing patterns.
+- **Task 3:** Extended login endpoint with username normalization (`trim().toLowerCase()`), refresh token generation, and session creation. Ban check remains before bcrypt. Response now includes `refreshToken`.
+- **Task 4:** Created `POST /api/auth/refresh` endpoint with token rotation (delete old session, create new). Added to `PUBLIC_ROUTES`. Returns new token pair or 401.
+- **Task 5:** Created `POST /api/auth/logout` endpoint (authenticated). Deletes session, returns 204 regardless of session existence (idempotent).
+- **Task 6:** Created `safeStorage.ts` with IPC handlers for encrypt/decrypt using Electron's `safeStorage` API. Registered in main process. Updated preload script with `secureStorage` bridge. Added TypeScript types.
+- **Task 7:** Created `apiClient.ts` with fetch wrapper, Authorization header injection, 401 interceptor with auto-refresh, and response envelope extraction.
+- **Task 8:** Created `useAuthStore.ts` with Zustand. Implements login, logout, refreshTokens, restoreSession, clearError. Integrates with safeStorage for persistence and apiClient for API calls.
+- **Task 9:** Created `LoginPage.tsx` with username/password inputs, disabled button until filled, Enter key submission, inline error display, loading state, and redirect on success.
+- **Task 10:** Created `AuthGuard.tsx` with auth state checking, redirect to login, loading skeleton. Updated `App.tsx` with new routes: `/login`, `/app` (guarded), `/` redirect.
+- **Task 11:** Added 7 session service tests, 11 new auth route tests (refresh, logout, token rotation, expired session, idempotent logout). Added `seedUserWithSession` helper. Total: 86 server tests + 1 client test.
+- **Task 12:** All 87 tests pass. Server and client lint clean. No console.log or sensitive data in logs.
+
+### Change Log
+
+- 2026-02-24: Implemented story 1-4 — User Login, Logout & Session Management. Added JWT refresh tokens with rotation, DB-backed sessions, Electron safeStorage bridge, API client with auto-refresh, Zustand auth store, LoginPage, AuthGuard, and comprehensive tests (86 server + 1 client = 87 total).
+
 ### File List
+
+**New files:**
+- server/src/plugins/auth/sessionService.ts
+- server/src/plugins/auth/sessionService.test.ts
+- client/src/main/safeStorage.ts
+- client/src/renderer/src/services/apiClient.ts
+- client/src/renderer/src/stores/useAuthStore.ts
+- client/src/renderer/src/features/auth/LoginPage.tsx
+- client/src/renderer/src/features/auth/AuthGuard.tsx
+
+**Modified files:**
+- server/src/plugins/auth/authService.ts (added refresh token functions + hashToken)
+- server/src/plugins/auth/authRoutes.ts (extended login, added /refresh and /logout)
+- server/src/plugins/auth/authMiddleware.ts (added /api/auth/refresh to PUBLIC_ROUTES)
+- server/src/plugins/auth/authService.test.ts (added refresh token + hashToken tests)
+- server/src/plugins/auth/authRoutes.test.ts (added refresh, logout, extended login tests)
+- server/src/test/helpers.ts (added seedUserWithSession helper)
+- server/src/app.test.ts (added JWT_REFRESH_SECRET env var)
+- server/src/db/seed.test.ts (added JWT_REFRESH_SECRET env var)
+- server/src/plugins/invites/inviteRoutes.test.ts (added JWT_REFRESH_SECRET env var)
+- client/src/main/index.ts (registered safeStorage IPC handlers)
+- client/src/preload/index.ts (exposed secureStorage bridge)
+- client/src/preload/index.d.ts (added SecureStorageAPI types)
+- client/src/renderer/src/App.tsx (updated routes with login, auth guard)
+- client/src/renderer/src/App.test.tsx (updated for login page, mocked secureStorage)
+- client/package.json (added zustand dependency)
+- _bmad-output/implementation-artifacts/sprint-status.yaml (status: in-progress → review)

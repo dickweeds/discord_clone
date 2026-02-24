@@ -1,6 +1,7 @@
 import { app, shell, BrowserWindow } from 'electron';
 import { join } from 'path';
 import { electronApp, optimizer, is } from '@electron-toolkit/utils';
+import { registerSafeStorageHandlers } from './safeStorage';
 
 function createWindow(): void {
   const mainWindow = new BrowserWindow({
@@ -37,6 +38,7 @@ function createWindow(): void {
 
 app.whenReady().then(() => {
   electronApp.setAppUserModelId('com.discord-clone');
+  registerSafeStorageHandlers();
 
   app.on('browser-window-created', (_, window) => {
     optimizer.watchWindowShortcuts(window);

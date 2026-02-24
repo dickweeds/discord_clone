@@ -2,8 +2,10 @@ import fp from 'fastify-plugin';
 import { eq } from 'drizzle-orm';
 import type { FastifyInstance } from 'fastify';
 import { users, invites, bans } from '../../db/schema.js';
-import { hashPassword, verifyPassword, generateAccessToken } from './authService.js';
+import { hashPassword, verifyPassword, generateAccessToken, generateRefreshToken, hashToken, verifyRefreshToken } from './authService.js';
 import { validateInvite } from '../invites/inviteService.js';
+import { createSession, findSessionByTokenHash, deleteSession } from './sessionService.js';
+import { getAuthenticatedUser } from './authMiddleware.js';
 
 interface RegisterBody {
   username: string;
@@ -14,6 +16,14 @@ interface RegisterBody {
 interface LoginBody {
   username: string;
   password: string;
+}
+
+interface RefreshBody {
+  refreshToken: string;
+}
+
+interface LogoutBody {
+  refreshToken: string;
 }
 
 export default fp(async (fastify: FastifyInstance) => {
@@ -137,7 +147,7 @@ export default fp(async (fastify: FastifyInstance) => {
     });
   });
 
-  // POST /api/auth/login — PUBLIC (minimal for this story)
+  // POST /api/auth/login — PUBLIC
   fastify.post<{ Body: LoginBody }>('/api/auth/login', {
     schema: {
       body: {
@@ -151,7 +161,8 @@ export default fp(async (fastify: FastifyInstance) => {
       },
     },
   }, async (request, reply) => {
-    const { username, password } = request.body;
+    const { username: rawUsername, password } = request.body;
+    const username = rawUsername.trim().toLowerCase();
 
     // 1. Look up user
     const user = fastify.db
@@ -162,11 +173,11 @@ export default fp(async (fastify: FastifyInstance) => {
 
     if (!user) {
       return reply.status(401).send({
-        error: { code: 'INVALID_CREDENTIALS', message: 'Invalid username or password' },
+        error: { code: 'INVALID_CREDENTIALS', message: 'Invalid username or password.' },
       });
     }
 
-    // 2. Check bans (before expensive bcrypt)
+    // 2. Check bans (before expensive bcrypt — timing attack prevention)
     const ban = fastify.db
       .select()
       .from(bans)
@@ -175,7 +186,7 @@ export default fp(async (fastify: FastifyInstance) => {
 
     if (ban) {
       return reply.status(403).send({
-        error: { code: 'ACCOUNT_BANNED', message: 'This account has been banned' },
+        error: { code: 'ACCOUNT_BANNED', message: 'This account has been banned.' },
       });
     }
 
@@ -183,16 +194,22 @@ export default fp(async (fastify: FastifyInstance) => {
     const validPassword = await verifyPassword(password, user.password_hash);
     if (!validPassword) {
       return reply.status(401).send({
-        error: { code: 'INVALID_CREDENTIALS', message: 'Invalid username or password' },
+        error: { code: 'INVALID_CREDENTIALS', message: 'Invalid username or password.' },
       });
     }
 
-    // 4. Generate access token
-    const accessToken = generateAccessToken({ userId: user.id, role: user.role });
+    // 4. Generate tokens
+    const tokenPayload = { userId: user.id, role: user.role };
+    const accessToken = generateAccessToken(tokenPayload);
+    const refreshToken = generateRefreshToken(tokenPayload);
+
+    // 5. Create session in DB (hash refresh token before storing)
+    createSession(fastify.db, user.id, refreshToken);
 
     return reply.status(200).send({
       data: {
         accessToken,
+        refreshToken,
         user: {
           id: user.id,
           username: user.username,
@@ -200,5 +217,92 @@ export default fp(async (fastify: FastifyInstance) => {
         },
       },
     });
+  });
+  // POST /api/auth/refresh — PUBLIC (requires valid refresh token in body)
+  fastify.post<{ Body: RefreshBody }>('/api/auth/refresh', {
+    schema: {
+      body: {
+        type: 'object',
+        required: ['refreshToken'],
+        properties: {
+          refreshToken: { type: 'string', minLength: 1 },
+        },
+        additionalProperties: false,
+      },
+    },
+  }, async (request, reply) => {
+    const { refreshToken } = request.body;
+
+    // 1. Verify the JWT signature + expiry
+    let payload;
+    try {
+      payload = verifyRefreshToken(refreshToken);
+    } catch {
+      return reply.status(401).send({
+        error: { code: 'INVALID_REFRESH_TOKEN', message: 'Invalid or expired refresh token.' },
+      });
+    }
+
+    // 2. Hash incoming token, find matching session in DB
+    const tokenHash = hashToken(refreshToken);
+    const session = findSessionByTokenHash(fastify.db, tokenHash);
+
+    if (!session) {
+      return reply.status(401).send({
+        error: { code: 'INVALID_REFRESH_TOKEN', message: 'Invalid or expired refresh token.' },
+      });
+    }
+
+    // 3. Verify session not expired
+    if (session.expires_at < new Date()) {
+      deleteSession(fastify.db, session.id);
+      return reply.status(401).send({
+        error: { code: 'INVALID_REFRESH_TOKEN', message: 'Invalid or expired refresh token.' },
+      });
+    }
+
+    // 4. Token rotation: delete old session, create new session with new tokens
+    deleteSession(fastify.db, session.id);
+
+    const tokenPayload = { userId: payload.userId, role: payload.role };
+    const newAccessToken = generateAccessToken(tokenPayload);
+    const newRefreshToken = generateRefreshToken(tokenPayload);
+
+    createSession(fastify.db, payload.userId, newRefreshToken);
+
+    return reply.status(200).send({
+      data: {
+        accessToken: newAccessToken,
+        refreshToken: newRefreshToken,
+      },
+    });
+  });
+
+  // POST /api/auth/logout — AUTHENTICATED
+  fastify.post<{ Body: LogoutBody }>('/api/auth/logout', {
+    schema: {
+      body: {
+        type: 'object',
+        required: ['refreshToken'],
+        properties: {
+          refreshToken: { type: 'string', minLength: 1 },
+        },
+        additionalProperties: false,
+      },
+    },
+  }, async (request, reply) => {
+    getAuthenticatedUser(request);
+    const { refreshToken } = request.body;
+
+    // Hash the refresh token, find and delete the matching session
+    const tokenHash = hashToken(refreshToken);
+    const session = findSessionByTokenHash(fastify.db, tokenHash);
+
+    if (session) {
+      deleteSession(fastify.db, session.id);
+    }
+
+    // Return 204 regardless (idempotent — don't leak session existence)
+    return reply.status(204).send();
   });
 }, { name: 'auth-routes' });
