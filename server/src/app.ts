@@ -1,6 +1,9 @@
 import Fastify, { FastifyInstance } from 'fastify';
 import { sql } from 'drizzle-orm';
 import dbPlugin from './plugins/db.js';
+import authMiddleware from './plugins/auth/authMiddleware.js';
+import authRoutes from './plugins/auth/authRoutes.js';
+import inviteRoutes from './plugins/invites/inviteRoutes.js';
 
 export async function buildApp(): Promise<FastifyInstance> {
   const app = Fastify({
@@ -16,14 +19,16 @@ export async function buildApp(): Promise<FastifyInstance> {
   // --- Infrastructure Plugins (register BEFORE domain plugins) ---
   await app.register(dbPlugin);
 
-  // --- Domain Plugins ---
-  // Domain plugins will be registered here:
-  // app.register(authPlugin);
+  // --- Auth & Domain Plugins ---
+  await app.register(authMiddleware);
+  await app.register(authRoutes);
+  await app.register(inviteRoutes);
+
+  // Future domain plugins:
   // app.register(channelRoutes);
   // app.register(messageRoutes);
   // app.register(voicePlugin);
   // app.register(adminRoutes);
-  // app.register(inviteRoutes);
   // app.register(presencePlugin);
 
   app.get('/api/health', async (_request, reply) => {

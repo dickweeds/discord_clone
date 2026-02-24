@@ -44,7 +44,7 @@ development_status:
   epic-1: in-progress
   1-1-project-scaffold-and-monorepo-setup: done
   1-2-database-schema-and-core-server-configuration: done
-  1-3-user-registration-and-invite-system: ready-for-dev
+  1-3-user-registration-and-invite-system: review
   1-4-user-login-logout-and-session-management: backlog
   1-5-e2e-encryption-foundation: backlog
   1-6-discord-familiar-app-shell-and-navigation: backlog
