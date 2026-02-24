@@ -1,0 +1,719 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>discord_clone — Design Direction Showcase</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Noto Sans", Helvetica, Arial, sans-serif; background: #0a0a0b; color: #f2f3f5; }
+
+  /* Navigation */
+  .nav { position: fixed; top: 0; left: 0; right: 0; z-index: 100; background: #111214; border-bottom: 1px solid #2b2d31; padding: 12px 24px; display: flex; align-items: center; gap: 16px; }
+  .nav h1 { font-size: 16px; font-weight: 600; color: #f2f3f5; white-space: nowrap; }
+  .nav-buttons { display: flex; gap: 8px; flex-wrap: wrap; }
+  .nav-btn { padding: 6px 14px; border-radius: 6px; border: 1px solid #404249; background: transparent; color: #b5bac1; font-size: 13px; cursor: pointer; transition: all 0.15s ease; }
+  .nav-btn:hover { background: #35373c; color: #f2f3f5; }
+  .nav-btn.active { background: #5865f2; border-color: #5865f2; color: #fff; }
+
+  /* Mockup container */
+  .mockups { margin-top: 56px; }
+  .mockup-section { display: none; min-height: calc(100vh - 56px); padding: 24px; }
+  .mockup-section.active { display: block; }
+  .mockup-title { font-size: 20px; font-weight: 700; margin-bottom: 4px; }
+  .mockup-desc { font-size: 14px; color: #b5bac1; margin-bottom: 20px; max-width: 700px; }
+
+  /* App frame */
+  .app-frame { border-radius: 12px; overflow: hidden; height: 600px; display: flex; box-shadow: 0 8px 32px rgba(0,0,0,0.5); }
+
+  /* Shared layout */
+  .sidebar { width: 240px; display: flex; flex-direction: column; flex-shrink: 0; }
+  .sidebar-header { padding: 12px 16px; font-size: 16px; font-weight: 700; display: flex; align-items: center; justify-content: space-between; }
+  .channel-section { padding: 8px 0; }
+  .channel-label { padding: 4px 16px; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; }
+  .channel-item { padding: 6px 16px; font-size: 14px; display: flex; align-items: center; gap: 8px; cursor: pointer; transition: background 0.15s ease; }
+  .channel-icon { font-size: 16px; opacity: 0.6; width: 20px; text-align: center; }
+  .voice-user { padding: 4px 16px 4px 44px; font-size: 13px; display: flex; align-items: center; gap: 8px; }
+  .voice-avatar { width: 24px; height: 24px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 11px; font-weight: 600; }
+  .speaking-ring { box-shadow: 0 0 0 2px #23a55a; }
+  .voice-bar { padding: 12px 16px; display: flex; align-items: center; gap: 8px; margin-top: auto; }
+  .voice-bar-info { flex: 1; }
+  .voice-bar-label { font-size: 13px; font-weight: 600; color: #23a55a; }
+  .voice-bar-channel { font-size: 11px; }
+  .voice-btn { width: 32px; height: 32px; border-radius: 50%; border: none; display: flex; align-items: center; justify-content: center; cursor: pointer; font-size: 14px; transition: all 0.15s ease; }
+
+  .content-area { flex: 1; display: flex; flex-direction: column; }
+  .content-header { padding: 12px 16px; font-size: 16px; font-weight: 600; display: flex; align-items: center; gap: 8px; }
+  .messages { flex: 1; padding: 16px; overflow-y: auto; display: flex; flex-direction: column; gap: 4px; }
+  .msg-group { margin-bottom: 12px; }
+  .msg-header { display: flex; align-items: baseline; gap: 8px; margin-bottom: 2px; }
+  .msg-author { font-size: 16px; font-weight: 500; }
+  .msg-time { font-size: 12px; }
+  .msg-body { font-size: 16px; line-height: 22px; }
+  .msg-input { padding: 12px 16px; }
+  .msg-input input { width: 100%; padding: 10px 16px; border-radius: 8px; border: none; font-size: 16px; font-family: inherit; outline: none; }
+
+  .member-list { width: 240px; padding: 16px; overflow-y: auto; flex-shrink: 0; }
+  .member-section-label { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; padding: 8px 0; }
+  .member-item { padding: 6px 8px; display: flex; align-items: center; gap: 8px; border-radius: 6px; cursor: pointer; transition: background 0.15s ease; }
+  .member-avatar { width: 32px; height: 32px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 13px; font-weight: 600; position: relative; }
+  .status-dot { width: 10px; height: 10px; border-radius: 50%; position: absolute; bottom: -1px; right: -1px; border: 2px solid; }
+  .member-name { font-size: 14px; }
+
+  /* User panel at bottom of sidebar */
+  .user-panel { padding: 8px; display: flex; align-items: center; gap: 8px; }
+  .user-panel-avatar { width: 32px; height: 32px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 13px; font-weight: 600; }
+  .user-panel-info { flex: 1; }
+  .user-panel-name { font-size: 14px; font-weight: 500; }
+  .user-panel-status { font-size: 11px; }
+  .user-panel-btns { display: flex; gap: 4px; }
+  .user-panel-btn { width: 28px; height: 28px; border-radius: 4px; border: none; display: flex; align-items: center; justify-content: center; cursor: pointer; font-size: 13px; }
+
+  /* Direction-specific styles */
+
+  /* Direction A: Classic Discord */
+  .dir-a .sidebar { background: #2b2d31; }
+  .dir-a .sidebar-header { background: #2b2d31; border-bottom: 1px solid #1e1f22; color: #f2f3f5; }
+  .dir-a .channel-label { color: #949ba4; }
+  .dir-a .channel-item { color: #949ba4; border-radius: 4px; margin: 0 8px; padding: 6px 8px; }
+  .dir-a .channel-item:hover { background: #35373c; color: #f2f3f5; }
+  .dir-a .channel-item.active { background: #404249; color: #f2f3f5; }
+  .dir-a .voice-user { color: #949ba4; }
+  .dir-a .voice-avatar { background: #5865f2; color: #fff; }
+  .dir-a .voice-bar { background: #232428; border-top: 1px solid #1e1f22; }
+  .dir-a .voice-bar-channel { color: #949ba4; }
+  .dir-a .voice-btn { background: #2b2d31; color: #b5bac1; }
+  .dir-a .voice-btn:hover { background: #35373c; color: #f2f3f5; }
+  .dir-a .content-area { background: #313338; }
+  .dir-a .content-header { border-bottom: 1px solid #2b2d31; color: #f2f3f5; }
+  .dir-a .msg-author { color: #f2f3f5; }
+  .dir-a .msg-time { color: #949ba4; }
+  .dir-a .msg-body { color: #dbdee1; }
+  .dir-a .msg-input input { background: #383a40; color: #f2f3f5; }
+  .dir-a .msg-input input::placeholder { color: #6d6f78; }
+  .dir-a .member-list { background: #2b2d31; border-left: 1px solid #1e1f22; }
+  .dir-a .member-section-label { color: #949ba4; }
+  .dir-a .member-item:hover { background: #35373c; }
+  .dir-a .member-avatar { background: #5865f2; color: #fff; }
+  .dir-a .member-name { color: #949ba4; }
+  .dir-a .status-dot.online { background: #23a55a; border-color: #2b2d31; }
+  .dir-a .status-dot.offline { background: #80848e; border-color: #2b2d31; }
+  .dir-a .user-panel { background: #232428; border-top: 1px solid #1e1f22; }
+  .dir-a .user-panel-avatar { background: #5865f2; color: #fff; }
+  .dir-a .user-panel-name { color: #f2f3f5; }
+  .dir-a .user-panel-status { color: #949ba4; }
+  .dir-a .user-panel-btn { background: transparent; color: #b5bac1; }
+  .dir-a .user-panel-btn:hover { background: #35373c; }
+
+  /* Direction B: Warm & Soft */
+  .dir-b .sidebar { background: #2a2520; }
+  .dir-b .sidebar-header { background: #2a2520; border-bottom: 1px solid #1c1915; color: #f0e6d9; }
+  .dir-b .channel-label { color: #a89882; }
+  .dir-b .channel-item { color: #a89882; border-radius: 8px; margin: 2px 8px; padding: 8px 10px; }
+  .dir-b .channel-item:hover { background: #362f28; color: #f0e6d9; }
+  .dir-b .channel-item.active { background: #3d342b; color: #f0e6d9; }
+  .dir-b .voice-user { color: #a89882; }
+  .dir-b .voice-avatar { background: #c97b35; color: #fff; border-radius: 8px; }
+  .dir-b .voice-bar { background: #1c1915; border-top: 1px solid #362f28; }
+  .dir-b .voice-bar-channel { color: #a89882; }
+  .dir-b .voice-btn { background: #2a2520; color: #a89882; border-radius: 8px; }
+  .dir-b .voice-btn:hover { background: #362f28; color: #f0e6d9; }
+  .dir-b .content-area { background: #221e1a; }
+  .dir-b .content-header { border-bottom: 1px solid #2a2520; color: #f0e6d9; }
+  .dir-b .msg-author { color: #f0e6d9; }
+  .dir-b .msg-time { color: #a89882; }
+  .dir-b .msg-body { color: #d4c4b0; }
+  .dir-b .msg-input input { background: #2a2520; color: #f0e6d9; border-radius: 12px; }
+  .dir-b .msg-input input::placeholder { color: #6d5f4e; }
+  .dir-b .member-list { background: #2a2520; border-left: 1px solid #1c1915; }
+  .dir-b .member-section-label { color: #a89882; }
+  .dir-b .member-item { border-radius: 8px; }
+  .dir-b .member-item:hover { background: #362f28; }
+  .dir-b .member-avatar { background: #c97b35; color: #fff; border-radius: 8px; }
+  .dir-b .member-name { color: #a89882; }
+  .dir-b .status-dot.online { background: #23a55a; border-color: #2a2520; }
+  .dir-b .status-dot.offline { background: #80848e; border-color: #2a2520; }
+  .dir-b .user-panel { background: #1c1915; border-top: 1px solid #362f28; }
+  .dir-b .user-panel-avatar { background: #c97b35; color: #fff; border-radius: 8px; }
+  .dir-b .user-panel-name { color: #f0e6d9; }
+  .dir-b .user-panel-status { color: #a89882; }
+  .dir-b .user-panel-btn { background: transparent; color: #a89882; border-radius: 6px; }
+  .dir-b .user-panel-btn:hover { background: #362f28; }
+
+  /* Direction C: Minimal & Clean */
+  .dir-c .sidebar { background: #18191c; }
+  .dir-c .sidebar-header { background: #18191c; border-bottom: 1px solid #222327; color: #f2f3f5; font-weight: 500; }
+  .dir-c .channel-label { color: #6d6f78; font-size: 10px; }
+  .dir-c .channel-item { color: #8b8d93; border-radius: 0; margin: 0; padding: 8px 16px; border-left: 2px solid transparent; }
+  .dir-c .channel-item:hover { background: #1e1f22; color: #f2f3f5; border-left-color: #404249; }
+  .dir-c .channel-item.active { background: #1e1f22; color: #f2f3f5; border-left-color: #5865f2; }
+  .dir-c .voice-user { color: #8b8d93; }
+  .dir-c .voice-avatar { background: #313338; color: #b5bac1; }
+  .dir-c .voice-bar { background: #111214; border-top: 1px solid #222327; }
+  .dir-c .voice-bar-channel { color: #6d6f78; }
+  .dir-c .voice-btn { background: #1e1f22; color: #8b8d93; }
+  .dir-c .voice-btn:hover { background: #2b2d31; color: #f2f3f5; }
+  .dir-c .content-area { background: #1e1f22; }
+  .dir-c .content-header { border-bottom: 1px solid #222327; color: #f2f3f5; font-weight: 500; }
+  .dir-c .msg-author { color: #f2f3f5; }
+  .dir-c .msg-time { color: #6d6f78; }
+  .dir-c .msg-body { color: #b5bac1; }
+  .dir-c .msg-input input { background: #111214; color: #f2f3f5; border: 1px solid #222327; }
+  .dir-c .msg-input input::placeholder { color: #4e5058; }
+  .dir-c .member-list { background: #18191c; border-left: 1px solid #222327; }
+  .dir-c .member-section-label { color: #6d6f78; }
+  .dir-c .member-item { border-radius: 4px; }
+  .dir-c .member-item:hover { background: #1e1f22; }
+  .dir-c .member-avatar { background: #313338; color: #b5bac1; }
+  .dir-c .member-name { color: #8b8d93; }
+  .dir-c .status-dot.online { background: #23a55a; border-color: #18191c; }
+  .dir-c .status-dot.offline { background: #6d6f78; border-color: #18191c; }
+  .dir-c .user-panel { background: #111214; border-top: 1px solid #222327; }
+  .dir-c .user-panel-avatar { background: #313338; color: #b5bac1; }
+  .dir-c .user-panel-name { color: #f2f3f5; }
+  .dir-c .user-panel-status { color: #6d6f78; }
+  .dir-c .user-panel-btn { background: transparent; color: #6d6f78; }
+  .dir-c .user-panel-btn:hover { background: #1e1f22; }
+
+  /* Direction D: Vibrant Gaming */
+  .dir-d .sidebar { background: #1a1b2e; }
+  .dir-d .sidebar-header { background: linear-gradient(135deg, #1a1b2e, #252745); border-bottom: 1px solid #2a2c4a; color: #e8e6f0; }
+  .dir-d .channel-label { color: #7b79a8; }
+  .dir-d .channel-item { color: #8886b5; border-radius: 6px; margin: 1px 8px; padding: 7px 10px; }
+  .dir-d .channel-item:hover { background: #252745; color: #e8e6f0; }
+  .dir-d .channel-item.active { background: #5865f2; color: #fff; }
+  .dir-d .voice-user { color: #8886b5; }
+  .dir-d .voice-avatar { background: #5865f2; color: #fff; }
+  .dir-d .voice-bar { background: #13142a; border-top: 1px solid #2a2c4a; }
+  .dir-d .voice-bar-channel { color: #7b79a8; }
+  .dir-d .voice-btn { background: #1a1b2e; color: #8886b5; }
+  .dir-d .voice-btn:hover { background: #252745; color: #e8e6f0; }
+  .dir-d .content-area { background: #1e1f35; }
+  .dir-d .content-header { border-bottom: 1px solid #2a2c4a; color: #e8e6f0; }
+  .dir-d .msg-author { color: #e8e6f0; }
+  .dir-d .msg-time { color: #7b79a8; }
+  .dir-d .msg-body { color: #c5c3de; }
+  .dir-d .msg-input input { background: #252745; color: #e8e6f0; border-radius: 10px; }
+  .dir-d .msg-input input::placeholder { color: #55537a; }
+  .dir-d .member-list { background: #1a1b2e; border-left: 1px solid #2a2c4a; }
+  .dir-d .member-section-label { color: #7b79a8; }
+  .dir-d .member-item { border-radius: 6px; }
+  .dir-d .member-item:hover { background: #252745; }
+  .dir-d .member-avatar { background: #5865f2; color: #fff; }
+  .dir-d .member-name { color: #8886b5; }
+  .dir-d .status-dot.online { background: #23a55a; border-color: #1a1b2e; }
+  .dir-d .status-dot.offline { background: #55537a; border-color: #1a1b2e; }
+  .dir-d .user-panel { background: #13142a; border-top: 1px solid #2a2c4a; }
+  .dir-d .user-panel-avatar { background: #5865f2; color: #fff; }
+  .dir-d .user-panel-name { color: #e8e6f0; }
+  .dir-d .user-panel-status { color: #7b79a8; }
+  .dir-d .user-panel-btn { background: transparent; color: #7b79a8; }
+  .dir-d .user-panel-btn:hover { background: #252745; }
+
+  /* Direction E: Subtle Warmth (Recommended) */
+  .dir-e .sidebar { background: #2b2d31; }
+  .dir-e .sidebar-header { background: #2b2d31; border-bottom: 1px solid #1e1f22; color: #f2f3f5; }
+  .dir-e .channel-label { color: #949ba4; }
+  .dir-e .channel-item { color: #949ba4; border-radius: 6px; margin: 1px 8px; padding: 7px 10px; }
+  .dir-e .channel-item:hover { background: #353739; color: #f2f3f5; }
+  .dir-e .channel-item.active { background: #3f4147; color: #f2f3f5; }
+  .dir-e .voice-user { color: #949ba4; }
+  .dir-e .voice-avatar { background: #5865f2; color: #fff; }
+  .dir-e .voice-bar { background: #1e1f22; border-top: 1px solid #1a1b1e; }
+  .dir-e .voice-bar-channel { color: #949ba4; }
+  .dir-e .voice-btn { background: #2b2d31; color: #b5bac1; border-radius: 6px; }
+  .dir-e .voice-btn:hover { background: #353739; color: #f2f3f5; }
+  .dir-e .content-area { background: #313338; }
+  .dir-e .content-header { border-bottom: 1px solid #2b2d31; color: #f2f3f5; }
+  .dir-e .msg-author { color: #f2f3f5; }
+  .dir-e .msg-time { color: #949ba4; }
+  .dir-e .msg-body { color: #dbdee1; }
+  .dir-e .msg-input input { background: #383a40; color: #f2f3f5; border-radius: 10px; }
+  .dir-e .msg-input input::placeholder { color: #6d6f78; }
+  .dir-e .member-list { background: #2b2d31; border-left: 1px solid #232528; }
+  .dir-e .member-section-label { color: #949ba4; }
+  .dir-e .member-item { border-radius: 6px; }
+  .dir-e .member-item:hover { background: #353739; }
+  .dir-e .member-avatar { background: #5865f2; color: #fff; }
+  .dir-e .member-name { color: #949ba4; }
+  .dir-e .status-dot.online { background: #23a55a; border-color: #2b2d31; }
+  .dir-e .status-dot.offline { background: #80848e; border-color: #2b2d31; }
+  .dir-e .user-panel { background: #232428; border-top: 1px solid #1e1f22; }
+  .dir-e .user-panel-avatar { background: #5865f2; color: #fff; }
+  .dir-e .user-panel-name { color: #f2f3f5; }
+  .dir-e .user-panel-status { color: #949ba4; }
+  .dir-e .user-panel-btn { background: transparent; color: #b5bac1; border-radius: 6px; }
+  .dir-e .user-panel-btn:hover { background: #353739; }
+
+  /* Direction F: Deep Dark */
+  .dir-f .sidebar { background: #141517; }
+  .dir-f .sidebar-header { background: #141517; border-bottom: 1px solid #1e1f22; color: #e0e1e5; }
+  .dir-f .channel-label { color: #6d6f78; }
+  .dir-f .channel-item { color: #80848e; border-radius: 4px; margin: 1px 6px; padding: 6px 10px; }
+  .dir-f .channel-item:hover { background: #1e1f22; color: #e0e1e5; }
+  .dir-f .channel-item.active { background: #232528; color: #e0e1e5; }
+  .dir-f .voice-user { color: #80848e; }
+  .dir-f .voice-avatar { background: #4752c4; color: #fff; }
+  .dir-f .voice-bar { background: #0d0e10; border-top: 1px solid #1e1f22; }
+  .dir-f .voice-bar-channel { color: #6d6f78; }
+  .dir-f .voice-btn { background: #141517; color: #80848e; }
+  .dir-f .voice-btn:hover { background: #1e1f22; color: #e0e1e5; }
+  .dir-f .content-area { background: #1a1b1e; }
+  .dir-f .content-header { border-bottom: 1px solid #141517; color: #e0e1e5; }
+  .dir-f .msg-author { color: #e0e1e5; }
+  .dir-f .msg-time { color: #6d6f78; }
+  .dir-f .msg-body { color: #a1a4ab; }
+  .dir-f .msg-input input { background: #141517; color: #e0e1e5; border: 1px solid #232528; }
+  .dir-f .msg-input input::placeholder { color: #4e5058; }
+  .dir-f .member-list { background: #141517; border-left: 1px solid #1e1f22; }
+  .dir-f .member-section-label { color: #6d6f78; }
+  .dir-f .member-item { border-radius: 4px; }
+  .dir-f .member-item:hover { background: #1e1f22; }
+  .dir-f .member-avatar { background: #4752c4; color: #fff; }
+  .dir-f .member-name { color: #80848e; }
+  .dir-f .status-dot.online { background: #23a55a; border-color: #141517; }
+  .dir-f .status-dot.offline { background: #6d6f78; border-color: #141517; }
+  .dir-f .user-panel { background: #0d0e10; border-top: 1px solid #1e1f22; }
+  .dir-f .user-panel-avatar { background: #4752c4; color: #fff; }
+  .dir-f .user-panel-name { color: #e0e1e5; }
+  .dir-f .user-panel-status { color: #6d6f78; }
+  .dir-f .user-panel-btn { background: transparent; color: #6d6f78; }
+  .dir-f .user-panel-btn:hover { background: #1e1f22; }
+</style>
+</head>
+<body>
+
+<nav class="nav">
+  <h1>discord_clone — Design Directions</h1>
+  <div class="nav-buttons">
+    <button class="nav-btn active" onclick="showDirection('a')">A: Classic Discord</button>
+    <button class="nav-btn" onclick="showDirection('b')">B: Warm & Earthy</button>
+    <button class="nav-btn" onclick="showDirection('c')">C: Minimal & Clean</button>
+    <button class="nav-btn" onclick="showDirection('d')">D: Vibrant Gaming</button>
+    <button class="nav-btn" onclick="showDirection('e')">E: Subtle Warmth ★</button>
+    <button class="nav-btn" onclick="showDirection('f')">F: Deep Dark</button>
+  </div>
+</nav>
+
+<div class="mockups">
+
+  <!-- Direction A: Classic Discord -->
+  <section id="dir-a" class="mockup-section active">
+    <div class="mockup-title">Direction A: Classic Discord</div>
+    <div class="mockup-desc">The closest match to Discord's current visual language. Sharp corners on items, familiar gray tones, identical spatial density. Maximum muscle memory preservation — users won't notice they switched.</div>
+    <div class="app-frame dir-a">
+      <div class="sidebar">
+        <div class="sidebar-header">discord_clone <span style="font-size:12px;opacity:0.5">▼</span></div>
+        <div class="channel-section">
+          <div class="channel-label">Text Channels</div>
+          <div class="channel-item active"><span class="channel-icon">#</span> general</div>
+          <div class="channel-item"><span class="channel-icon">#</span> off-topic</div>
+          <div class="channel-item"><span class="channel-icon">#</span> memes</div>
+        </div>
+        <div class="channel-section">
+          <div class="channel-label">Voice Channels</div>
+          <div class="channel-item"><span class="channel-icon">🔊</span> Gaming</div>
+          <div class="voice-user"><div class="voice-avatar speaking-ring">M</div> Marcus</div>
+          <div class="voice-user"><div class="voice-avatar">J</div> Jordan</div>
+          <div class="voice-user"><div class="voice-avatar">T</div> Tyler</div>
+          <div class="channel-item"><span class="channel-icon">🔊</span> Chill</div>
+        </div>
+        <div class="voice-bar">
+          <div class="voice-bar-info">
+            <div class="voice-bar-label">● Voice Connected</div>
+            <div class="voice-bar-channel">Gaming</div>
+          </div>
+          <div class="voice-btn">🎤</div>
+          <div class="voice-btn">🎧</div>
+          <div class="voice-btn" style="color:#f23f43">📞</div>
+        </div>
+        <div class="user-panel">
+          <div class="user-panel-avatar">A</div>
+          <div class="user-panel-info">
+            <div class="user-panel-name">Aiden</div>
+            <div class="user-panel-status">Online</div>
+          </div>
+          <div class="user-panel-btns">
+            <button class="user-panel-btn">⚙</button>
+          </div>
+        </div>
+      </div>
+      <div class="content-area">
+        <div class="content-header"><span style="opacity:0.5">#</span> general</div>
+        <div class="messages">
+          <div class="msg-group">
+            <div class="msg-header"><span class="msg-author">Marcus</span><span class="msg-time">Today at 7:32 PM</span></div>
+            <div class="msg-body">yo who's hopping on tonight?</div>
+          </div>
+          <div class="msg-group">
+            <div class="msg-header"><span class="msg-author">Jordan</span><span class="msg-time">Today at 7:33 PM</span></div>
+            <div class="msg-body">im down, give me like 20 min</div>
+          </div>
+          <div class="msg-group">
+            <div class="msg-header"><span class="msg-author">Tyler</span><span class="msg-time">Today at 7:34 PM</span></div>
+            <div class="msg-body">already in voice lol</div>
+          </div>
+          <div class="msg-group">
+            <div class="msg-header"><span class="msg-author">Aiden</span><span class="msg-time">Today at 7:35 PM</span></div>
+            <div class="msg-body">joining now, someone invite sarah too</div>
+          </div>
+          <div class="msg-group">
+            <div class="msg-header"><span class="msg-author">Marcus</span><span class="msg-time">Today at 7:36 PM</span></div>
+            <div class="msg-body">wait this app is so fast, what did you build this with?</div>
+          </div>
+        </div>
+        <div class="msg-input"><input type="text" placeholder="Message #general" /></div>
+      </div>
+      <div class="member-list">
+        <div class="member-section-label">ONLINE — 5</div>
+        <div class="member-item"><div class="member-avatar">A<div class="status-dot online"></div></div><span class="member-name">Aiden</span></div>
+        <div class="member-item"><div class="member-avatar">M<div class="status-dot online"></div></div><span class="member-name">Marcus</span></div>
+        <div class="member-item"><div class="member-avatar">J<div class="status-dot online"></div></div><span class="member-name">Jordan</span></div>
+        <div class="member-item"><div class="member-avatar">T<div class="status-dot online"></div></div><span class="member-name">Tyler</span></div>
+        <div class="member-item"><div class="member-avatar">S<div class="status-dot online"></div></div><span class="member-name">Sarah</span></div>
+        <div class="member-section-label">OFFLINE — 3</div>
+        <div class="member-item"><div class="member-avatar" style="opacity:0.5">D<div class="status-dot offline"></div></div><span class="member-name" style="opacity:0.5">Derek</span></div>
+        <div class="member-item"><div class="member-avatar" style="opacity:0.5">L<div class="status-dot offline"></div></div><span class="member-name" style="opacity:0.5">Luna</span></div>
+        <div class="member-item"><div class="member-avatar" style="opacity:0.5">C<div class="status-dot offline"></div></div><span class="member-name" style="opacity:0.5">Chris</span></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Direction B: Warm & Earthy -->
+  <section id="dir-b" class="mockup-section">
+    <div class="mockup-title">Direction B: Warm & Earthy</div>
+    <div class="mockup-desc">A departure from cool grays into warm browns and amber tones. Softer border radius, warmer text colors. Feels like a cozy cabin instead of a tech product. More personality, but less familiar.</div>
+    <div class="app-frame dir-b">
+      <div class="sidebar">
+        <div class="sidebar-header">discord_clone <span style="font-size:12px;opacity:0.5">▼</span></div>
+        <div class="channel-section">
+          <div class="channel-label">Text Channels</div>
+          <div class="channel-item active"><span class="channel-icon">#</span> general</div>
+          <div class="channel-item"><span class="channel-icon">#</span> off-topic</div>
+          <div class="channel-item"><span class="channel-icon">#</span> memes</div>
+        </div>
+        <div class="channel-section">
+          <div class="channel-label">Voice Channels</div>
+          <div class="channel-item"><span class="channel-icon">🔊</span> Gaming</div>
+          <div class="voice-user"><div class="voice-avatar speaking-ring">M</div> Marcus</div>
+          <div class="voice-user"><div class="voice-avatar">J</div> Jordan</div>
+          <div class="voice-user"><div class="voice-avatar">T</div> Tyler</div>
+          <div class="channel-item"><span class="channel-icon">🔊</span> Chill</div>
+        </div>
+        <div class="voice-bar">
+          <div class="voice-bar-info">
+            <div class="voice-bar-label">● Voice Connected</div>
+            <div class="voice-bar-channel">Gaming</div>
+          </div>
+          <div class="voice-btn">🎤</div>
+          <div class="voice-btn">🎧</div>
+          <div class="voice-btn" style="color:#f23f43">📞</div>
+        </div>
+        <div class="user-panel">
+          <div class="user-panel-avatar">A</div>
+          <div class="user-panel-info">
+            <div class="user-panel-name">Aiden</div>
+            <div class="user-panel-status">Online</div>
+          </div>
+          <div class="user-panel-btns"><button class="user-panel-btn">⚙</button></div>
+        </div>
+      </div>
+      <div class="content-area">
+        <div class="content-header"><span style="opacity:0.5">#</span> general</div>
+        <div class="messages">
+          <div class="msg-group"><div class="msg-header"><span class="msg-author">Marcus</span><span class="msg-time">Today at 7:32 PM</span></div><div class="msg-body">yo who's hopping on tonight?</div></div>
+          <div class="msg-group"><div class="msg-header"><span class="msg-author">Jordan</span><span class="msg-time">Today at 7:33 PM</span></div><div class="msg-body">im down, give me like 20 min</div></div>
+          <div class="msg-group"><div class="msg-header"><span class="msg-author">Tyler</span><span class="msg-time">Today at 7:34 PM</span></div><div class="msg-body">already in voice lol</div></div>
+          <div class="msg-group"><div class="msg-header"><span class="msg-author">Aiden</span><span class="msg-time">Today at 7:35 PM</span></div><div class="msg-body">joining now, someone invite sarah too</div></div>
+          <div class="msg-group"><div class="msg-header"><span class="msg-author">Marcus</span><span class="msg-time">Today at 7:36 PM</span></div><div class="msg-body">wait this app is so fast, what did you build this with?</div></div>
+        </div>
+        <div class="msg-input"><input type="text" placeholder="Message #general" /></div>
+      </div>
+      <div class="member-list">
+        <div class="member-section-label">ONLINE — 5</div>
+        <div class="member-item"><div class="member-avatar">A<div class="status-dot online"></div></div><span class="member-name">Aiden</span></div>
+        <div class="member-item"><div class="member-avatar">M<div class="status-dot online"></div></div><span class="member-name">Marcus</span></div>
+        <div class="member-item"><div class="member-avatar">J<div class="status-dot online"></div></div><span class="member-name">Jordan</span></div>
+        <div class="member-item"><div class="member-avatar">T<div class="status-dot online"></div></div><span class="member-name">Tyler</span></div>
+        <div class="member-item"><div class="member-avatar">S<div class="status-dot online"></div></div><span class="member-name">Sarah</span></div>
+        <div class="member-section-label">OFFLINE — 3</div>
+        <div class="member-item"><div class="member-avatar" style="opacity:0.5">D<div class="status-dot offline"></div></div><span class="member-name" style="opacity:0.5">Derek</span></div>
+        <div class="member-item"><div class="member-avatar" style="opacity:0.5">L<div class="status-dot offline"></div></div><span class="member-name" style="opacity:0.5">Luna</span></div>
+        <div class="member-item"><div class="member-avatar" style="opacity:0.5">C<div class="status-dot offline"></div></div><span class="member-name" style="opacity:0.5">Chris</span></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Direction C: Minimal & Clean -->
+  <section id="dir-c" class="mockup-section">
+    <div class="mockup-title">Direction C: Minimal & Clean</div>
+    <div class="mockup-desc">Ultra-minimal approach with left-border indicators instead of background highlights. Reduced visual weight, maximum content focus. Feels almost IDE-like — efficient and no-nonsense. Very dark, very quiet.</div>
+    <div class="app-frame dir-c">
+      <div class="sidebar">
+        <div class="sidebar-header">discord_clone</div>
+        <div class="channel-section">
+          <div class="channel-label">Text Channels</div>
+          <div class="channel-item active"><span class="channel-icon">#</span> general</div>
+          <div class="channel-item"><span class="channel-icon">#</span> off-topic</div>
+          <div class="channel-item"><span class="channel-icon">#</span> memes</div>
+        </div>
+        <div class="channel-section">
+          <div class="channel-label">Voice Channels</div>
+          <div class="channel-item"><span class="channel-icon">🔊</span> Gaming</div>
+          <div class="voice-user"><div class="voice-avatar speaking-ring">M</div> Marcus</div>
+          <div class="voice-user"><div class="voice-avatar">J</div> Jordan</div>
+          <div class="voice-user"><div class="voice-avatar">T</div> Tyler</div>
+          <div class="channel-item"><span class="channel-icon">🔊</span> Chill</div>
+        </div>
+        <div class="voice-bar">
+          <div class="voice-bar-info">
+            <div class="voice-bar-label">● Voice Connected</div>
+            <div class="voice-bar-channel">Gaming</div>
+          </div>
+          <div class="voice-btn">🎤</div>
+          <div class="voice-btn">🎧</div>
+          <div class="voice-btn" style="color:#f23f43">📞</div>
+        </div>
+        <div class="user-panel">
+          <div class="user-panel-avatar">A</div>
+          <div class="user-panel-info">
+            <div class="user-panel-name">Aiden</div>
+            <div class="user-panel-status">Online</div>
+          </div>
+          <div class="user-panel-btns"><button class="user-panel-btn">⚙</button></div>
+        </div>
+      </div>
+      <div class="content-area">
+        <div class="content-header"><span style="opacity:0.5">#</span> general</div>
+        <div class="messages">
+          <div class="msg-group"><div class="msg-header"><span class="msg-author">Marcus</span><span class="msg-time">Today at 7:32 PM</span></div><div class="msg-body">yo who's hopping on tonight?</div></div>
+          <div class="msg-group"><div class="msg-header"><span class="msg-author">Jordan</span><span class="msg-time">Today at 7:33 PM</span></div><div class="msg-body">im down, give me like 20 min</div></div>
+          <div class="msg-group"><div class="msg-header"><span class="msg-author">Tyler</span><span class="msg-time">Today at 7:34 PM</span></div><div class="msg-body">already in voice lol</div></div>
+          <div class="msg-group"><div class="msg-header"><span class="msg-author">Aiden</span><span class="msg-time">Today at 7:35 PM</span></div><div class="msg-body">joining now, someone invite sarah too</div></div>
+          <div class="msg-group"><div class="msg-header"><span class="msg-author">Marcus</span><span class="msg-time">Today at 7:36 PM</span></div><div class="msg-body">wait this app is so fast, what did you build this with?</div></div>
+        </div>
+        <div class="msg-input"><input type="text" placeholder="Message #general" /></div>
+      </div>
+      <div class="member-list">
+        <div class="member-section-label">ONLINE — 5</div>
+        <div class="member-item"><div class="member-avatar">A<div class="status-dot online"></div></div><span class="member-name">Aiden</span></div>
+        <div class="member-item"><div class="member-avatar">M<div class="status-dot online"></div></div><span class="member-name">Marcus</span></div>
+        <div class="member-item"><div class="member-avatar">J<div class="status-dot online"></div></div><span class="member-name">Jordan</span></div>
+        <div class="member-item"><div class="member-avatar">T<div class="status-dot online"></div></div><span class="member-name">Tyler</span></div>
+        <div class="member-item"><div class="member-avatar">S<div class="status-dot online"></div></div><span class="member-name">Sarah</span></div>
+        <div class="member-section-label">OFFLINE — 3</div>
+        <div class="member-item"><div class="member-avatar" style="opacity:0.5">D<div class="status-dot offline"></div></div><span class="member-name" style="opacity:0.5">Derek</span></div>
+        <div class="member-item"><div class="member-avatar" style="opacity:0.5">L<div class="status-dot offline"></div></div><span class="member-name" style="opacity:0.5">Luna</span></div>
+        <div class="member-item"><div class="member-avatar" style="opacity:0.5">C<div class="status-dot offline"></div></div><span class="member-name" style="opacity:0.5">Chris</span></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Direction D: Vibrant Gaming -->
+  <section id="dir-d" class="mockup-section">
+    <div class="mockup-title">Direction D: Vibrant Gaming</div>
+    <div class="mockup-desc">Leans into gaming culture with deep indigo/purple undertones and more vibrant accent usage. Active channel gets a full accent fill. Energetic but still dark. Feels like a gaming-first platform.</div>
+    <div class="app-frame dir-d">
+      <div class="sidebar">
+        <div class="sidebar-header">discord_clone <span style="font-size:12px;opacity:0.5">▼</span></div>
+        <div class="channel-section">
+          <div class="channel-label">Text Channels</div>
+          <div class="channel-item active"><span class="channel-icon">#</span> general</div>
+          <div class="channel-item"><span class="channel-icon">#</span> off-topic</div>
+          <div class="channel-item"><span class="channel-icon">#</span> memes</div>
+        </div>
+        <div class="channel-section">
+          <div class="channel-label">Voice Channels</div>
+          <div class="channel-item"><span class="channel-icon">🔊</span> Gaming</div>
+          <div class="voice-user"><div class="voice-avatar speaking-ring">M</div> Marcus</div>
+          <div class="voice-user"><div class="voice-avatar">J</div> Jordan</div>
+          <div class="voice-user"><div class="voice-avatar">T</div> Tyler</div>
+          <div class="channel-item"><span class="channel-icon">🔊</span> Chill</div>
+        </div>
+        <div class="voice-bar">
+          <div class="voice-bar-info">
+            <div class="voice-bar-label">● Voice Connected</div>
+            <div class="voice-bar-channel">Gaming</div>
+          </div>
+          <div class="voice-btn">🎤</div>
+          <div class="voice-btn">🎧</div>
+          <div class="voice-btn" style="color:#f23f43">📞</div>
+        </div>
+        <div class="user-panel">
+          <div class="user-panel-avatar">A</div>
+          <div class="user-panel-info">
+            <div class="user-panel-name">Aiden</div>
+            <div class="user-panel-status">Online</div>
+          </div>
+          <div class="user-panel-btns"><button class="user-panel-btn">⚙</button></div>
+        </div>
+      </div>
+      <div class="content-area">
+        <div class="content-header"><span style="opacity:0.5">#</span> general</div>
+        <div class="messages">
+          <div class="msg-group"><div class="msg-header"><span class="msg-author">Marcus</span><span class="msg-time">Today at 7:32 PM</span></div><div class="msg-body">yo who's hopping on tonight?</div></div>
+          <div class="msg-group"><div class="msg-header"><span class="msg-author">Jordan</span><span class="msg-time">Today at 7:33 PM</span></div><div class="msg-body">im down, give me like 20 min</div></div>
+          <div class="msg-group"><div class="msg-header"><span class="msg-author">Tyler</span><span class="msg-time">Today at 7:34 PM</span></div><div class="msg-body">already in voice lol</div></div>
+          <div class="msg-group"><div class="msg-header"><span class="msg-author">Aiden</span><span class="msg-time">Today at 7:35 PM</span></div><div class="msg-body">joining now, someone invite sarah too</div></div>
+          <div class="msg-group"><div class="msg-header"><span class="msg-author">Marcus</span><span class="msg-time">Today at 7:36 PM</span></div><div class="msg-body">wait this app is so fast, what did you build this with?</div></div>
+        </div>
+        <div class="msg-input"><input type="text" placeholder="Message #general" /></div>
+      </div>
+      <div class="member-list">
+        <div class="member-section-label">ONLINE — 5</div>
+        <div class="member-item"><div class="member-avatar">A<div class="status-dot online"></div></div><span class="member-name">Aiden</span></div>
+        <div class="member-item"><div class="member-avatar">M<div class="status-dot online"></div></div><span class="member-name">Marcus</span></div>
+        <div class="member-item"><div class="member-avatar">J<div class="status-dot online"></div></div><span class="member-name">Jordan</span></div>
+        <div class="member-item"><div class="member-avatar">T<div class="status-dot online"></div></div><span class="member-name">Tyler</span></div>
+        <div class="member-item"><div class="member-avatar">S<div class="status-dot online"></div></div><span class="member-name">Sarah</span></div>
+        <div class="member-section-label">OFFLINE — 3</div>
+        <div class="member-item"><div class="member-avatar" style="opacity:0.5">D<div class="status-dot offline"></div></div><span class="member-name" style="opacity:0.5">Derek</span></div>
+        <div class="member-item"><div class="member-avatar" style="opacity:0.5">L<div class="status-dot offline"></div></div><span class="member-name" style="opacity:0.5">Luna</span></div>
+        <div class="member-item"><div class="member-avatar" style="opacity:0.5">C<div class="status-dot offline"></div></div><span class="member-name" style="opacity:0.5">Chris</span></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Direction E: Subtle Warmth (Recommended) -->
+  <section id="dir-e" class="mockup-section">
+    <div class="mockup-title">Direction E: Subtle Warmth ★ Recommended</div>
+    <div class="mockup-desc">Discord's proven layout with slightly softer edges (6px radius), subtly warmer hover states, and a touch more breathing room. The "if Discord was designed by someone who cared about comfort" direction. Familiar enough to trigger muscle memory, refined enough to feel better.</div>
+    <div class="app-frame dir-e">
+      <div class="sidebar">
+        <div class="sidebar-header">discord_clone <span style="font-size:12px;opacity:0.5">▼</span></div>
+        <div class="channel-section">
+          <div class="channel-label">Text Channels</div>
+          <div class="channel-item active"><span class="channel-icon">#</span> general</div>
+          <div class="channel-item"><span class="channel-icon">#</span> off-topic</div>
+          <div class="channel-item"><span class="channel-icon">#</span> memes</div>
+        </div>
+        <div class="channel-section">
+          <div class="channel-label">Voice Channels</div>
+          <div class="channel-item"><span class="channel-icon">🔊</span> Gaming</div>
+          <div class="voice-user"><div class="voice-avatar speaking-ring">M</div> Marcus</div>
+          <div class="voice-user"><div class="voice-avatar">J</div> Jordan</div>
+          <div class="voice-user"><div class="voice-avatar">T</div> Tyler</div>
+          <div class="channel-item"><span class="channel-icon">🔊</span> Chill</div>
+        </div>
+        <div class="voice-bar">
+          <div class="voice-bar-info">
+            <div class="voice-bar-label">● Voice Connected</div>
+            <div class="voice-bar-channel">Gaming</div>
+          </div>
+          <div class="voice-btn">🎤</div>
+          <div class="voice-btn">🎧</div>
+          <div class="voice-btn" style="color:#f23f43">📞</div>
+        </div>
+        <div class="user-panel">
+          <div class="user-panel-avatar">A</div>
+          <div class="user-panel-info">
+            <div class="user-panel-name">Aiden</div>
+            <div class="user-panel-status">Online</div>
+          </div>
+          <div class="user-panel-btns"><button class="user-panel-btn">⚙</button></div>
+        </div>
+      </div>
+      <div class="content-area">
+        <div class="content-header"><span style="opacity:0.5">#</span> general</div>
+        <div class="messages">
+          <div class="msg-group"><div class="msg-header"><span class="msg-author">Marcus</span><span class="msg-time">Today at 7:32 PM</span></div><div class="msg-body">yo who's hopping on tonight?</div></div>
+          <div class="msg-group"><div class="msg-header"><span class="msg-author">Jordan</span><span class="msg-time">Today at 7:33 PM</span></div><div class="msg-body">im down, give me like 20 min</div></div>
+          <div class="msg-group"><div class="msg-header"><span class="msg-author">Tyler</span><span class="msg-time">Today at 7:34 PM</span></div><div class="msg-body">already in voice lol</div></div>
+          <div class="msg-group"><div class="msg-header"><span class="msg-author">Aiden</span><span class="msg-time">Today at 7:35 PM</span></div><div class="msg-body">joining now, someone invite sarah too</div></div>
+          <div class="msg-group"><div class="msg-header"><span class="msg-author">Marcus</span><span class="msg-time">Today at 7:36 PM</span></div><div class="msg-body">wait this app is so fast, what did you build this with?</div></div>
+        </div>
+        <div class="msg-input"><input type="text" placeholder="Message #general" /></div>
+      </div>
+      <div class="member-list">
+        <div class="member-section-label">ONLINE — 5</div>
+        <div class="member-item"><div class="member-avatar">A<div class="status-dot online"></div></div><span class="member-name">Aiden</span></div>
+        <div class="member-item"><div class="member-avatar">M<div class="status-dot online"></div></div><span class="member-name">Marcus</span></div>
+        <div class="member-item"><div class="member-avatar">J<div class="status-dot online"></div></div><span class="member-name">Jordan</span></div>
+        <div class="member-item"><div class="member-avatar">T<div class="status-dot online"></div></div><span class="member-name">Tyler</span></div>
+        <div class="member-item"><div class="member-avatar">S<div class="status-dot online"></div></div><span class="member-name">Sarah</span></div>
+        <div class="member-section-label">OFFLINE — 3</div>
+        <div class="member-item"><div class="member-avatar" style="opacity:0.5">D<div class="status-dot offline"></div></div><span class="member-name" style="opacity:0.5">Derek</span></div>
+        <div class="member-item"><div class="member-avatar" style="opacity:0.5">L<div class="status-dot offline"></div></div><span class="member-name" style="opacity:0.5">Luna</span></div>
+        <div class="member-item"><div class="member-avatar" style="opacity:0.5">C<div class="status-dot offline"></div></div><span class="member-name" style="opacity:0.5">Chris</span></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Direction F: Deep Dark -->
+  <section id="dir-f" class="mockup-section">
+    <div class="mockup-title">Direction F: Deep Dark</div>
+    <div class="mockup-desc">The darkest option — nearly black backgrounds with minimal contrast between regions. Feels stealthy and understated. Maximum "disappear into the background during gaming" energy. Borders use subtle lines instead of background color changes.</div>
+    <div class="app-frame dir-f">
+      <div class="sidebar">
+        <div class="sidebar-header">discord_clone</div>
+        <div class="channel-section">
+          <div class="channel-label">Text Channels</div>
+          <div class="channel-item active"><span class="channel-icon">#</span> general</div>
+          <div class="channel-item"><span class="channel-icon">#</span> off-topic</div>
+          <div class="channel-item"><span class="channel-icon">#</span> memes</div>
+        </div>
+        <div class="channel-section">
+          <div class="channel-label">Voice Channels</div>
+          <div class="channel-item"><span class="channel-icon">🔊</span> Gaming</div>
+          <div class="voice-user"><div class="voice-avatar speaking-ring">M</div> Marcus</div>
+          <div class="voice-user"><div class="voice-avatar">J</div> Jordan</div>
+          <div class="voice-user"><div class="voice-avatar">T</div> Tyler</div>
+          <div class="channel-item"><span class="channel-icon">🔊</span> Chill</div>
+        </div>
+        <div class="voice-bar">
+          <div class="voice-bar-info">
+            <div class="voice-bar-label">● Voice Connected</div>
+            <div class="voice-bar-channel">Gaming</div>
+          </div>
+          <div class="voice-btn">🎤</div>
+          <div class="voice-btn">🎧</div>
+          <div class="voice-btn" style="color:#f23f43">📞</div>
+        </div>
+        <div class="user-panel">
+          <div class="user-panel-avatar">A</div>
+          <div class="user-panel-info">
+            <div class="user-panel-name">Aiden</div>
+            <div class="user-panel-status">Online</div>
+          </div>
+          <div class="user-panel-btns"><button class="user-panel-btn">⚙</button></div>
+        </div>
+      </div>
+      <div class="content-area">
+        <div class="content-header"><span style="opacity:0.5">#</span> general</div>
+        <div class="messages">
+          <div class="msg-group"><div class="msg-header"><span class="msg-author">Marcus</span><span class="msg-time">Today at 7:32 PM</span></div><div class="msg-body">yo who's hopping on tonight?</div></div>
+          <div class="msg-group"><div class="msg-header"><span class="msg-author">Jordan</span><span class="msg-time">Today at 7:33 PM</span></div><div class="msg-body">im down, give me like 20 min</div></div>
+          <div class="msg-group"><div class="msg-header"><span class="msg-author">Tyler</span><span class="msg-time">Today at 7:34 PM</span></div><div class="msg-body">already in voice lol</div></div>
+          <div class="msg-group"><div class="msg-header"><span class="msg-author">Aiden</span><span class="msg-time">Today at 7:35 PM</span></div><div class="msg-body">joining now, someone invite sarah too</div></div>
+          <div class="msg-group"><div class="msg-header"><span class="msg-author">Marcus</span><span class="msg-time">Today at 7:36 PM</span></div><div class="msg-body">wait this app is so fast, what did you build this with?</div></div>
+        </div>
+        <div class="msg-input"><input type="text" placeholder="Message #general" /></div>
+      </div>
+      <div class="member-list">
+        <div class="member-section-label">ONLINE — 5</div>
+        <div class="member-item"><div class="member-avatar">A<div class="status-dot online"></div></div><span class="member-name">Aiden</span></div>
+        <div class="member-item"><div class="member-avatar">M<div class="status-dot online"></div></div><span class="member-name">Marcus</span></div>
+        <div class="member-item"><div class="member-avatar">J<div class="status-dot online"></div></div><span class="member-name">Jordan</span></div>
+        <div class="member-item"><div class="member-avatar">T<div class="status-dot online"></div></div><span class="member-name">Tyler</span></div>
+        <div class="member-item"><div class="member-avatar">S<div class="status-dot online"></div></div><span class="member-name">Sarah</span></div>
+        <div class="member-section-label">OFFLINE — 3</div>
+        <div class="member-item"><div class="member-avatar" style="opacity:0.5">D<div class="status-dot offline"></div></div><span class="member-name" style="opacity:0.5">Derek</span></div>
+        <div class="member-item"><div class="member-avatar" style="opacity:0.5">L<div class="status-dot offline"></div></div><span class="member-name" style="opacity:0.5">Luna</span></div>
+        <div class="member-item"><div class="member-avatar" style="opacity:0.5">C<div class="status-dot offline"></div></div><span class="member-name" style="opacity:0.5">Chris</span></div>
+      </div>
+    </div>
+  </section>
+
+</div>
+
+<script>
+function showDirection(id) {
+  document.querySelectorAll('.mockup-section').forEach(s => s.classList.remove('active'));
+  document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
+  document.getElementById('dir-' + id).classList.add('active');
+  event.target.classList.add('active');
+}
+</script>
+
+</body>
+</html>
