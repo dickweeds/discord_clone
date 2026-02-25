@@ -214,4 +214,80 @@ describe('wsClient', () => {
       // No error is the success case
     });
   });
+
+  describe('request', () => {
+    it('sends message with id and resolves on matching response', async () => {
+      wsClient.connect('my-token');
+      mockInstances[0].triggerOpen();
+
+      const promise = wsClient.request<{ data: string }>('test:action', { key: 'value' });
+
+      // Extract the sent message to get the auto-generated id
+      expect(mockInstances[0].send).toHaveBeenCalled();
+      const sentMsg = JSON.parse(mockInstances[0].send.mock.calls[0][0] as string);
+      expect(sentMsg.type).toBe('test:action');
+      expect(sentMsg.payload).toEqual({ key: 'value' });
+      expect(sentMsg.id).toBeDefined();
+
+      // Simulate server response with matching id
+      mockInstances[0].triggerMessage(
+        JSON.stringify({ type: 'response', payload: { data: 'result' }, id: sentMsg.id }),
+      );
+
+      const result = await promise;
+      expect(result).toEqual({ data: 'result' });
+    });
+
+    it('rejects with error message on error response', async () => {
+      wsClient.connect('my-token');
+      mockInstances[0].triggerOpen();
+
+      const promise = wsClient.request('test:action', {});
+
+      const sentMsg = JSON.parse(mockInstances[0].send.mock.calls[0][0] as string);
+
+      // Simulate server error response
+      mockInstances[0].triggerMessage(
+        JSON.stringify({ type: 'error', payload: { error: 'Something failed' }, id: sentMsg.id }),
+      );
+
+      await expect(promise).rejects.toThrow('Something failed');
+    });
+
+    it('rejects after timeout', async () => {
+      vi.useFakeTimers();
+      wsClient.connect('my-token');
+      mockInstances[0].triggerOpen();
+
+      const promise = wsClient.request('test:action', {}, 1000);
+
+      vi.advanceTimersByTime(1001);
+
+      await expect(promise).rejects.toThrow('Request timeout');
+      vi.useRealTimers();
+    });
+
+    it('resolves multiple concurrent requests independently', async () => {
+      wsClient.connect('my-token');
+      mockInstances[0].triggerOpen();
+
+      const promise1 = wsClient.request<{ val: number }>('action:one', {});
+      const promise2 = wsClient.request<{ val: number }>('action:two', {});
+
+      const sent1 = JSON.parse(mockInstances[0].send.mock.calls[0][0] as string);
+      const sent2 = JSON.parse(mockInstances[0].send.mock.calls[1][0] as string);
+
+      // Respond to second request first
+      mockInstances[0].triggerMessage(
+        JSON.stringify({ type: 'response', payload: { val: 2 }, id: sent2.id }),
+      );
+      mockInstances[0].triggerMessage(
+        JSON.stringify({ type: 'response', payload: { val: 1 }, id: sent1.id }),
+      );
+
+      const [result1, result2] = await Promise.all([promise1, promise2]);
+      expect(result1).toEqual({ val: 1 });
+      expect(result2).toEqual({ val: 2 });
+    });
+  });
 });

@@ -11,6 +11,7 @@ import {
   sendPresenceSync,
 } from '../plugins/presence/presenceService.js';
 import { registerMessageHandlers } from '../plugins/messages/messageWsHandler.js';
+import { handleVoiceDisconnect } from '../plugins/voice/voiceWsHandler.js';
 
 const clients = new Map<string, WebSocket>();
 
@@ -73,6 +74,7 @@ export default fp(async function wsServer(fastify) {
     socket.on('close', () => {
       clients.delete(userId);
       removeUser(userId);
+      handleVoiceDisconnect(userId);
       fastify.log.info({ userId }, 'WebSocket client disconnected');
       broadcastPresenceUpdate(clients, userId, 'offline');
     });

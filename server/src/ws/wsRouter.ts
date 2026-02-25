@@ -41,6 +41,16 @@ export function routeMessage(ws: WebSocket, raw: string, userId: string, log: Fa
   handler(ws, message, userId);
 }
 
+export function respond(ws: WebSocket, requestId: string, payload: unknown): void {
+  if (ws.readyState !== ws.OPEN) return;
+  ws.send(JSON.stringify({ type: 'response', payload, id: requestId }));
+}
+
+export function respondError(ws: WebSocket, requestId: string, error: string): void {
+  if (ws.readyState !== ws.OPEN) return;
+  ws.send(JSON.stringify({ type: 'error', payload: { error }, id: requestId }));
+}
+
 function isValidWsMessage(data: unknown): data is WsMessage {
   if (typeof data !== 'object' || data === null) return false;
   const obj = data as Record<string, unknown>;

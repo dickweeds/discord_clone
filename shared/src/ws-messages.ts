@@ -23,6 +23,12 @@ export interface TextReceivePayload {
 // Voice
 export interface VoiceJoinPayload {
   channelId: string;
+  rtpCapabilities?: unknown;
+}
+
+export interface VoiceJoinResponse {
+  routerRtpCapabilities: unknown;
+  existingPeers: string[];
 }
 
 export interface VoiceLeavePayload {
@@ -35,6 +41,70 @@ export interface VoiceStatePayload {
   muted: boolean;
   deafened: boolean;
   speaking: boolean;
+}
+
+export interface VoiceCreateTransportPayload {
+  direction: 'send' | 'recv';
+}
+
+export interface VoiceCreateTransportResponse {
+  transportParams: {
+    id: string;
+    iceParameters: unknown;
+    iceCandidates: unknown[];
+    dtlsParameters: unknown;
+  };
+  iceServers: { urls: string | string[]; username?: string; credential?: string }[];
+}
+
+export interface VoiceConnectTransportPayload {
+  transportId: string;
+  dtlsParameters: unknown;
+}
+
+export interface VoiceProducePayload {
+  transportId: string;
+  kind: 'audio';
+  rtpParameters: unknown;
+}
+
+export interface VoiceProduceResponse {
+  producerId: string;
+}
+
+export interface VoiceConsumePayload {
+  producerId: string;
+}
+
+export interface VoiceConsumeResponse {
+  consumerId: string;
+  producerId: string;
+  kind: 'audio';
+  rtpParameters: unknown;
+}
+
+export interface VoiceConsumerResumePayload {
+  consumerId: string;
+}
+
+export interface VoiceNewProducerPayload {
+  producerId: string;
+  peerId: string;
+}
+
+export interface VoiceProducerClosedPayload {
+  producerId: string;
+  peerId: string;
+}
+
+export interface VoicePeerJoinedPayload {
+  userId: string;
+  channelId: string;
+}
+
+export interface VoicePeerLeftPayload {
+  userId: string;
+  channelId: string;
 }
 
 // Presence
@@ -56,6 +126,15 @@ export const WS_TYPES = {
   VOICE_LEAVE: 'voice:leave',
   VOICE_STATE: 'voice:state',
   VOICE_SIGNAL: 'voice:signal',
+  VOICE_CREATE_TRANSPORT: 'voice:create-transport',
+  VOICE_CONNECT_TRANSPORT: 'voice:connect-transport',
+  VOICE_PRODUCE: 'voice:produce',
+  VOICE_CONSUME: 'voice:consume',
+  VOICE_CONSUMER_RESUME: 'voice:consumer-resume',
+  VOICE_NEW_PRODUCER: 'voice:new-producer',
+  VOICE_PRODUCER_CLOSED: 'voice:producer-closed',
+  VOICE_PEER_JOINED: 'voice:peer-joined',
+  VOICE_PEER_LEFT: 'voice:peer-left',
   PRESENCE_UPDATE: 'presence:update',
   PRESENCE_SYNC: 'presence:sync',
   CHANNEL_UPDATE: 'channel:update',

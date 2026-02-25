@@ -9,6 +9,8 @@ import channelRoutes from './plugins/channels/channelRoutes.js';
 import userRoutes from './plugins/users/userRoutes.js';
 import messageRoutes from './plugins/messages/messageRoutes.js';
 import wsServer from './ws/wsServer.js';
+import { initMediasoup, setLogger, closeMediasoup } from './plugins/voice/mediasoupManager.js';
+import { registerVoiceHandlers } from './plugins/voice/voiceWsHandler.js';
 
 export async function buildApp(): Promise<FastifyInstance> {
   const app = Fastify({
@@ -25,6 +27,10 @@ export async function buildApp(): Promise<FastifyInstance> {
   await app.register(cors, { origin: true, credentials: true });
   await app.register(dbPlugin);
 
+  // --- mediasoup Worker + Router ---
+  setLogger(app.log);
+  await initMediasoup();
+
   // --- Auth & Domain Plugins ---
   await app.register(authMiddleware);
   await app.register(authRoutes);
@@ -33,6 +39,14 @@ export async function buildApp(): Promise<FastifyInstance> {
   await app.register(userRoutes, { prefix: '/api/users' });
   await app.register(messageRoutes, { prefix: '/api/channels' });
   await app.register(wsServer);
+
+  // --- Voice WS Handlers (after wsServer registers the WebSocket endpoint) ---
+  registerVoiceHandlers(app.db, app.log);
+
+  // Graceful shutdown: close mediasoup
+  app.addHook('onClose', async () => {
+    await closeMediasoup();
+  });
 
   app.get('/api/health', async (_request, reply) => {
     try {

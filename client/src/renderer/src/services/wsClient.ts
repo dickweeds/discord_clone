@@ -3,10 +3,16 @@ import { WS_TYPES, WS_RECONNECT_DELAY, WS_MAX_RECONNECT_DELAY } from 'discord-cl
 import { usePresenceStore } from '../stores/usePresenceStore';
 
 type MessageCallback = (payload: unknown) => void;
+type PendingRequest = {
+  resolve: (value: unknown) => void;
+  reject: (reason: Error) => void;
+  timer: ReturnType<typeof setTimeout>;
+};
 
 class WsClient {
   private socket: WebSocket | null = null;
   private handlers = new Map<string, Set<MessageCallback>>();
+  private pendingRequests = new Map<string, PendingRequest>();
   private reconnectTimer: ReturnType<typeof setTimeout> | null = null;
   private reconnectDelay = WS_RECONNECT_DELAY;
   private accessToken: string | null = null;
@@ -80,6 +86,24 @@ class WsClient {
         this.handlers.delete(type);
       }
     };
+  }
+
+  request<T>(type: string, payload: unknown, timeout = 5000): Promise<T> {
+    const id = crypto.randomUUID();
+    return new Promise<T>((resolve, reject) => {
+      const timer = setTimeout(() => {
+        this.pendingRequests.delete(id);
+        reject(new Error('Request timeout'));
+      }, timeout);
+
+      this.pendingRequests.set(id, {
+        resolve: resolve as (value: unknown) => void,
+        reject,
+        timer,
+      });
+
+      this.send({ type, payload, id });
+    });
   }
 
   updateToken(accessToken: string): void {
@@ -161,6 +185,22 @@ class WsClient {
     } catch {
       console.warn('[wsClient] Failed to parse incoming WebSocket message');
       return;
+    }
+
+    // Handle request-response pattern
+    if ((message.type === 'response' || message.type === 'error') && message.id) {
+      const pending = this.pendingRequests.get(message.id);
+      if (pending) {
+        this.pendingRequests.delete(message.id);
+        clearTimeout(pending.timer);
+        if (message.type === 'error') {
+          const errorPayload = message.payload as { error: string };
+          pending.reject(new Error(errorPayload.error));
+        } else {
+          pending.resolve(message.payload);
+        }
+        return;
+      }
     }
 
     // Route presence messages to store
