@@ -2,7 +2,7 @@
 title: 'Wire Up Invite People Button'
 slug: 'wire-up-invite-people-button'
 created: '2026-02-25'
-status: 'implementation-complete'
+status: 'done'
 stepsCompleted: [1, 2, 3, 4]
 tech_stack: ['React 18+', 'TypeScript 5.x strict', 'Zustand v5.0.x', 'Radix UI Dialog', 'Tailwind CSS', 'Vitest', 'React Testing Library']
 files_to_modify: ['shared/src/types.ts', 'client/src/renderer/src/stores/useInviteStore.ts (new)', 'client/src/renderer/src/features/channels/InviteModal.tsx (new)', 'client/src/renderer/src/features/channels/ServerHeader.tsx']
