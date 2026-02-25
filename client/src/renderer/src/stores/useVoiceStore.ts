@@ -1,18 +1,12 @@
 import { create } from 'zustand';
-import { wsClient } from '../services/wsClient';
-import * as mediaService from '../services/mediaService';
+import * as voiceService from '../services/voiceService';
 import { playConnectSound, playDisconnectSound } from '../utils/soundPlayer';
-import type {
-  VoiceJoinPayload,
-  VoiceJoinResponse,
-  VoiceCreateTransportPayload,
-  VoiceCreateTransportResponse,
-} from 'discord-clone-shared';
 
 type ConnectionState = 'disconnected' | 'connecting' | 'connected';
 
 interface VoiceState {
   currentChannelId: string | null;
+  currentUserId: string | null;
   connectionState: ConnectionState;
   isLoading: boolean;
   error: string | null;
@@ -20,7 +14,7 @@ interface VoiceState {
   isMuted: boolean;
   isDeafened: boolean;
 
-  joinChannel: (channelId: string) => Promise<void>;
+  joinChannel: (channelId: string, userId: string) => Promise<void>;
   leaveChannel: () => Promise<void>;
   localCleanup: () => void;
   addPeer: (channelId: string, userId: string) => void;
@@ -34,6 +28,7 @@ interface VoiceState {
 
 export const useVoiceStore = create<VoiceState>((set, get) => ({
   currentChannelId: null,
+  currentUserId: null,
   connectionState: 'disconnected',
   isLoading: false,
   error: null,
@@ -41,7 +36,7 @@ export const useVoiceStore = create<VoiceState>((set, get) => ({
   isMuted: false,
   isDeafened: false,
 
-  joinChannel: async (channelId: string) => {
+  joinChannel: async (channelId: string, userId: string) => {
     const state = get();
 
     // Leave current channel first if already in one
@@ -49,63 +44,37 @@ export const useVoiceStore = create<VoiceState>((set, get) => ({
       await get().leaveChannel();
     }
 
-    set({ connectionState: 'connecting', isLoading: true, error: null });
+    // Set channelId optimistically so the status bar shows the correct channel name
+    set({
+      connectionState: 'connecting',
+      isLoading: true,
+      error: null,
+      currentChannelId: channelId,
+      currentUserId: userId,
+    });
 
     try {
-      // 1. Join voice channel on server
-      const { routerRtpCapabilities, existingPeers } = await wsClient.request<VoiceJoinResponse>(
-        'voice:join',
-        { channelId } satisfies VoiceJoinPayload,
-      );
+      const { existingPeers } = await voiceService.joinVoiceChannel(channelId);
 
-      // 2. Initialize mediasoup Device
-      await mediaService.initDevice(routerRtpCapabilities as Parameters<typeof mediaService.initDevice>[0]);
-
-      // 3. Create send transport
-      const sendTransportResponse = await wsClient.request<VoiceCreateTransportResponse>(
-        'voice:create-transport',
-        { direction: 'send' } satisfies VoiceCreateTransportPayload,
-      );
-      const sendTransport = mediaService.createSendTransport(
-        sendTransportResponse.transportParams as Parameters<typeof mediaService.createSendTransport>[0],
-        sendTransportResponse.iceServers as RTCIceServer[],
-      );
-
-      // 4. Create recv transport
-      const recvTransportResponse = await wsClient.request<VoiceCreateTransportResponse>(
-        'voice:create-transport',
-        { direction: 'recv' } satisfies VoiceCreateTransportPayload,
-      );
-      mediaService.createRecvTransport(
-        recvTransportResponse.transportParams as Parameters<typeof mediaService.createRecvTransport>[0],
-        recvTransportResponse.iceServers as RTCIceServer[],
-      );
-
-      // 5. Produce audio (capture mic and start sending)
-      await mediaService.produceAudio(sendTransport);
-
-      // 6. Build participants map with existing peers + self
+      // Build participants map with existing peers + self
       const participants = new Map(get().channelParticipants);
-      const peerList = [...existingPeers];
-      // Add self — we'll get our own userId from the auth store dynamically
+      const peerList = [...existingPeers, userId];
       participants.set(channelId, peerList);
 
-      // 7. Update state
       set({
         connectionState: 'connected',
-        currentChannelId: channelId,
         isLoading: false,
         channelParticipants: participants,
       });
 
-      // 8. Play connect sound
       playConnectSound();
 
     } catch (err) {
-      mediaService.cleanup();
+      voiceService.cleanupMedia();
       set({
         connectionState: 'disconnected',
         currentChannelId: null,
+        currentUserId: null,
         isLoading: false,
         error: (err as Error).message,
       });
@@ -113,22 +82,32 @@ export const useVoiceStore = create<VoiceState>((set, get) => ({
   },
 
   leaveChannel: async () => {
-    const { currentChannelId } = get();
+    const { currentChannelId, currentUserId } = get();
     if (!currentChannelId) return;
 
     try {
-      await wsClient.request<void>('voice:leave', { channelId: currentChannelId });
+      await voiceService.leaveVoiceChannel(currentChannelId);
     } catch {
       // WS might already be disconnected — continue with local cleanup
     }
 
-    mediaService.cleanup();
+    voiceService.cleanupMedia();
 
+    // Only remove self from participant list, not all participants
     const participants = new Map(get().channelParticipants);
-    participants.delete(currentChannelId);
+    if (currentUserId) {
+      const list = participants.get(currentChannelId) ?? [];
+      const filtered = list.filter((id) => id !== currentUserId);
+      if (filtered.length > 0) {
+        participants.set(currentChannelId, filtered);
+      } else {
+        participants.delete(currentChannelId);
+      }
+    }
 
     set({
       currentChannelId: null,
+      currentUserId: null,
       connectionState: 'disconnected',
       isMuted: false,
       isDeafened: false,
@@ -139,10 +118,11 @@ export const useVoiceStore = create<VoiceState>((set, get) => ({
   },
 
   localCleanup: () => {
-    mediaService.cleanup();
+    voiceService.cleanupMedia();
 
     set({
       currentChannelId: null,
+      currentUserId: null,
       connectionState: 'disconnected',
       isLoading: false,
       isMuted: false,

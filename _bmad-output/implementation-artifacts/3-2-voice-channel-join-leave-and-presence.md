@@ -1,6 +1,6 @@
 # Story 3.2: Voice Channel Join, Leave & Presence
 
-Status: review
+Status: done
 
 <!-- Note: Validation is optional. Run validate-create-story for quality check before dev-story. -->
 
@@ -637,12 +637,23 @@ Claude Opus 4.6
 ### Change Log
 
 - 2026-02-25: Implemented voice channel join/leave/presence (Story 3.2) — all 12 tasks complete
+- 2026-02-25: Code review fixes (9 issues: 3 HIGH, 3 MEDIUM, 3 LOW)
+  - H1: Fixed self not added to channelParticipants on join — joinChannel now accepts userId param, adds self to peer list
+  - H2: Fixed leaveChannel deleting all participants — now only removes self from channel participant list
+  - H3: Broke circular import useVoiceStore ↔ wsClient — extracted voiceService.ts as intermediary, wsClient now uses dynamic import for useVoiceStore
+  - M1: Set currentChannelId optimistically during connecting so VoiceStatusBar shows correct channel name
+  - M2: Added error display to VoiceStatusBar with 5s auto-dismiss
+  - M3: Added console.warn to handleNewProducer catch block (was silently swallowing errors)
+  - L1: Replaced hardcoded hex colors (#23a55a, #f23f43) with design tokens (text-voice-speaking, bg-error)
+  - L2: Added tests for removeConsumerByProducerId, getRecvTransport, getConsumers
+  - L3: Fixed mock leakage in mediaService.test.ts — navigator/Audio/MediaStream restored in afterEach
 
 ### File List
 
 **New files:**
 - `client/src/renderer/src/services/mediaService.ts`
 - `client/src/renderer/src/services/mediaService.test.ts`
+- `client/src/renderer/src/services/voiceService.ts` — extracted from useVoiceStore to break circular import
 - `client/src/renderer/src/stores/useVoiceStore.ts`
 - `client/src/renderer/src/stores/useVoiceStore.test.ts`
 - `client/src/renderer/src/features/voice/VoiceParticipant.tsx`
@@ -656,9 +667,9 @@ Claude Opus 4.6
 - `shared/src/index.ts` — exported VoiceChannelPresencePayload
 - `client/package.json` — added mediasoup-client dependency
 - `package-lock.json` — updated lockfile
-- `client/src/renderer/src/services/wsClient.ts` — added voice event handlers, voice cleanup on disconnect, presence sync on reconnect
+- `client/src/renderer/src/services/wsClient.ts` — added voice event handlers (using dynamic import for useVoiceStore), voice cleanup on disconnect, presence sync on reconnect
 - `client/src/renderer/src/features/channels/ChannelSidebar.tsx` — added VoiceParticipant rendering, VoiceStatusBar placement
-- `client/src/renderer/src/features/channels/ChannelItem.tsx` — voice channel click triggers joinChannel
+- `client/src/renderer/src/features/channels/ChannelItem.tsx` — voice channel click triggers joinChannel with userId
 - `client/src/renderer/src/features/layout/AppLayout.tsx` — added voice keyboard shortcuts
 - `client/src/renderer/src/globals.css` — added slideUp animation keyframes
 - `_bmad-output/implementation-artifacts/sprint-status.yaml` — story status updated

@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 
 const mockLoad = vi.fn();
 const mockCreateSendTransport = vi.fn();
@@ -27,8 +27,16 @@ import {
   createRecvTransport,
   produceAudio,
   consumeAudio,
+  getRecvTransport,
+  getConsumers,
+  removeConsumerByProducerId,
   cleanup,
 } from './mediaService';
+
+// Store originals for cleanup
+const originalNavigator = globalThis.navigator;
+const originalAudio = globalThis.Audio;
+const originalMediaStream = globalThis.MediaStream;
 
 function makeMockTransport(id: string) {
   return {
@@ -56,6 +64,17 @@ function makeMockTransport(id: string) {
 beforeEach(() => {
   vi.clearAllMocks();
   cleanup();
+});
+
+afterEach(() => {
+  // Restore global mocks to prevent leaking into other test files
+  Object.defineProperty(globalThis, 'navigator', {
+    value: originalNavigator,
+    writable: true,
+    configurable: true,
+  });
+  globalThis.Audio = originalAudio;
+  globalThis.MediaStream = originalMediaStream;
 });
 
 describe('mediaService', () => {
@@ -206,14 +225,12 @@ describe('mediaService', () => {
   describe('consumeAudio', () => {
     it('creates consumer and plays audio', async () => {
       const mockPlay = vi.fn().mockResolvedValue(undefined);
-      // Mock Audio constructor in globalThis using a real constructor function
       globalThis.Audio = function MockAudio(this: Record<string, unknown>) {
         this.play = mockPlay;
         this.pause = vi.fn();
         this.srcObject = null;
       } as unknown as typeof Audio;
 
-      // Mock MediaStream constructor
       globalThis.MediaStream = function MockMediaStream() {
         return {};
       } as unknown as typeof MediaStream;
@@ -238,6 +255,101 @@ describe('mediaService', () => {
       });
       expect(mockPlay).toHaveBeenCalled();
       expect(consumer).toBeDefined();
+    });
+  });
+
+  describe('getRecvTransport', () => {
+    it('returns null when no recv transport exists', () => {
+      expect(getRecvTransport()).toBeNull();
+    });
+
+    it('returns the recv transport after creation', async () => {
+      const transport = makeMockTransport('recv-1');
+      mockCreateRecvTransport.mockReturnValue(transport);
+      await initDevice({ codecs: [] } as Parameters<typeof initDevice>[0]);
+
+      const result = createRecvTransport(
+        { id: 'recv-1', iceParameters: {}, iceCandidates: [], dtlsParameters: {} } as unknown as Parameters<typeof createRecvTransport>[0],
+        [],
+      );
+
+      expect(getRecvTransport()).toBe(result);
+    });
+  });
+
+  describe('getConsumers', () => {
+    it('returns empty map initially', () => {
+      expect(getConsumers().size).toBe(0);
+    });
+  });
+
+  describe('removeConsumerByProducerId', () => {
+    function setupAudioMocks() {
+      const mockPlay = vi.fn().mockResolvedValue(undefined);
+      globalThis.Audio = function MockAudio(this: Record<string, unknown>) {
+        this.play = mockPlay;
+        this.pause = vi.fn();
+        this.srcObject = null;
+      } as unknown as typeof Audio;
+
+      globalThis.MediaStream = function MockMediaStream() {
+        return {};
+      } as unknown as typeof MediaStream;
+    }
+
+    it('removes consumer matching the producerId', async () => {
+      setupAudioMocks();
+
+      // Create a transport mock whose consume returns the target producerId
+      const transport = {
+        ...makeMockTransport('recv-1'),
+        consume: vi.fn().mockResolvedValue({
+          id: 'consumer-id',
+          producerId: 'target-producer',
+          track: { kind: 'audio' },
+          on: vi.fn(),
+          close: vi.fn(),
+          resume: vi.fn(),
+        }),
+      };
+
+      await consumeAudio(
+        transport as unknown as Parameters<typeof consumeAudio>[0],
+        {
+          consumerId: 'c-1',
+          producerId: 'target-producer',
+          kind: 'audio',
+          rtpParameters: {} as Parameters<typeof consumeAudio>[1]['rtpParameters'],
+        },
+      );
+
+      expect(getConsumers().size).toBe(1);
+
+      removeConsumerByProducerId('target-producer');
+
+      expect(getConsumers().size).toBe(0);
+    });
+
+    it('is a no-op when producerId does not match', async () => {
+      setupAudioMocks();
+
+      const transport = makeMockTransport('recv-1');
+
+      await consumeAudio(
+        transport as unknown as Parameters<typeof consumeAudio>[0],
+        {
+          consumerId: 'c-1',
+          producerId: 'some-producer',
+          kind: 'audio',
+          rtpParameters: {} as Parameters<typeof consumeAudio>[1]['rtpParameters'],
+        },
+      );
+
+      expect(getConsumers().size).toBe(1);
+
+      removeConsumerByProducerId('non-existent-producer');
+
+      expect(getConsumers().size).toBe(1);
     });
   });
 

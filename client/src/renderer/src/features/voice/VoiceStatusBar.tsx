@@ -1,19 +1,30 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import { Mic, MicOff, Headphones, HeadphoneOff, Video, PhoneOff } from 'lucide-react';
 import { useVoiceStore } from '../../stores/useVoiceStore';
 import { useChannelStore } from '../../stores/useChannelStore';
+
+const ERROR_DISMISS_MS = 5000;
 
 export function VoiceStatusBar(): React.ReactNode {
   const currentChannelId = useVoiceStore((s) => s.currentChannelId);
   const connectionState = useVoiceStore((s) => s.connectionState);
   const isMuted = useVoiceStore((s) => s.isMuted);
   const isDeafened = useVoiceStore((s) => s.isDeafened);
+  const error = useVoiceStore((s) => s.error);
   const toggleMute = useVoiceStore((s) => s.toggleMute);
   const toggleDeafen = useVoiceStore((s) => s.toggleDeafen);
   const leaveChannel = useVoiceStore((s) => s.leaveChannel);
+  const clearError = useVoiceStore((s) => s.clearError);
   const channels = useChannelStore((s) => s.channels);
 
-  if (!currentChannelId && connectionState === 'disconnected') return null;
+  // Auto-dismiss error after timeout
+  useEffect(() => {
+    if (!error) return;
+    const timer = setTimeout(() => clearError(), ERROR_DISMISS_MS);
+    return () => clearTimeout(timer);
+  }, [error, clearError]);
+
+  if (!currentChannelId && connectionState === 'disconnected' && !error) return null;
 
   const channel = channels.find((c) => c.id === currentChannelId);
   const channelName = channel?.name ?? 'Unknown';
@@ -32,13 +43,18 @@ export function VoiceStatusBar(): React.ReactNode {
     >
       {/* Left: Status + Channel name */}
       <div className="flex flex-col min-w-0">
-        {isConnecting && (
+        {error && (
+          <span className="text-xs font-medium text-error">Connection failed</span>
+        )}
+        {!error && isConnecting && (
           <span className="text-xs font-medium text-text-secondary">Connecting...</span>
         )}
-        {isConnected && (
-          <span className="text-xs font-medium text-[#23a55a]">Voice Connected</span>
+        {!error && isConnected && (
+          <span className="text-xs font-medium text-voice-speaking">Voice Connected</span>
         )}
-        <span className="text-xs text-text-secondary truncate">{channelName}</span>
+        {currentChannelId && (
+          <span className="text-xs text-text-secondary truncate">{channelName}</span>
+        )}
       </div>
 
       {/* Right: Control buttons */}
@@ -78,7 +94,7 @@ export function VoiceStatusBar(): React.ReactNode {
         <button
           onClick={() => leaveChannel()}
           aria-label="Disconnect from voice"
-          className="w-8 h-8 flex items-center justify-center rounded bg-[#f23f43] text-white hover:bg-[#da373c] transition-colors duration-150"
+          className="w-8 h-8 flex items-center justify-center rounded bg-error text-white hover:brightness-90 transition-colors duration-150"
         >
           <PhoneOff size={18} />
         </button>

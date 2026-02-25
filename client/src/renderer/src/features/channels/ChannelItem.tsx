@@ -3,6 +3,7 @@ import { Hash, Volume2 } from 'lucide-react';
 import { useNavigate } from 'react-router';
 import type { ChannelListItem } from '../../stores/useChannelStore';
 import { useVoiceStore } from '../../stores/useVoiceStore';
+import useAuthStore from '../../stores/useAuthStore';
 
 interface ChannelItemProps {
   channel: ChannelListItem;
@@ -12,13 +13,14 @@ interface ChannelItemProps {
 export function ChannelItem({ channel, isActive }: ChannelItemProps): React.ReactNode {
   const navigate = useNavigate();
   const joinChannel = useVoiceStore((s) => s.joinChannel);
+  const userId = useAuthStore((s) => s.user?.id);
   const Icon = channel.type === 'text' ? Hash : Volume2;
 
   const handleClick = () => {
     if (channel.type === 'text') {
       navigate(`/app/channels/${channel.id}`);
-    } else {
-      joinChannel(channel.id);
+    } else if (userId) {
+      joinChannel(channel.id, userId);
     }
   };
 

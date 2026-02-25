@@ -8,6 +8,7 @@ import { useChannelStore } from '../../stores/useChannelStore';
 beforeEach(() => {
   useVoiceStore.setState({
     currentChannelId: null,
+    currentUserId: null,
     connectionState: 'disconnected',
     isLoading: false,
     error: null,
@@ -144,5 +145,28 @@ describe('VoiceStatusBar', () => {
     render(<VoiceStatusBar />);
 
     expect(screen.getByRole('button', { name: /toggle video/i })).toBeDisabled();
+  });
+
+  it('shows error state when connection fails', () => {
+    useVoiceStore.setState({
+      currentChannelId: null,
+      connectionState: 'disconnected',
+      error: 'Connection failed',
+    });
+
+    render(<VoiceStatusBar />);
+
+    expect(screen.getByText('Connection failed')).toBeInTheDocument();
+  });
+
+  it('renders nothing when disconnected with no error', () => {
+    useVoiceStore.setState({
+      currentChannelId: null,
+      connectionState: 'disconnected',
+      error: null,
+    });
+
+    const { container } = render(<VoiceStatusBar />);
+    expect(container.firstChild).toBeNull();
   });
 });

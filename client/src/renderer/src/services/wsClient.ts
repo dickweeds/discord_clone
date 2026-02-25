@@ -18,7 +18,6 @@ import { usePresenceStore } from '../stores/usePresenceStore';
 import { useChannelStore } from '../stores/useChannelStore';
 import { useMemberStore } from '../stores/useMemberStore';
 import { useAdminNotificationStore } from '../stores/useAdminNotificationStore';
-import { useVoiceStore } from '../stores/useVoiceStore';
 import * as mediaService from './mediaService';
 
 type MessageCallback = (payload: unknown) => void;
@@ -167,8 +166,8 @@ class WsClient {
       });
 
       await this.request<void>('voice:consumer-resume', { consumerId: consumer.id });
-    } catch {
-      // Failed to consume — peer audio unavailable
+    } catch (err) {
+      console.warn('[wsClient] Failed to consume producer audio:', (err as Error).message);
     }
   }
 
@@ -274,10 +273,14 @@ class WsClient {
       useMemberStore.getState().removeMember(payload.userId);
     } else if (message.type === WS_TYPES.VOICE_PEER_JOINED) {
       const payload = message.payload as VoicePeerJoinedPayload;
-      useVoiceStore.getState().addPeer(payload.channelId, payload.userId);
+      import('../stores/useVoiceStore').then(({ useVoiceStore }) => {
+        useVoiceStore.getState().addPeer(payload.channelId, payload.userId);
+      }).catch(() => {});
     } else if (message.type === WS_TYPES.VOICE_PEER_LEFT) {
       const payload = message.payload as VoicePeerLeftPayload;
-      useVoiceStore.getState().removePeer(payload.channelId, payload.userId);
+      import('../stores/useVoiceStore').then(({ useVoiceStore }) => {
+        useVoiceStore.getState().removePeer(payload.channelId, payload.userId);
+      }).catch(() => {});
     } else if (message.type === WS_TYPES.VOICE_NEW_PRODUCER) {
       const payload = message.payload as VoiceNewProducerPayload;
       this.handleNewProducer(payload);
@@ -286,7 +289,9 @@ class WsClient {
       mediaService.removeConsumerByProducerId(payload.producerId);
     } else if (message.type === WS_TYPES.VOICE_PRESENCE_SYNC) {
       const payload = message.payload as VoiceChannelPresencePayload;
-      useVoiceStore.getState().syncParticipants(payload.participants);
+      import('../stores/useVoiceStore').then(({ useVoiceStore }) => {
+        useVoiceStore.getState().syncParticipants(payload.participants);
+      }).catch(() => {});
     }
 
     // Dispatch to registered handlers
@@ -375,7 +380,9 @@ class WsClient {
 
   private cleanupVoiceOnDisconnect(): void {
     // Local cleanup only — skip sending voice:leave since WS is already down
-    useVoiceStore.getState().localCleanup();
+    import('../stores/useVoiceStore').then(({ useVoiceStore }) => {
+      useVoiceStore.getState().localCleanup();
+    }).catch(() => {});
   }
 
   private requestVoicePresenceSync(): void {

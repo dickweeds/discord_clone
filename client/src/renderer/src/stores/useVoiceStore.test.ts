@@ -1,30 +1,9 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
-vi.mock('../services/wsClient', () => ({
-  wsClient: {
-    request: vi.fn(),
-  },
-}));
-
-vi.mock('../services/mediaService', () => ({
-  initDevice: vi.fn().mockResolvedValue({ rtpCapabilities: { codecs: [] } }),
-  createSendTransport: vi.fn().mockReturnValue({
-    id: 'send-transport-id',
-    on: vi.fn(),
-    produce: vi.fn(),
-    close: vi.fn(),
-  }),
-  createRecvTransport: vi.fn().mockReturnValue({
-    id: 'recv-transport-id',
-    on: vi.fn(),
-    consume: vi.fn(),
-    close: vi.fn(),
-  }),
-  produceAudio: vi.fn().mockResolvedValue({
-    producer: { id: 'producer-1', close: vi.fn() },
-    stream: { getTracks: () => [] },
-  }),
-  cleanup: vi.fn(),
+vi.mock('../services/voiceService', () => ({
+  joinVoiceChannel: vi.fn().mockResolvedValue({ existingPeers: [] }),
+  leaveVoiceChannel: vi.fn().mockResolvedValue(undefined),
+  cleanupMedia: vi.fn(),
 }));
 
 vi.mock('../utils/soundPlayer', () => ({
@@ -33,15 +12,16 @@ vi.mock('../utils/soundPlayer', () => ({
 }));
 
 import { useVoiceStore } from './useVoiceStore';
-import { wsClient } from '../services/wsClient';
-import * as mediaService from '../services/mediaService';
+import * as voiceService from '../services/voiceService';
 import { playConnectSound, playDisconnectSound } from '../utils/soundPlayer';
 
-const mockRequest = vi.mocked(wsClient.request);
+const mockJoin = vi.mocked(voiceService.joinVoiceChannel);
+const mockLeave = vi.mocked(voiceService.leaveVoiceChannel);
 
 beforeEach(() => {
   useVoiceStore.setState({
     currentChannelId: null,
+    currentUserId: null,
     connectionState: 'disconnected',
     isLoading: false,
     error: null,
@@ -56,6 +36,7 @@ describe('useVoiceStore', () => {
   it('should have correct initial state', () => {
     const state = useVoiceStore.getState();
     expect(state.currentChannelId).toBeNull();
+    expect(state.currentUserId).toBeNull();
     expect(state.connectionState).toBe('disconnected');
     expect(state.isLoading).toBe(false);
     expect(state.error).toBeNull();
@@ -66,101 +47,89 @@ describe('useVoiceStore', () => {
 
   describe('joinChannel', () => {
     it('sets connection state to connecting then connected', async () => {
-      mockRequest
-        .mockResolvedValueOnce({ routerRtpCapabilities: { codecs: [] }, existingPeers: [] })
-        .mockResolvedValueOnce({ transportParams: { id: 's1', iceParameters: {}, iceCandidates: [], dtlsParameters: {} }, iceServers: [] })
-        .mockResolvedValueOnce({ transportParams: { id: 'r1', iceParameters: {}, iceCandidates: [], dtlsParameters: {} }, iceServers: [] });
+      mockJoin.mockResolvedValueOnce({ existingPeers: [] });
 
-      await useVoiceStore.getState().joinChannel('voice-ch-1');
+      await useVoiceStore.getState().joinChannel('voice-ch-1', 'my-user-id');
 
       const state = useVoiceStore.getState();
       expect(state.connectionState).toBe('connected');
       expect(state.currentChannelId).toBe('voice-ch-1');
+      expect(state.currentUserId).toBe('my-user-id');
       expect(state.isLoading).toBe(false);
     });
 
-    it('calls wsClient.request with voice:join', async () => {
-      mockRequest
-        .mockResolvedValueOnce({ routerRtpCapabilities: { codecs: [] }, existingPeers: [] })
-        .mockResolvedValueOnce({ transportParams: { id: 's1', iceParameters: {}, iceCandidates: [], dtlsParameters: {} }, iceServers: [] })
-        .mockResolvedValueOnce({ transportParams: { id: 'r1', iceParameters: {}, iceCandidates: [], dtlsParameters: {} }, iceServers: [] });
+    it('calls voiceService.joinVoiceChannel with channelId', async () => {
+      mockJoin.mockResolvedValueOnce({ existingPeers: [] });
 
-      await useVoiceStore.getState().joinChannel('voice-ch-1');
+      await useVoiceStore.getState().joinChannel('voice-ch-1', 'my-user-id');
 
-      expect(mockRequest).toHaveBeenCalledWith('voice:join', { channelId: 'voice-ch-1' });
+      expect(mockJoin).toHaveBeenCalledWith('voice-ch-1');
     });
 
-    it('initializes mediasoup Device with routerRtpCapabilities', async () => {
-      const caps = { codecs: [{ mimeType: 'audio/opus' }] };
-      mockRequest
-        .mockResolvedValueOnce({ routerRtpCapabilities: caps, existingPeers: [] })
-        .mockResolvedValueOnce({ transportParams: { id: 's1', iceParameters: {}, iceCandidates: [], dtlsParameters: {} }, iceServers: [] })
-        .mockResolvedValueOnce({ transportParams: { id: 'r1', iceParameters: {}, iceCandidates: [], dtlsParameters: {} }, iceServers: [] });
+    it('sets currentChannelId optimistically during connecting', async () => {
+      let connectingChannelId: string | null = null;
+      mockJoin.mockImplementationOnce(async () => {
+        connectingChannelId = useVoiceStore.getState().currentChannelId;
+        return { existingPeers: [] };
+      });
 
-      await useVoiceStore.getState().joinChannel('voice-ch-1');
+      await useVoiceStore.getState().joinChannel('voice-ch-1', 'my-user-id');
 
-      expect(mediaService.initDevice).toHaveBeenCalledWith(caps);
+      expect(connectingChannelId).toBe('voice-ch-1');
     });
 
-    it('updates channelParticipants with existingPeers', async () => {
-      mockRequest
-        .mockResolvedValueOnce({ routerRtpCapabilities: { codecs: [] }, existingPeers: ['user-1', 'user-2'] })
-        .mockResolvedValueOnce({ transportParams: { id: 's1', iceParameters: {}, iceCandidates: [], dtlsParameters: {} }, iceServers: [] })
-        .mockResolvedValueOnce({ transportParams: { id: 'r1', iceParameters: {}, iceCandidates: [], dtlsParameters: {} }, iceServers: [] });
+    it('updates channelParticipants with existingPeers and self', async () => {
+      mockJoin.mockResolvedValueOnce({ existingPeers: ['user-1', 'user-2'] });
 
-      await useVoiceStore.getState().joinChannel('voice-ch-1');
+      await useVoiceStore.getState().joinChannel('voice-ch-1', 'my-user-id');
 
       const participants = useVoiceStore.getState().channelParticipants.get('voice-ch-1');
-      expect(participants).toEqual(['user-1', 'user-2']);
+      expect(participants).toEqual(['user-1', 'user-2', 'my-user-id']);
     });
 
     it('plays connect sound on success', async () => {
-      mockRequest
-        .mockResolvedValueOnce({ routerRtpCapabilities: { codecs: [] }, existingPeers: [] })
-        .mockResolvedValueOnce({ transportParams: { id: 's1', iceParameters: {}, iceCandidates: [], dtlsParameters: {} }, iceServers: [] })
-        .mockResolvedValueOnce({ transportParams: { id: 'r1', iceParameters: {}, iceCandidates: [], dtlsParameters: {} }, iceServers: [] });
+      mockJoin.mockResolvedValueOnce({ existingPeers: [] });
 
-      await useVoiceStore.getState().joinChannel('voice-ch-1');
+      await useVoiceStore.getState().joinChannel('voice-ch-1', 'my-user-id');
 
       expect(playConnectSound).toHaveBeenCalled();
     });
 
     it('sets error state on failure', async () => {
-      mockRequest.mockRejectedValueOnce(new Error('Connection failed'));
+      mockJoin.mockRejectedValueOnce(new Error('Connection failed'));
 
-      await useVoiceStore.getState().joinChannel('voice-ch-1');
+      await useVoiceStore.getState().joinChannel('voice-ch-1', 'my-user-id');
 
       const state = useVoiceStore.getState();
       expect(state.connectionState).toBe('disconnected');
       expect(state.currentChannelId).toBeNull();
+      expect(state.currentUserId).toBeNull();
       expect(state.error).toBe('Connection failed');
       expect(state.isLoading).toBe(false);
     });
 
-    it('cleans up mediaService on failure', async () => {
-      mockRequest.mockRejectedValueOnce(new Error('Connection failed'));
+    it('cleans up media on failure', async () => {
+      mockJoin.mockRejectedValueOnce(new Error('Connection failed'));
 
-      await useVoiceStore.getState().joinChannel('voice-ch-1');
+      await useVoiceStore.getState().joinChannel('voice-ch-1', 'my-user-id');
 
-      expect(mediaService.cleanup).toHaveBeenCalled();
+      expect(voiceService.cleanupMedia).toHaveBeenCalled();
     });
 
     it('leaves current channel before joining new one', async () => {
       // Set up as already connected
       useVoiceStore.setState({
         currentChannelId: 'old-channel',
+        currentUserId: 'my-user-id',
         connectionState: 'connected',
       });
 
-      mockRequest
-        .mockResolvedValueOnce(undefined) // voice:leave for old channel
-        .mockResolvedValueOnce({ routerRtpCapabilities: { codecs: [] }, existingPeers: [] })
-        .mockResolvedValueOnce({ transportParams: { id: 's1', iceParameters: {}, iceCandidates: [], dtlsParameters: {} }, iceServers: [] })
-        .mockResolvedValueOnce({ transportParams: { id: 'r1', iceParameters: {}, iceCandidates: [], dtlsParameters: {} }, iceServers: [] });
+      mockLeave.mockResolvedValueOnce(undefined);
+      mockJoin.mockResolvedValueOnce({ existingPeers: [] });
 
-      await useVoiceStore.getState().joinChannel('new-channel');
+      await useVoiceStore.getState().joinChannel('new-channel', 'my-user-id');
 
-      expect(mockRequest).toHaveBeenCalledWith('voice:leave', { channelId: 'old-channel' });
+      expect(mockLeave).toHaveBeenCalledWith('old-channel');
       expect(useVoiceStore.getState().currentChannelId).toBe('new-channel');
     });
   });
@@ -169,32 +138,35 @@ describe('useVoiceStore', () => {
     it('resets state and calls cleanup', async () => {
       useVoiceStore.setState({
         currentChannelId: 'voice-ch-1',
+        currentUserId: 'my-user-id',
         connectionState: 'connected',
+        channelParticipants: new Map([['voice-ch-1', ['my-user-id']]]),
       });
-      mockRequest.mockResolvedValueOnce(undefined);
+      mockLeave.mockResolvedValueOnce(undefined);
 
       await useVoiceStore.getState().leaveChannel();
 
       const state = useVoiceStore.getState();
       expect(state.currentChannelId).toBeNull();
+      expect(state.currentUserId).toBeNull();
       expect(state.connectionState).toBe('disconnected');
       expect(state.isMuted).toBe(false);
       expect(state.isDeafened).toBe(false);
-      expect(mediaService.cleanup).toHaveBeenCalled();
+      expect(voiceService.cleanupMedia).toHaveBeenCalled();
     });
 
-    it('sends voice:leave request', async () => {
-      useVoiceStore.setState({ currentChannelId: 'voice-ch-1', connectionState: 'connected' });
-      mockRequest.mockResolvedValueOnce(undefined);
+    it('sends voice:leave request via voiceService', async () => {
+      useVoiceStore.setState({ currentChannelId: 'voice-ch-1', currentUserId: 'my-user-id', connectionState: 'connected' });
+      mockLeave.mockResolvedValueOnce(undefined);
 
       await useVoiceStore.getState().leaveChannel();
 
-      expect(mockRequest).toHaveBeenCalledWith('voice:leave', { channelId: 'voice-ch-1' });
+      expect(mockLeave).toHaveBeenCalledWith('voice-ch-1');
     });
 
     it('plays disconnect sound', async () => {
-      useVoiceStore.setState({ currentChannelId: 'voice-ch-1', connectionState: 'connected' });
-      mockRequest.mockResolvedValueOnce(undefined);
+      useVoiceStore.setState({ currentChannelId: 'voice-ch-1', currentUserId: 'my-user-id', connectionState: 'connected' });
+      mockLeave.mockResolvedValueOnce(undefined);
 
       await useVoiceStore.getState().leaveChannel();
 
@@ -204,18 +176,47 @@ describe('useVoiceStore', () => {
     it('does nothing if not in a channel', async () => {
       await useVoiceStore.getState().leaveChannel();
 
-      expect(mockRequest).not.toHaveBeenCalled();
-      expect(mediaService.cleanup).not.toHaveBeenCalled();
+      expect(mockLeave).not.toHaveBeenCalled();
+      expect(voiceService.cleanupMedia).not.toHaveBeenCalled();
     });
 
     it('still cleans up locally even if ws request fails', async () => {
-      useVoiceStore.setState({ currentChannelId: 'voice-ch-1', connectionState: 'connected' });
-      mockRequest.mockRejectedValueOnce(new Error('WS down'));
+      useVoiceStore.setState({ currentChannelId: 'voice-ch-1', currentUserId: 'my-user-id', connectionState: 'connected' });
+      mockLeave.mockRejectedValueOnce(new Error('WS down'));
 
       await useVoiceStore.getState().leaveChannel();
 
-      expect(mediaService.cleanup).toHaveBeenCalled();
+      expect(voiceService.cleanupMedia).toHaveBeenCalled();
       expect(useVoiceStore.getState().currentChannelId).toBeNull();
+    });
+
+    it('only removes self from channelParticipants, not all participants', async () => {
+      useVoiceStore.setState({
+        currentChannelId: 'voice-ch-1',
+        currentUserId: 'my-user-id',
+        connectionState: 'connected',
+        channelParticipants: new Map([['voice-ch-1', ['user-1', 'my-user-id', 'user-2']]]),
+      });
+      mockLeave.mockResolvedValueOnce(undefined);
+
+      await useVoiceStore.getState().leaveChannel();
+
+      const participants = useVoiceStore.getState().channelParticipants.get('voice-ch-1');
+      expect(participants).toEqual(['user-1', 'user-2']);
+    });
+
+    it('removes channel entry when self is the last participant', async () => {
+      useVoiceStore.setState({
+        currentChannelId: 'voice-ch-1',
+        currentUserId: 'my-user-id',
+        connectionState: 'connected',
+        channelParticipants: new Map([['voice-ch-1', ['my-user-id']]]),
+      });
+      mockLeave.mockResolvedValueOnce(undefined);
+
+      await useVoiceStore.getState().leaveChannel();
+
+      expect(useVoiceStore.getState().channelParticipants.has('voice-ch-1')).toBe(false);
     });
   });
 
@@ -313,6 +314,7 @@ describe('useVoiceStore', () => {
     it('resets all voice state without sending WS message', () => {
       useVoiceStore.setState({
         currentChannelId: 'voice-ch-1',
+        currentUserId: 'my-user-id',
         connectionState: 'connected',
         channelParticipants: new Map([['voice-ch-1', ['u1']]]),
         isMuted: true,
@@ -323,12 +325,13 @@ describe('useVoiceStore', () => {
 
       const state = useVoiceStore.getState();
       expect(state.currentChannelId).toBeNull();
+      expect(state.currentUserId).toBeNull();
       expect(state.connectionState).toBe('disconnected');
       expect(state.channelParticipants.size).toBe(0);
       expect(state.isMuted).toBe(false);
       expect(state.isDeafened).toBe(false);
-      expect(mediaService.cleanup).toHaveBeenCalled();
-      expect(mockRequest).not.toHaveBeenCalled();
+      expect(voiceService.cleanupMedia).toHaveBeenCalled();
+      expect(mockLeave).not.toHaveBeenCalled();
     });
   });
 });
