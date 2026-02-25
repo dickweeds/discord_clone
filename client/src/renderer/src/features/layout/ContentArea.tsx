@@ -1,11 +1,11 @@
-import React, { useEffect, useMemo } from 'react';
+import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { useParams, useNavigate } from 'react-router';
-import { Hash, Users } from 'lucide-react';
+import { ArrowDown, Hash, Loader2, Users } from 'lucide-react';
 import { useChannelStore } from '../../stores/useChannelStore';
 import { useUIStore } from '../../stores/useUIStore';
 import useMessageStore from '../../stores/useMessageStore';
 import type { DecryptedMessage } from '../../stores/useMessageStore';
-import { fetchMessages } from '../../services/messageService';
+import { fetchMessages, fetchOlderMessages } from '../../services/messageService';
 import { ConnectionBanner } from './ConnectionBanner';
 import MessageInput from '../messages/MessageInput';
 import { MessageGroup } from '../messages/MessageGroup';
@@ -23,8 +23,17 @@ export function ContentArea(): React.ReactNode {
   const setCurrentChannel = useMessageStore((s) => s.setCurrentChannel);
   const channelMessages = useMessageStore((s) => channelId ? s.messages.get(channelId) ?? EMPTY_MESSAGES : EMPTY_MESSAGES);
   const isLoadingMessages = useMessageStore((s) => s.isLoading);
+  const isLoadingMore = useMessageStore((s) => s.isLoadingMore);
+  const hasMore = useMessageStore((s) => channelId ? s.hasMoreMessages.get(channelId) ?? true : false);
   const messageError = useMessageStore((s) => s.error);
   const navigate = useNavigate();
+
+  const scrollRef = useRef<HTMLDivElement>(null);
+  const isAtBottom = useRef(true);
+  const prevMessageCount = useRef(0);
+  const [hasNewMessages, setHasNewMessages] = useState(false);
+  const prevFirstMsgId = useRef<string | undefined>();
+  const loadingMoreRef = useRef(false);
 
   const messageGroups = useMemo(() => groupMessages(channelMessages), [channelMessages]);
 
@@ -32,9 +41,88 @@ export function ContentArea(): React.ReactNode {
     if (channelId) {
       setActiveChannel(channelId);
       setCurrentChannel(channelId);
+      setHasNewMessages(false);
+      isAtBottom.current = true;
+      prevMessageCount.current = 0;
+      prevScrollHeight.current = 0;
+      prevFirstMsgId.current = undefined;
+      loadingMoreRef.current = false;
       fetchMessages(channelId);
     }
   }, [channelId, setActiveChannel, setCurrentChannel]);
+
+  // Scroll to bottom on initial load (isLoading transitions false)
+  useEffect(() => {
+    if (!isLoadingMessages && scrollRef.current) {
+      scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
+      isAtBottom.current = true;
+      prevMessageCount.current = channelMessages.length;
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isLoadingMessages]);
+
+  // Auto-scroll or show new messages indicator when messages change
+  useEffect(() => {
+    const count = channelMessages.length;
+    if (count > prevMessageCount.current && prevMessageCount.current > 0) {
+      if (isAtBottom.current && scrollRef.current) {
+        scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
+      } else if (!isAtBottom.current) {
+        setHasNewMessages(true);
+      }
+    }
+    prevMessageCount.current = count;
+  }, [channelMessages]);
+
+  const handleScroll = useCallback(() => {
+    const el = scrollRef.current;
+    if (!el) return;
+
+    // Track if at bottom (50px threshold)
+    isAtBottom.current = el.scrollHeight - el.scrollTop - el.clientHeight < 50;
+
+    // Hide new messages indicator when user scrolls to bottom
+    if (isAtBottom.current) {
+      setHasNewMessages(false);
+    }
+
+    // Infinite scroll-up: load older messages when near top
+    // Uses ref guard (synchronous) instead of React state to prevent duplicate requests
+    if (el.scrollTop < 100 && hasMore && !loadingMoreRef.current && channelId) {
+      loadingMoreRef.current = true;
+      fetchOlderMessages(channelId).finally(() => {
+        loadingMoreRef.current = false;
+      });
+    }
+  }, [hasMore, channelId]);
+
+  // Preserve scroll position only after prepending older messages (not on append)
+  const prevScrollHeight = useRef(0);
+  useLayoutEffect(() => {
+    const el = scrollRef.current;
+    if (!el) return;
+
+    const firstMsgId = channelMessages.length > 0 ? channelMessages[0].id : undefined;
+    const wasPrepend =
+      prevFirstMsgId.current !== undefined &&
+      firstMsgId !== undefined &&
+      prevFirstMsgId.current !== firstMsgId;
+
+    if (wasPrepend && prevScrollHeight.current > 0 && el.scrollHeight > prevScrollHeight.current) {
+      const delta = el.scrollHeight - prevScrollHeight.current;
+      el.scrollTop += delta;
+    }
+
+    prevScrollHeight.current = el.scrollHeight;
+    prevFirstMsgId.current = firstMsgId;
+  }, [channelMessages]);
+
+  const scrollToBottom = useCallback(() => {
+    if (scrollRef.current) {
+      scrollRef.current.scrollTo({ top: scrollRef.current.scrollHeight, behavior: 'smooth' });
+      setHasNewMessages(false);
+    }
+  }, []);
 
   const channel = channels.find((c) => c.id === channelId);
 
@@ -82,12 +170,32 @@ export function ContentArea(): React.ReactNode {
             </div>
           </div>
         ) : (
-          <div className="flex-1 overflow-y-auto" role="log" aria-label={`Messages in ${channel.name}`}>
+          <div className="flex-1 overflow-y-auto relative" ref={scrollRef} onScroll={handleScroll} role="log" aria-label={`Messages in ${channel.name}`}>
+            {isLoadingMore && (
+              <div className="flex justify-center py-2">
+                <Loader2 className="animate-spin text-text-muted" size={20} aria-label="Loading older messages" />
+              </div>
+            )}
+            {!hasMore && (
+              <div className="text-center py-4">
+                <p className="text-text-muted text-sm">This is the beginning of #{channel.name}</p>
+              </div>
+            )}
             <div className="max-w-[720px] mx-auto w-full px-4 py-4">
               {messageGroups.map((group, index) => (
                 <MessageGroup key={`${group.authorId}-${group.firstTimestamp}`} group={group} isFirst={index === 0} />
               ))}
             </div>
+            {hasNewMessages && (
+              <button
+                onClick={scrollToBottom}
+                className="sticky bottom-2 left-1/2 -translate-x-1/2 bg-accent-primary text-text-primary rounded-full px-4 py-1.5 text-sm font-medium shadow-lg cursor-pointer flex items-center gap-1.5 z-10"
+                aria-label="Jump to new messages"
+              >
+                New messages
+                <ArrowDown size={14} />
+              </button>
+            )}
           </div>
         )}
       </div>

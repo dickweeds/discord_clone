@@ -13,17 +13,22 @@ export interface DecryptedMessage {
 
 interface MessageState {
   messages: Map<string, DecryptedMessage[]>;
+  hasMoreMessages: Map<string, boolean>;
+  isLoadingMore: boolean;
   currentChannelId: string | null;
   isLoading: boolean;
   error: string | null;
   sendError: string | null;
   addOptimisticMessage: (channelId: string, message: DecryptedMessage) => void;
-  setMessages: (channelId: string, messages: DecryptedMessage[]) => void;
+  setMessages: (channelId: string, messages: DecryptedMessage[], hasMore?: boolean) => void;
+  prependMessages: (channelId: string, messages: DecryptedMessage[], hasMore: boolean) => void;
+  getOldestMessageId: (channelId: string) => string | undefined;
   addReceivedMessage: (message: DecryptedMessage) => void;
   confirmMessage: (tempId: string, serverMessage: TextReceivePayload) => void;
   markMessageFailed: (tempId: string) => void;
   setCurrentChannel: (channelId: string | null) => void;
   setLoading: (isLoading: boolean) => void;
+  setLoadingMore: (isLoadingMore: boolean) => void;
   setError: (error: string | null) => void;
   setSendError: (sendError: string | null) => void;
   clearError: () => void;
@@ -32,6 +37,8 @@ interface MessageState {
 
 const useMessageStore = create<MessageState>((set, get) => ({
   messages: new Map(),
+  hasMoreMessages: new Map(),
+  isLoadingMore: false,
   currentChannelId: null,
   isLoading: false,
   error: null,
@@ -44,10 +51,27 @@ const useMessageStore = create<MessageState>((set, get) => ({
     set({ messages: newMessages, sendError: null });
   },
 
-  setMessages: (channelId: string, msgs: DecryptedMessage[]) => {
+  setMessages: (channelId: string, msgs: DecryptedMessage[], hasMore?: boolean) => {
     const newMessages = new Map(get().messages);
     newMessages.set(channelId, msgs);
-    set({ messages: newMessages });
+    const newHasMore = new Map(get().hasMoreMessages);
+    newHasMore.set(channelId, hasMore ?? true);
+    set({ messages: newMessages, hasMoreMessages: newHasMore });
+  },
+
+  prependMessages: (channelId: string, msgs: DecryptedMessage[], hasMore: boolean) => {
+    const newMessages = new Map(get().messages);
+    const existing = newMessages.get(channelId) ?? [];
+    newMessages.set(channelId, [...msgs, ...existing]);
+    const newHasMore = new Map(get().hasMoreMessages);
+    newHasMore.set(channelId, hasMore);
+    set({ messages: newMessages, hasMoreMessages: newHasMore });
+  },
+
+  getOldestMessageId: (channelId: string): string | undefined => {
+    const msgs = get().messages.get(channelId);
+    if (!msgs || msgs.length === 0) return undefined;
+    return msgs[0].id;
   },
 
   addReceivedMessage: (message: DecryptedMessage) => {
@@ -99,6 +123,7 @@ const useMessageStore = create<MessageState>((set, get) => ({
   },
 
   setLoading: (isLoading: boolean) => set({ isLoading }),
+  setLoadingMore: (isLoadingMore: boolean) => set({ isLoadingMore }),
   setError: (error: string | null) => set({ error }),
   setSendError: (sendError: string | null) => set({ sendError }),
   clearError: () => set({ error: null }),

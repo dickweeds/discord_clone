@@ -55,7 +55,7 @@ development_status:
   2-1-websocket-connection-and-real-time-transport: done
   2-2-encrypted-text-messaging: done
   2-3-message-feed-and-channel-navigation-ui: done
-  2-4-persistent-message-history-and-scrollback: ready-for-dev
+  2-4-persistent-message-history-and-scrollback: done
   epic-2-retrospective: optional
 
   # Epic 3: Voice Communication

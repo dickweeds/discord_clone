@@ -6,6 +6,8 @@ import type { DecryptedMessage } from './useMessageStore';
 beforeEach(() => {
   useMessageStore.setState({
     messages: new Map(),
+    hasMoreMessages: new Map(),
+    isLoadingMore: false,
     currentChannelId: null,
     isLoading: false,
     error: null,
@@ -229,6 +231,84 @@ describe('useMessageStore', () => {
       useMessageStore.setState({ sendError: 'send error' });
       useMessageStore.getState().clearSendError();
       expect(useMessageStore.getState().sendError).toBeNull();
+    });
+  });
+
+  describe('prependMessages', () => {
+    it('adds messages to beginning of channel array', () => {
+      const existing: DecryptedMessage = {
+        id: 'msg-2', channelId: 'ch-1', authorId: 'user-1',
+        content: 'Existing', createdAt: '2024-01-01T01:00:00Z', status: 'sent',
+      };
+      useMessageStore.getState().setMessages('ch-1', [existing]);
+
+      const older: DecryptedMessage = {
+        id: 'msg-1', channelId: 'ch-1', authorId: 'user-1',
+        content: 'Older', createdAt: '2024-01-01T00:00:00Z', status: 'sent',
+      };
+      useMessageStore.getState().prependMessages('ch-1', [older], false);
+
+      const messages = useMessageStore.getState().messages.get('ch-1');
+      expect(messages).toHaveLength(2);
+      expect(messages![0].content).toBe('Older');
+      expect(messages![1].content).toBe('Existing');
+    });
+
+    it('updates hasMoreMessages for channel', () => {
+      useMessageStore.getState().prependMessages('ch-1', [], true);
+      expect(useMessageStore.getState().hasMoreMessages.get('ch-1')).toBe(true);
+
+      useMessageStore.getState().prependMessages('ch-1', [], false);
+      expect(useMessageStore.getState().hasMoreMessages.get('ch-1')).toBe(false);
+    });
+  });
+
+  describe('setMessages with hasMore', () => {
+    it('sets hasMoreMessages to true when hasMore is true', () => {
+      useMessageStore.getState().setMessages('ch-1', [], true);
+      expect(useMessageStore.getState().hasMoreMessages.get('ch-1')).toBe(true);
+    });
+
+    it('sets hasMoreMessages to false when hasMore is false', () => {
+      useMessageStore.getState().setMessages('ch-1', [], false);
+      expect(useMessageStore.getState().hasMoreMessages.get('ch-1')).toBe(false);
+    });
+
+    it('defaults hasMoreMessages to true when hasMore not provided', () => {
+      useMessageStore.getState().setMessages('ch-1', []);
+      expect(useMessageStore.getState().hasMoreMessages.get('ch-1')).toBe(true);
+    });
+  });
+
+  describe('getOldestMessageId', () => {
+    it('returns first message ID', () => {
+      useMessageStore.getState().setMessages('ch-1', [
+        { id: 'oldest', channelId: 'ch-1', authorId: 'user-1', content: 'First', createdAt: '2024-01-01T00:00:00Z', status: 'sent' },
+        { id: 'newest', channelId: 'ch-1', authorId: 'user-1', content: 'Last', createdAt: '2024-01-01T01:00:00Z', status: 'sent' },
+      ]);
+
+      expect(useMessageStore.getState().getOldestMessageId('ch-1')).toBe('oldest');
+    });
+
+    it('returns undefined for empty channel', () => {
+      expect(useMessageStore.getState().getOldestMessageId('ch-1')).toBeUndefined();
+    });
+
+    it('returns undefined for channel with no messages', () => {
+      useMessageStore.getState().setMessages('ch-1', []);
+      expect(useMessageStore.getState().getOldestMessageId('ch-1')).toBeUndefined();
+    });
+  });
+
+  describe('isLoadingMore', () => {
+    it('toggles correctly', () => {
+      expect(useMessageStore.getState().isLoadingMore).toBe(false);
+
+      useMessageStore.getState().setLoadingMore(true);
+      expect(useMessageStore.getState().isLoadingMore).toBe(true);
+
+      useMessageStore.getState().setLoadingMore(false);
+      expect(useMessageStore.getState().isLoadingMore).toBe(false);
     });
   });
 });
