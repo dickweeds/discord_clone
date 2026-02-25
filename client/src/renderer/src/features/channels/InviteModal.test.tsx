@@ -109,6 +109,25 @@ describe('InviteModal', () => {
     });
   });
 
+  it('shows Copied! feedback after generating invite', async () => {
+    const user = userEvent.setup();
+    vi.spyOn(navigator.clipboard, 'writeText').mockResolvedValue();
+    mockGenerateInvite.mockResolvedValueOnce({
+      id: 'new-id',
+      token: 'new-token',
+      createdBy: 'u1',
+      revoked: false,
+      createdAt: '2026-01-20T00:00:00Z',
+    });
+
+    render(<InviteModal open={true} onOpenChange={() => {}} />);
+    await user.click(screen.getByText('Generate Invite Link'));
+
+    await waitFor(() => {
+      expect(screen.getByText('Copied!')).toBeInTheDocument();
+    });
+  });
+
   it('calls revokeInvite on revoke button click', async () => {
     const user = userEvent.setup();
     mockStoreState.invites = [

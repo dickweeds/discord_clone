@@ -7,7 +7,7 @@ interface InviteState {
   isLoading: boolean;
   error: string | null;
   fetchInvites: () => Promise<void>;
-  generateInvite: () => Promise<Invite>;
+  generateInvite: () => Promise<Invite | null>;
   revokeInvite: (id: string) => Promise<void>;
   clearError: () => void;
 }
@@ -31,19 +31,14 @@ export const useInviteStore = create<InviteState>((set) => ({
   generateInvite: async () => {
     set({ error: null });
     try {
-      const newInvite = await apiRequest<Invite>('/api/invites', {
+      const invite = await apiRequest<Invite>('/api/invites', {
         method: 'POST',
       });
-      const invite: Invite = {
-        ...newInvite,
-        revoked: false,
-        createdBy: newInvite.createdBy ?? '',
-      };
       set((state) => ({ invites: [invite, ...state.invites] }));
       return invite;
     } catch (err) {
       set({ error: (err as Error).message });
-      throw err;
+      return null;
     }
   },
 

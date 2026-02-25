@@ -73,6 +73,8 @@ describe('useInviteStore', () => {
       mockApiRequest.mockResolvedValueOnce({
         id: '2',
         token: 'new-token',
+        createdBy: 'u1',
+        revoked: false,
         createdAt: '2026-01-02T00:00:00Z',
       });
 
@@ -85,10 +87,11 @@ describe('useInviteStore', () => {
       expect(state.invites[0].revoked).toBe(false);
     });
 
-    it('sets error and rethrows on failure', async () => {
+    it('returns null and sets error on failure', async () => {
       mockApiRequest.mockRejectedValueOnce(new Error('Server error'));
 
-      await expect(useInviteStore.getState().generateInvite()).rejects.toThrow('Server error');
+      const result = await useInviteStore.getState().generateInvite();
+      expect(result).toBeNull();
       expect(useInviteStore.getState().error).toBe('Server error');
     });
   });

@@ -14,6 +14,8 @@ export default fp(async (fastify: FastifyInstance) => {
       data: {
         id: invite.id,
         token: invite.token,
+        createdBy: invite.created_by,
+        revoked: false,
         createdAt: invite.created_at.toISOString(),
       },
     });

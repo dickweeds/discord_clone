@@ -1,7 +1,11 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { Copy, Trash2, Link } from 'lucide-react';
+import { Copy, Trash2, Link as LinkIcon } from 'lucide-react';
 import { Modal, Button } from '../../components';
 import { useInviteStore } from '../../stores/useInviteStore';
+
+function buildInviteLink(token: string): string {
+  return `${window.location.origin}/invite/${token}`;
+}
 
 interface InviteModalProps {
   open: boolean;
@@ -26,26 +30,19 @@ export function InviteModal({ open, onOpenChange }: InviteModalProps): React.Rea
     }
   }, [open, fetchInvites]);
 
-  const buildInviteLink = useCallback((token: string) => {
-    return `${window.location.origin}/invite/${token}`;
-  }, []);
-
   const copyToClipboard = useCallback(async (token: string, id: string) => {
     await navigator.clipboard.writeText(buildInviteLink(token));
     setCopiedId(id);
     setTimeout(() => setCopiedId((prev) => (prev === id ? null : prev)), 2000);
-  }, [buildInviteLink]);
+  }, []);
 
   const handleGenerate = async () => {
     setIsGenerating(true);
-    try {
-      const invite = await generateInvite();
-      await copyToClipboard(invite.token, invite.id);
-    } catch {
-      // Error already set in store
-    } finally {
-      setIsGenerating(false);
+    const invite = await generateInvite();
+    if (invite) {
+      await copyToClipboard(invite.token, 'generated');
     }
+    setIsGenerating(false);
   };
 
   const handleRevoke = (id: string) => {
@@ -58,7 +55,7 @@ export function InviteModal({ open, onOpenChange }: InviteModalProps): React.Rea
         {/* Generate Section */}
         <div className="flex items-center gap-2">
           <Button onClick={handleGenerate} disabled={isGenerating}>
-            <Link size={16} className="mr-2" />
+            <LinkIcon size={16} className="mr-2" />
             {isGenerating ? 'Generating...' : 'Generate Invite Link'}
           </Button>
           {copiedId === 'generated' && (
