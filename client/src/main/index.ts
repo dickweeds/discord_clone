@@ -3,6 +3,17 @@ import { join } from 'path';
 import { electronApp, optimizer, is } from '@electron-toolkit/utils';
 import { registerSafeStorageHandlers } from './safeStorage';
 
+const isWslLinux =
+  process.platform === 'linux' &&
+  Boolean(process.env['WSL_DISTRO_NAME'] || process.env['WSL_INTEROP']);
+
+if (isWslLinux) {
+  app.commandLine.appendSwitch('no-sandbox');
+  app.commandLine.appendSwitch('disable-gpu');
+  app.commandLine.appendSwitch('disable-gpu-sandbox');
+  app.disableHardwareAcceleration();
+}
+
 function createWindow(): void {
   const mainWindow = new BrowserWindow({
     width: 1280,
@@ -15,7 +26,7 @@ function createWindow(): void {
       nodeIntegration: false,
 
       contextIsolation: true,
-      sandbox: true,
+      sandbox: !isWslLinux,
       preload: join(__dirname, '../preload/index.js'),
     },
   });
