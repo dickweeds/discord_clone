@@ -51,8 +51,8 @@ development_status:
   epic-1-retrospective: done
 
   # Epic 2: Real-Time Text Communication
-  epic-2: backlog
-  2-1-websocket-connection-and-real-time-transport: backlog
+  epic-2: in-progress
+  2-1-websocket-connection-and-real-time-transport: ready-for-dev
   2-2-encrypted-text-messaging: backlog
   2-3-message-feed-and-channel-navigation-ui: backlog
   2-4-persistent-message-history-and-scrollback: backlog
