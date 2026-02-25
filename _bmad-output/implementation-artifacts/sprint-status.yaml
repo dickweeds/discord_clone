@@ -54,7 +54,7 @@ development_status:
   epic-2: in-progress
   2-1-websocket-connection-and-real-time-transport: done
   2-2-encrypted-text-messaging: done
-  2-3-message-feed-and-channel-navigation-ui: ready-for-dev
+  2-3-message-feed-and-channel-navigation-ui: done
   2-4-persistent-message-history-and-scrollback: backlog
   epic-2-retrospective: optional
 

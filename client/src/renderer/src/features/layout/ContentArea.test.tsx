@@ -1,11 +1,12 @@
 import { describe, it, expect, vi, beforeAll, beforeEach } from 'vitest';
-import { render, screen, waitFor } from '@testing-library/react';
+import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter, Route, Routes } from 'react-router';
 import { useChannelStore } from '../../stores/useChannelStore';
 import { useUIStore } from '../../stores/useUIStore';
 import useMessageStore from '../../stores/useMessageStore';
 import { usePresenceStore } from '../../stores/usePresenceStore';
+import { useMemberStore } from '../../stores/useMemberStore';
 
 const { mockFetchMessages } = vi.hoisted(() => ({
   mockFetchMessages: vi.fn(),
@@ -81,6 +82,14 @@ beforeEach(() => {
     isLoading: false,
     error: null,
   });
+  useMemberStore.setState({
+    members: [
+      { id: 'user-1', username: 'alice', role: 'owner', createdAt: '2024-01-01T00:00:00Z' },
+      { id: 'user-2', username: 'bob', role: 'user', createdAt: '2024-01-01T00:00:00Z' },
+    ],
+    isLoading: false,
+    error: null,
+  });
   vi.clearAllMocks();
 });
 
@@ -105,15 +114,17 @@ describe('ContentArea', () => {
   it('shows welcome message for selected channel with no messages', async () => {
     renderContentArea('ch-1');
     await waitFor(() => {
-      expect(screen.getByText('Welcome to #general')).toBeInTheDocument();
+      const heading = screen.getByRole('heading', { level: 2 });
+      expect(heading).toHaveTextContent('general');
+      expect(screen.getByText('This is the beginning of #general. Send the first message!')).toBeInTheDocument();
     });
-    expect(screen.getByText('This is the start of the #general channel.')).toBeInTheDocument();
   });
 
   it('shows channel name in header', async () => {
     renderContentArea('ch-1');
     await waitFor(() => {
-      expect(screen.getByText('general')).toBeInTheDocument();
+      // Channel name appears in header (and possibly empty state)
+      expect(screen.getAllByText('general').length).toBeGreaterThanOrEqual(1);
     });
   });
 
@@ -224,7 +235,7 @@ describe('ContentArea', () => {
 
   it('redirects to next text channel when active channel is removed', async () => {
     renderContentArea('ch-1');
-    expect(screen.getByText('Welcome to #general')).toBeInTheDocument();
+    expect(screen.getByText('This is the beginning of #general. Send the first message!')).toBeInTheDocument();
 
     // Simulate channel deletion via WS — remove ch-1, activeChannelId updates to ch-2
     useChannelStore.setState({
@@ -235,12 +246,12 @@ describe('ContentArea', () => {
     });
 
     // Should redirect to the remaining channel
-    expect(await screen.findByText('Welcome to #help')).toBeInTheDocument();
+    expect(await screen.findByText('This is the beginning of #help. Send the first message!')).toBeInTheDocument();
   });
 
   it('redirects to /app/channels when all channels are removed', async () => {
     renderContentArea('ch-1');
-    expect(screen.getByText('Welcome to #general')).toBeInTheDocument();
+    expect(screen.getByText('This is the beginning of #general. Send the first message!')).toBeInTheDocument();
 
     // Simulate all channels deleted
     useChannelStore.setState({
@@ -252,9 +263,64 @@ describe('ContentArea', () => {
     expect(await screen.findByText('Select a channel')).toBeInTheDocument();
   });
 
+  it('renders messages as grouped MessageGroup components', async () => {
+    useMemberStore.setState({
+      members: [
+        { id: 'user-1', username: 'alice', role: 'owner', createdAt: '2024-01-01T00:00:00Z' },
+        { id: 'user-2', username: 'bob', role: 'user', createdAt: '2024-01-01T00:00:00Z' },
+      ],
+      isLoading: false,
+      error: null,
+    });
+    useMessageStore.setState({
+      messages: new Map([
+        ['ch-1', [
+          { id: 'msg-1', channelId: 'ch-1', authorId: 'user-1', content: 'Hello from alice', createdAt: '2024-01-01T12:00:00Z', status: 'sent' as const },
+          { id: 'msg-2', channelId: 'ch-1', authorId: 'user-1', content: 'Second msg', createdAt: '2024-01-01T12:01:00Z', status: 'sent' as const },
+          { id: 'msg-3', channelId: 'ch-1', authorId: 'user-2', content: 'Hello from bob', createdAt: '2024-01-01T12:02:00Z', status: 'sent' as const },
+        ]],
+      ]),
+    });
+
+    renderContentArea('ch-1');
+
+    await waitFor(() => {
+      const groups = screen.getAllByRole('group');
+      expect(groups).toHaveLength(2);
+
+      // First group: alice's 2 messages
+      expect(within(groups[0]).getByText('alice')).toBeInTheDocument();
+      expect(within(groups[0]).getByText('Hello from alice')).toBeInTheDocument();
+      expect(within(groups[0]).getByText('Second msg')).toBeInTheDocument();
+
+      // Second group: bob's 1 message
+      expect(within(groups[1]).getByText('bob')).toBeInTheDocument();
+      expect(within(groups[1]).getByText('Hello from bob')).toBeInTheDocument();
+    });
+  });
+
+  it('message container has max-width constraint', async () => {
+    useMessageStore.setState({
+      messages: new Map([
+        ['ch-1', [
+          { id: 'msg-1', channelId: 'ch-1', authorId: 'user-1', content: 'Test', createdAt: '2024-01-01T12:00:00Z', status: 'sent' as const },
+        ]],
+      ]),
+    });
+
+    const { container } = renderContentArea('ch-1');
+
+    await waitFor(() => {
+      expect(screen.getByText('Test')).toBeInTheDocument();
+    });
+
+    const maxWidthContainer = container.querySelector('.max-w-\\[720px\\]');
+    expect(maxWidthContainer).toBeInTheDocument();
+  });
+
   it('does not redirect when a non-active channel is removed', () => {
     renderContentArea('ch-1');
-    expect(screen.getByText('Welcome to #general')).toBeInTheDocument();
+    expect(screen.getByText('This is the beginning of #general. Send the first message!')).toBeInTheDocument();
 
     // Remove ch-2 (not the active channel)
     useChannelStore.setState({
@@ -265,6 +331,6 @@ describe('ContentArea', () => {
     });
 
     // Should still show the active channel
-    expect(screen.getByText('Welcome to #general')).toBeInTheDocument();
+    expect(screen.getByText('This is the beginning of #general. Send the first message!')).toBeInTheDocument();
   });
 });
