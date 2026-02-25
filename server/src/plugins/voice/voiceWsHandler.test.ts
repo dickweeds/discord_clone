@@ -2,7 +2,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import type { WsMessage } from 'discord-clone-shared';
 import { WS_TYPES } from 'discord-clone-shared';
 import { MAX_PARTICIPANTS } from 'discord-clone-shared';
-import { clearAllVoiceState, getPeer, getAllPeers, joinVoiceChannel, setPeerTransport } from './voiceService.js';
+import { clearAllVoiceState, getPeer, getAllPeers, joinVoiceChannel, setPeerTransport, setPeerVideoProducer } from './voiceService.js';
 
 // Mock mediasoupManager
 const mockCreateWebRtcTransport = vi.fn();
@@ -331,6 +331,151 @@ describe('voiceWsHandler', () => {
       expect(broadcast.type).toBe(WS_TYPES.VOICE_NEW_PRODUCER);
       expect(broadcast.payload.producerId).toBe('producer-1');
       expect(broadcast.payload.peerId).toBe('user-1');
+    });
+
+    it('includes kind field in voice:new-producer broadcast', async () => {
+      joinVoiceChannel('user-1', 'voice-channel-1', null);
+      joinVoiceChannel('user-2', 'voice-channel-1', null);
+
+      const mockTransport = createMockTransport('transport-send');
+      setPeerTransport('user-1', 'send', mockTransport as never);
+
+      const otherWs = createMockWs();
+      mockClients.set('user-2', otherWs);
+
+      const ws = createMockWs();
+      const handler = registeredHandlers.get(WS_TYPES.VOICE_PRODUCE)!;
+      handler(ws, {
+        type: WS_TYPES.VOICE_PRODUCE,
+        payload: { transportId: 'transport-send', kind: 'audio', rtpParameters: {} },
+        id: 'req-kind-audio',
+      }, 'user-1');
+
+      await vi.waitFor(() => {
+        expect(otherWs.send).toHaveBeenCalled();
+      });
+
+      const broadcast = JSON.parse(otherWs.send.mock.calls[0][0]);
+      expect(broadcast.payload.kind).toBe('audio');
+    });
+
+    it('produces video and stores via setPeerVideoProducer', async () => {
+      joinVoiceChannel('user-1', 'voice-channel-1', null);
+
+      const mockVideoProducer = {
+        id: 'video-producer-1',
+        on: vi.fn(),
+        close: vi.fn(),
+        kind: 'video' as const,
+      };
+      const mockTransport = createMockTransport('transport-send');
+      mockTransport.produce.mockResolvedValue(mockVideoProducer);
+      setPeerTransport('user-1', 'send', mockTransport as never);
+
+      const ws = createMockWs();
+      const handler = registeredHandlers.get(WS_TYPES.VOICE_PRODUCE)!;
+      handler(ws, {
+        type: WS_TYPES.VOICE_PRODUCE,
+        payload: { transportId: 'transport-send', kind: 'video', rtpParameters: {} },
+        id: 'req-video',
+      }, 'user-1');
+
+      await vi.waitFor(() => {
+        expect(ws.send).toHaveBeenCalled();
+      });
+
+      const sent = JSON.parse(ws.send.mock.calls[0][0]);
+      expect(sent.type).toBe('response');
+      expect(sent.payload.producerId).toBe('video-producer-1');
+      expect(getPeer('user-1')!.videoProducer).toBe(mockVideoProducer);
+    });
+
+    it('broadcasts voice:new-producer with kind video for video produce', async () => {
+      joinVoiceChannel('user-1', 'voice-channel-1', null);
+      joinVoiceChannel('user-2', 'voice-channel-1', null);
+
+      const mockVideoProducer = {
+        id: 'video-producer-1',
+        on: vi.fn(),
+        close: vi.fn(),
+        kind: 'video' as const,
+      };
+      const mockTransport = createMockTransport('transport-send');
+      mockTransport.produce.mockResolvedValue(mockVideoProducer);
+      setPeerTransport('user-1', 'send', mockTransport as never);
+
+      const otherWs = createMockWs();
+      mockClients.set('user-2', otherWs);
+
+      const ws = createMockWs();
+      const handler = registeredHandlers.get(WS_TYPES.VOICE_PRODUCE)!;
+      handler(ws, {
+        type: WS_TYPES.VOICE_PRODUCE,
+        payload: { transportId: 'transport-send', kind: 'video', rtpParameters: {} },
+        id: 'req-video-broadcast',
+      }, 'user-1');
+
+      await vi.waitFor(() => {
+        expect(otherWs.send).toHaveBeenCalled();
+      });
+
+      const broadcast = JSON.parse(otherWs.send.mock.calls[0][0]);
+      expect(broadcast.type).toBe(WS_TYPES.VOICE_NEW_PRODUCER);
+      expect(broadcast.payload.kind).toBe('video');
+    });
+
+    it('rejects duplicate audio producer', async () => {
+      joinVoiceChannel('user-1', 'voice-channel-1', null);
+      const mockTransport = createMockTransport('transport-send');
+      setPeerTransport('user-1', 'send', mockTransport as never);
+
+      // Produce audio first
+      const ws = createMockWs();
+      const handler = registeredHandlers.get(WS_TYPES.VOICE_PRODUCE)!;
+      handler(ws, {
+        type: WS_TYPES.VOICE_PRODUCE,
+        payload: { transportId: 'transport-send', kind: 'audio', rtpParameters: {} },
+        id: 'req-audio-1',
+      }, 'user-1');
+
+      await vi.waitFor(() => {
+        expect(ws.send).toHaveBeenCalled();
+      });
+
+      // Try to produce audio again
+      const ws2 = createMockWs();
+      handler(ws2, {
+        type: WS_TYPES.VOICE_PRODUCE,
+        payload: { transportId: 'transport-send', kind: 'audio', rtpParameters: {} },
+        id: 'req-dup-audio',
+      }, 'user-1');
+
+      const sent = JSON.parse(ws2.send.mock.calls[0][0]);
+      expect(sent.type).toBe('error');
+      expect(sent.payload.error).toContain('audio producer');
+    });
+
+    it('rejects duplicate video producer', async () => {
+      joinVoiceChannel('user-1', 'voice-channel-1', null);
+      const mockTransport = createMockTransport('transport-send');
+      setPeerTransport('user-1', 'send', mockTransport as never);
+
+      // Set existing video producer
+      const existingVideoProducer = { id: 'existing-video', on: vi.fn(), close: vi.fn(), kind: 'video' as const };
+      setPeerVideoProducer('user-1', existingVideoProducer as never);
+
+      const ws = createMockWs();
+      const handler = registeredHandlers.get(WS_TYPES.VOICE_PRODUCE)!;
+      handler(ws, {
+        type: WS_TYPES.VOICE_PRODUCE,
+        payload: { transportId: 'transport-send', kind: 'video', rtpParameters: {} },
+        id: 'req-dup-video',
+      }, 'user-1');
+
+      // Should respond with error synchronously (before produce is called)
+      const sent = JSON.parse(ws.send.mock.calls[0][0]);
+      expect(sent.type).toBe('error');
+      expect(sent.payload.error).toContain('video producer');
     });
   });
 

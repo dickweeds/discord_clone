@@ -11,7 +11,10 @@ let sendTransport: types.Transport | null = null;
 let recvTransport: types.Transport | null = null;
 let producer: types.Producer | null = null;
 let localStream: MediaStream | null = null;
+let videoProducer: types.Producer | null = null;
+let localVideoStream: MediaStream | null = null;
 const consumers = new Map<string, { consumer: types.Consumer; audio: HTMLAudioElement }>();
+const videoConsumers = new Map<string, { consumer: types.Consumer; element: HTMLVideoElement }>();
 
 export function getDevice(): Device | null {
   return device;
@@ -65,7 +68,7 @@ export function createSendTransport(
       wsClient
         .request<VoiceProduceResponse>('voice:produce', {
           transportId: sendTransport!.id,
-          kind: kind as 'audio',
+          kind: kind as 'audio' | 'video',
           rtpParameters,
         } satisfies VoiceProducePayload)
         .then(({ producerId }) => callback({ id: producerId }))
@@ -172,6 +175,71 @@ export function getLocalStream(): MediaStream | null {
   return localStream;
 }
 
+export async function produceVideo(transport: types.Transport): Promise<void> {
+  const stream = await navigator.mediaDevices.getUserMedia({
+    video: { width: { ideal: 1280 }, height: { ideal: 720 }, frameRate: { ideal: 30 } },
+  });
+  const track = stream.getVideoTracks()[0];
+  videoProducer = await transport.produce({ track });
+  localVideoStream = stream;
+}
+
+export function stopVideo(): void {
+  if (videoProducer) {
+    videoProducer.close();
+    videoProducer = null;
+  }
+  if (localVideoStream) {
+    localVideoStream.getTracks().forEach((t) => t.stop());
+    localVideoStream = null;
+  }
+}
+
+export function getLocalVideoStream(): MediaStream | null {
+  return localVideoStream;
+}
+
+export async function consumeVideo(
+  transport: types.Transport,
+  params: { consumerId: string; producerId: string; kind: 'video'; rtpParameters: types.RtpParameters },
+): Promise<types.Consumer> {
+  const consumer = await transport.consume({
+    id: params.consumerId,
+    producerId: params.producerId,
+    kind: params.kind,
+    rtpParameters: params.rtpParameters,
+  });
+
+  const video = document.createElement('video');
+  video.srcObject = new MediaStream([consumer.track]);
+  video.autoplay = true;
+  video.playsInline = true;
+  video.muted = true;
+
+  videoConsumers.set(consumer.id, { consumer, element: video });
+
+  return consumer;
+}
+
+export function getVideoConsumers(): Map<string, { consumer: types.Consumer; element: HTMLVideoElement }> {
+  return videoConsumers;
+}
+
+export function removeVideoConsumerByProducerId(producerId: string): void {
+  for (const [consumerId, entry] of videoConsumers) {
+    if (entry.consumer.producerId === producerId) {
+      entry.consumer.close();
+      entry.element.srcObject = null;
+      videoConsumers.delete(consumerId);
+      break;
+    }
+  }
+}
+
+export function getSendTransport(): types.Transport | null {
+  return sendTransport;
+}
+
 export function getRecvTransport(): types.Transport | null {
   return recvTransport;
 }
@@ -199,12 +267,26 @@ export function cleanup(): void {
     producer = null;
   }
 
+  // Close video producer
+  if (videoProducer) {
+    videoProducer.close();
+    videoProducer = null;
+  }
+
   // Stop local media tracks
   if (localStream) {
     for (const track of localStream.getTracks()) {
       track.stop();
     }
     localStream = null;
+  }
+
+  // Stop local video tracks
+  if (localVideoStream) {
+    for (const track of localVideoStream.getTracks()) {
+      track.stop();
+    }
+    localVideoStream = null;
   }
 
   // Close all consumers and audio elements
@@ -214,6 +296,13 @@ export function cleanup(): void {
     entry.audio.srcObject = null;
   }
   consumers.clear();
+
+  // Close all video consumers
+  for (const [, entry] of videoConsumers) {
+    entry.consumer.close();
+    entry.element.srcObject = null;
+  }
+  videoConsumers.clear();
 
   // Close transports
   if (sendTransport) {

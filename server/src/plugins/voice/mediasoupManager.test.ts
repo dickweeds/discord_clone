@@ -6,7 +6,10 @@ const { mockWorkerOn, mockWorkerClose, mockRouterCreateWebRtcTransport, mockRout
   const mockRouterCreateWebRtcTransport = vi.fn();
   const mockRouter = {
     rtpCapabilities: {
-      codecs: [{ kind: 'audio', mimeType: 'audio/opus', clockRate: 48000, channels: 2 }],
+      codecs: [
+        { kind: 'audio', mimeType: 'audio/opus', clockRate: 48000, channels: 2 },
+        { kind: 'video', mimeType: 'video/VP8', clockRate: 90000 },
+      ],
       headerExtensions: [],
     },
     canConsume: vi.fn().mockReturnValue(true),
@@ -65,7 +68,10 @@ describe('mediasoupManager', () => {
         logTags: ['ice', 'dtls', 'rtp', 'srtp', 'rtcp'],
       });
       expect(mockWorker.createRouter).toHaveBeenCalledWith({
-        mediaCodecs: [{ kind: 'audio', mimeType: 'audio/opus', clockRate: 48000, channels: 2 }],
+        mediaCodecs: [
+          { kind: 'audio', mimeType: 'audio/opus', clockRate: 48000, channels: 2 },
+          { kind: 'video', mimeType: 'video/VP8', clockRate: 90000 },
+        ],
       });
       expect(mockWorker.on).toHaveBeenCalledWith('died', expect.any(Function));
     });
@@ -89,6 +95,16 @@ describe('mediasoupManager', () => {
       const caps = getRouterRtpCapabilities();
       expect(caps.codecs).toBeDefined();
       expect(caps.codecs![0].mimeType).toBe('audio/opus');
+    });
+
+    it('returns RTP capabilities with video/VP8 codec', async () => {
+      await initMediasoup();
+      const caps = getRouterRtpCapabilities();
+      expect(caps.codecs).toBeDefined();
+      const vp8Codec = caps.codecs!.find((c) => c.mimeType === 'video/VP8');
+      expect(vp8Codec).toBeDefined();
+      expect(vp8Codec!.kind).toBe('video');
+      expect(vp8Codec!.clockRate).toBe(90000);
     });
   });
 
@@ -114,6 +130,27 @@ describe('mediasoupManager', () => {
       expect(result.transportParams.dtlsParameters).toBeDefined();
       expect(result.iceServers).toHaveLength(1);
       expect(result.iceServers[0].urls).toContain('stun:127.0.0.1:3478');
+    });
+
+    it('creates transport with initialAvailableOutgoingBitrate of 3000000 for video support', async () => {
+      const mockTransport = {
+        id: 'transport-456',
+        iceParameters: { usernameFragment: 'abc', password: 'def' },
+        iceCandidates: [{ foundation: '1' }],
+        dtlsParameters: { fingerprints: [] },
+        on: vi.fn(),
+        close: vi.fn(),
+      };
+      mockRouterCreateWebRtcTransport.mockResolvedValue(mockTransport);
+
+      await initMediasoup();
+      await createWebRtcTransport('user-1');
+
+      expect(mockRouterCreateWebRtcTransport).toHaveBeenCalledWith(
+        expect.objectContaining({
+          initialAvailableOutgoingBitrate: 3000000,
+        }),
+      );
     });
   });
 

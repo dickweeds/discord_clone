@@ -1,5 +1,5 @@
 import React, { useEffect } from 'react';
-import { Mic, MicOff, Headphones, HeadphoneOff, Video, PhoneOff } from 'lucide-react';
+import { Mic, MicOff, Headphones, HeadphoneOff, Video, VideoOff, PhoneOff } from 'lucide-react';
 import { useVoiceStore } from '../../stores/useVoiceStore';
 import { useChannelStore } from '../../stores/useChannelStore';
 
@@ -10,9 +10,11 @@ export function VoiceStatusBar(): React.ReactNode {
   const connectionState = useVoiceStore((s) => s.connectionState);
   const isMuted = useVoiceStore((s) => s.isMuted);
   const isDeafened = useVoiceStore((s) => s.isDeafened);
+  const isVideoEnabled = useVoiceStore((s) => s.isVideoEnabled);
   const error = useVoiceStore((s) => s.error);
   const toggleMute = useVoiceStore((s) => s.toggleMute);
   const toggleDeafen = useVoiceStore((s) => s.toggleDeafen);
+  const toggleVideo = useVoiceStore((s) => s.toggleVideo);
   const leaveChannel = useVoiceStore((s) => s.leaveChannel);
   const clearError = useVoiceStore((s) => s.clearError);
   const channels = useChannelStore((s) => s.channels);
@@ -34,6 +36,7 @@ export function VoiceStatusBar(): React.ReactNode {
 
   const MuteIcon = isMuted ? MicOff : Mic;
   const DeafenIcon = isDeafened ? HeadphoneOff : Headphones;
+  const VideoIcon = isVideoEnabled ? Video : VideoOff;
 
   return (
     <div
@@ -84,11 +87,15 @@ export function VoiceStatusBar(): React.ReactNode {
         </button>
 
         <button
-          disabled
-          aria-label="Toggle video"
-          className="w-8 h-8 flex items-center justify-center rounded text-text-muted opacity-50 cursor-not-allowed"
+          onClick={() => toggleVideo()}
+          aria-label={isVideoEnabled ? 'Turn off camera' : 'Turn on camera'}
+          className={`w-8 h-8 flex items-center justify-center rounded transition-colors duration-150 ${
+            isVideoEnabled
+              ? 'text-accent-primary'
+              : 'text-text-muted hover:bg-bg-hover hover:text-text-primary'
+          }`}
         >
-          <Video size={18} />
+          <VideoIcon size={18} />
         </button>
 
         <button

@@ -65,6 +65,9 @@ export function AppLayout(): React.ReactNode {
     } else if (key === 'e') {
       e.preventDefault();
       useVoiceStore.getState().leaveChannel();
+    } else if (key === 'v') {
+      e.preventDefault();
+      useVoiceStore.getState().toggleVideo();
     }
   }, []);
 

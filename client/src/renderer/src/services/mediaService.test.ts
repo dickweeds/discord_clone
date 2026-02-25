@@ -26,7 +26,12 @@ import {
   createSendTransport,
   createRecvTransport,
   produceAudio,
+  produceVideo,
+  stopVideo,
+  getLocalVideoStream,
   consumeAudio,
+  consumeVideo,
+  getVideoConsumers,
   getRecvTransport,
   getConsumers,
   removeConsumerByProducerId,
@@ -422,7 +427,6 @@ describe('mediaService', () => {
 
   describe('deafenAudio', () => {
     it('mutes all consumer audio elements and mutes producer', async () => {
-      // Setup consumer with audio element
       const mockPlay = vi.fn().mockResolvedValue(undefined);
       const mockAudioEl = { play: mockPlay, pause: vi.fn(), srcObject: null, muted: false };
       globalThis.Audio = function MockAudio(this: Record<string, unknown>) {
@@ -445,7 +449,6 @@ describe('mediaService', () => {
 
       deafenAudio();
 
-      // Verify consumer audio was muted
       const consumers = getConsumers();
       for (const [, entry] of consumers) {
         expect(entry.audio.muted).toBe(true);
@@ -511,12 +514,153 @@ describe('mediaService', () => {
     });
   });
 
+  describe('produceVideo', () => {
+    it('calls getUserMedia with video constraints and produces on transport', async () => {
+      const mockVideoTrack = { kind: 'video', stop: vi.fn() };
+      const mockVideoStream = {
+        getVideoTracks: () => [mockVideoTrack],
+        getTracks: () => [mockVideoTrack],
+      };
+      Object.defineProperty(globalThis, 'navigator', {
+        value: {
+          mediaDevices: {
+            getUserMedia: vi.fn().mockResolvedValue(mockVideoStream),
+          },
+        },
+        writable: true,
+        configurable: true,
+      });
+
+      const transport = makeMockTransport('send-1');
+
+      await produceVideo(transport as unknown as Parameters<typeof produceVideo>[0]);
+
+      expect(navigator.mediaDevices.getUserMedia).toHaveBeenCalledWith({
+        video: { width: { ideal: 1280 }, height: { ideal: 720 }, frameRate: { ideal: 30 } },
+      });
+      expect(transport.produce).toHaveBeenCalledWith({ track: mockVideoTrack });
+      expect(getLocalVideoStream()).toBe(mockVideoStream);
+    });
+  });
+
+  describe('stopVideo', () => {
+    it('closes video producer and stops video tracks', async () => {
+      const mockVideoTrack = { kind: 'video', stop: vi.fn() };
+      const mockVideoStream = {
+        getVideoTracks: () => [mockVideoTrack],
+        getTracks: () => [mockVideoTrack],
+      };
+      Object.defineProperty(globalThis, 'navigator', {
+        value: {
+          mediaDevices: {
+            getUserMedia: vi.fn().mockResolvedValue(mockVideoStream),
+          },
+        },
+        writable: true,
+        configurable: true,
+      });
+
+      const transport = makeMockTransport('send-1');
+      await produceVideo(transport as unknown as Parameters<typeof produceVideo>[0]);
+
+      stopVideo();
+
+      expect(transport.produce.mock.results[0].value).toBeDefined();
+      expect(mockVideoTrack.stop).toHaveBeenCalled();
+      expect(getLocalVideoStream()).toBeNull();
+    });
+
+    it('is safe to call when no video is active', () => {
+      expect(() => stopVideo()).not.toThrow();
+    });
+  });
+
+  describe('getLocalVideoStream', () => {
+    it('returns null when no video stream exists', () => {
+      expect(getLocalVideoStream()).toBeNull();
+    });
+  });
+
+  describe('consumeVideo', () => {
+    it('creates video consumer with HTMLVideoElement', async () => {
+      const mockVideoElement = {
+        srcObject: null as unknown,
+        autoplay: false,
+        playsInline: false,
+        muted: false,
+      };
+      vi.spyOn(document, 'createElement').mockReturnValue(mockVideoElement as unknown as HTMLVideoElement);
+
+      globalThis.MediaStream = function MockMediaStream() {
+        return {};
+      } as unknown as typeof MediaStream;
+
+      const transport = {
+        ...makeMockTransport('recv-1'),
+        consume: vi.fn().mockResolvedValue({
+          id: 'video-consumer-1',
+          producerId: 'video-producer-1',
+          track: { kind: 'video' },
+          on: vi.fn(),
+          close: vi.fn(),
+          resume: vi.fn(),
+        }),
+      };
+
+      const consumer = await consumeVideo(
+        transport as unknown as Parameters<typeof consumeVideo>[0],
+        {
+          consumerId: 'vc-1',
+          producerId: 'vp-1',
+          kind: 'video',
+          rtpParameters: {} as Parameters<typeof consumeVideo>[1]['rtpParameters'],
+        },
+      );
+
+      expect(transport.consume).toHaveBeenCalledWith({
+        id: 'vc-1',
+        producerId: 'vp-1',
+        kind: 'video',
+        rtpParameters: {},
+      });
+      expect(consumer).toBeDefined();
+      expect(mockVideoElement.autoplay).toBe(true);
+      expect(mockVideoElement.muted).toBe(true);
+      expect(getVideoConsumers().size).toBe(1);
+    });
+  });
+
   describe('cleanup', () => {
     it('resets device to null', async () => {
       await initDevice({ codecs: [] } as Parameters<typeof initDevice>[0]);
       expect(getDevice()).not.toBeNull();
       cleanup();
       expect(getDevice()).toBeNull();
+    });
+
+    it('cleans up video resources', async () => {
+      const mockVideoTrack = { kind: 'video', stop: vi.fn() };
+      const mockVideoStream = {
+        getVideoTracks: () => [mockVideoTrack],
+        getTracks: () => [mockVideoTrack],
+      };
+      Object.defineProperty(globalThis, 'navigator', {
+        value: {
+          mediaDevices: {
+            getUserMedia: vi.fn().mockResolvedValue(mockVideoStream),
+          },
+        },
+        writable: true,
+        configurable: true,
+      });
+
+      const transport = makeMockTransport('send-1');
+      await produceVideo(transport as unknown as Parameters<typeof produceVideo>[0]);
+
+      cleanup();
+
+      expect(mockVideoTrack.stop).toHaveBeenCalled();
+      expect(getLocalVideoStream()).toBeNull();
     });
   });
 });

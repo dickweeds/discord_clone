@@ -68,7 +68,7 @@ development_status:
 
   # Epic 4: Video Communication
   epic-4: in-progress
-  4-1-video-camera-toggle-and-streaming: ready-for-dev
+  4-1-video-camera-toggle-and-streaming: done
   4-2-video-grid-display: backlog
   epic-4-retrospective: optional
 

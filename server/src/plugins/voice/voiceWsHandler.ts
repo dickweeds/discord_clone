@@ -21,6 +21,7 @@ import {
   findProducerOwner,
   setPeerTransport,
   setPeerProducer,
+  setPeerVideoProducer,
   addPeerConsumer,
   removePeer,
   clearAllVoiceState,
@@ -187,7 +188,7 @@ function handleConnectTransport(ws: WebSocket, message: WsMessage, userId: strin
 function handleProduce(ws: WebSocket, message: WsMessage, userId: string): void {
   const { transportId, kind, rtpParameters } = message.payload as {
     transportId: string;
-    kind: 'audio';
+    kind: 'audio' | 'video';
     rtpParameters: unknown;
   };
   const requestId = message.id;
@@ -203,13 +204,29 @@ function handleProduce(ws: WebSocket, message: WsMessage, userId: string): void 
     return;
   }
 
+  // Reject duplicate audio producer
+  if (kind === 'audio' && peer.producer) {
+    if (requestId) respondError(ws, requestId, 'Already has an active audio producer');
+    return;
+  }
+
+  // Reject duplicate video producer
+  if (kind === 'video' && peer.videoProducer) {
+    if (requestId) respondError(ws, requestId, 'Already has an active video producer');
+    return;
+  }
+
   peer.sendTransport
     .produce({
       kind,
       rtpParameters: rtpParameters as Parameters<typeof peer.sendTransport.produce>[0]['rtpParameters'],
     })
     .then((producer: Producer) => {
-      setPeerProducer(userId, producer);
+      if (kind === 'video') {
+        setPeerVideoProducer(userId, producer);
+      } else {
+        setPeerProducer(userId, producer);
+      }
 
       producer.on('transportclose', () => {
         log.info({ userId, producerId: producer.id }, 'Producer transport closed');
@@ -223,6 +240,7 @@ function handleProduce(ws: WebSocket, message: WsMessage, userId: string): void 
       broadcastToChannel(peer.channelId, userId, WS_TYPES.VOICE_NEW_PRODUCER, {
         producerId: producer.id,
         peerId: userId,
+        kind,
       });
     })
     .catch((err: Error) => {
@@ -270,7 +288,7 @@ function handleConsume(ws: WebSocket, message: WsMessage, userId: string): void 
           try {
             clientWs.send(JSON.stringify({
               type: WS_TYPES.VOICE_PRODUCER_CLOSED,
-              payload: { producerId, peerId: producerPeerId },
+              payload: { producerId, peerId: producerPeerId, kind: consumer.kind },
             }));
           } catch {
             log.debug({ userId }, 'Failed to send producer-closed notification');

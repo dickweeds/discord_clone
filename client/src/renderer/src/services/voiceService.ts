@@ -66,6 +66,16 @@ export async function leaveVoiceChannel(channelId: string): Promise<void> {
   await wsClient.request<void>('voice:leave', { channelId });
 }
 
+export async function startVideo(): Promise<void> {
+  const sendTransport = mediaService.getSendTransport();
+  if (!sendTransport) throw new Error('Send transport not available');
+  await mediaService.produceVideo(sendTransport);
+}
+
+export function stopVideo(): void {
+  mediaService.stopVideo();
+}
+
 export function cleanupMedia(): void {
   vadService.stopAllVAD();
   mediaService.cleanup();

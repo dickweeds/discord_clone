@@ -19,6 +19,8 @@ interface VoiceState {
   isMuted: boolean;
   isDeafened: boolean;
   speakingUsers: Set<string>;
+  isVideoEnabled: boolean;
+  videoParticipants: Set<string>;
 
   joinChannel: (channelId: string, userId: string) => Promise<void>;
   leaveChannel: () => Promise<void>;
@@ -29,6 +31,9 @@ interface VoiceState {
   setSpeaking: (userId: string, isSpeaking: boolean) => void;
   toggleMute: () => void;
   toggleDeafen: () => void;
+  toggleVideo: () => Promise<void>;
+  addVideoParticipant: (userId: string) => void;
+  removeVideoParticipant: (userId: string) => void;
   clearError: () => void;
   syncParticipants: (participants: { userId: string; channelId: string }[]) => void;
 }
@@ -43,6 +48,8 @@ export const useVoiceStore = create<VoiceState>((set, get) => ({
   isMuted: false,
   isDeafened: false,
   speakingUsers: new Set<string>(),
+  isVideoEnabled: false,
+  videoParticipants: new Set(),
 
   joinChannel: async (channelId: string, userId: string) => {
     const state = get();
@@ -90,8 +97,13 @@ export const useVoiceStore = create<VoiceState>((set, get) => ({
   },
 
   leaveChannel: async () => {
-    const { currentChannelId, currentUserId } = get();
+    const { currentChannelId, currentUserId, isVideoEnabled } = get();
     if (!currentChannelId) return;
+
+    // Stop video if enabled before leaving
+    if (isVideoEnabled) {
+      voiceService.stopVideo();
+    }
 
     try {
       await voiceService.leaveVoiceChannel(currentChannelId);
@@ -120,6 +132,8 @@ export const useVoiceStore = create<VoiceState>((set, get) => ({
       isMuted: false,
       isDeafened: false,
       speakingUsers: new Set<string>(),
+      isVideoEnabled: false,
+      videoParticipants: new Set(),
       channelParticipants: participants,
     });
 
@@ -137,6 +151,8 @@ export const useVoiceStore = create<VoiceState>((set, get) => ({
       isMuted: false,
       isDeafened: false,
       speakingUsers: new Set<string>(),
+      isVideoEnabled: false,
+      videoParticipants: new Set(),
       channelParticipants: new Map(),
     });
   },
@@ -236,6 +252,43 @@ export const useVoiceStore = create<VoiceState>((set, get) => ({
       }
       set({ isDeafened: false, isMuted: wasMutedBeforeDeafen });
     }
+  },
+
+  toggleVideo: async () => {
+    const { currentChannelId, currentUserId, isVideoEnabled } = get();
+    if (!currentChannelId || !currentUserId) return;
+
+    if (!isVideoEnabled) {
+      try {
+        await voiceService.startVideo();
+        const videoParticipants = new Set(get().videoParticipants);
+        videoParticipants.add(currentUserId);
+        set({ isVideoEnabled: true, videoParticipants });
+      } catch (err) {
+        set({ error: (err as Error).message });
+      }
+    } else {
+      voiceService.stopVideo();
+      const videoParticipants = new Set(get().videoParticipants);
+      videoParticipants.delete(currentUserId);
+      set({ isVideoEnabled: false, videoParticipants });
+    }
+  },
+
+  addVideoParticipant: (userId: string) => {
+    set((state) => {
+      const videoParticipants = new Set(state.videoParticipants);
+      videoParticipants.add(userId);
+      return { videoParticipants };
+    });
+  },
+
+  removeVideoParticipant: (userId: string) => {
+    set((state) => {
+      const videoParticipants = new Set(state.videoParticipants);
+      videoParticipants.delete(userId);
+      return { videoParticipants };
+    });
   },
 
   clearError: () => set({ error: null }),

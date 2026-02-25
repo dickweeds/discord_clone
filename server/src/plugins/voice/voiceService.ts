@@ -8,6 +8,7 @@ export interface VoicePeer {
   sendTransport: WebRtcTransport | null;
   recvTransport: WebRtcTransport | null;
   producer: Producer | null;
+  videoProducer: Producer | null;
   consumers: Map<string, Consumer>;
 }
 
@@ -36,6 +37,7 @@ export function joinVoiceChannel(
     sendTransport: null,
     recvTransport: null,
     producer: null,
+    videoProducer: null,
     consumers: new Map(),
   };
   voicePeers.set(userId, peer);
@@ -95,6 +97,12 @@ export function setPeerProducer(userId: string, producer: Producer): void {
   peer.producer = producer;
 }
 
+export function setPeerVideoProducer(userId: string, producer: Producer): void {
+  const peer = voicePeers.get(userId);
+  if (!peer) throw new Error(`Voice peer not found: ${userId}`);
+  peer.videoProducer = producer;
+}
+
 export function addPeerConsumer(userId: string, consumer: Consumer): void {
   const peer = voicePeers.get(userId);
   if (!peer) throw new Error(`Voice peer not found: ${userId}`);
@@ -108,6 +116,7 @@ export function removePeer(userId: string): string | null {
 export function findProducerOwner(producerId: string): string | null {
   for (const [userId, peer] of voicePeers) {
     if (peer.producer?.id === producerId) return userId;
+    if (peer.videoProducer?.id === producerId) return userId;
   }
   return null;
 }
@@ -134,6 +143,12 @@ function cleanupPeer(peer: VoicePeer): void {
   if (peer.producer) {
     try { peer.producer.close(); } catch { /* already closed */ }
     peer.producer = null;
+  }
+
+  // Close video producer
+  if (peer.videoProducer) {
+    try { peer.videoProducer.close(); } catch { /* already closed */ }
+    peer.videoProducer = null;
   }
 
   // Close transports

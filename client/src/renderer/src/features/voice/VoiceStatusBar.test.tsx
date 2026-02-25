@@ -15,6 +15,8 @@ beforeEach(() => {
     channelParticipants: new Map(),
     isMuted: false,
     isDeafened: false,
+    isVideoEnabled: false,
+    videoParticipants: new Set(),
   });
   useChannelStore.setState({
     channels: [
@@ -132,19 +134,51 @@ describe('VoiceStatusBar', () => {
 
     expect(screen.getByRole('button', { name: /mute microphone/i })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /deafen audio/i })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /toggle video/i })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /turn on camera/i })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /disconnect from voice/i })).toBeInTheDocument();
   });
 
-  it('video button is disabled', () => {
+  it('video button is enabled and clickable', async () => {
+    const mockToggleVideo = vi.fn();
     useVoiceStore.setState({
       currentChannelId: 'voice-1',
       connectionState: 'connected',
+      toggleVideo: mockToggleVideo,
     });
 
     render(<VoiceStatusBar />);
 
-    expect(screen.getByRole('button', { name: /toggle video/i })).toBeDisabled();
+    const videoButton = screen.getByRole('button', { name: /turn on camera/i });
+    expect(videoButton).not.toBeDisabled();
+
+    const user = userEvent.setup();
+    await user.click(videoButton);
+
+    expect(mockToggleVideo).toHaveBeenCalled();
+  });
+
+  it('video button shows "Turn off camera" when video is enabled', () => {
+    useVoiceStore.setState({
+      currentChannelId: 'voice-1',
+      connectionState: 'connected',
+      isVideoEnabled: true,
+    });
+
+    render(<VoiceStatusBar />);
+
+    expect(screen.getByRole('button', { name: /turn off camera/i })).toBeInTheDocument();
+  });
+
+  it('video button shows "Turn on camera" when video is disabled', () => {
+    useVoiceStore.setState({
+      currentChannelId: 'voice-1',
+      connectionState: 'connected',
+      isVideoEnabled: false,
+    });
+
+    render(<VoiceStatusBar />);
+
+    expect(screen.getByRole('button', { name: /turn on camera/i })).toBeInTheDocument();
   });
 
   it('shows error state when connection fails', () => {

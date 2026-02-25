@@ -159,25 +159,42 @@ class WsClient {
         { producerId: payload.producerId },
       );
 
-      const consumer = await mediaService.consumeAudio(recvTransport, {
-        consumerId: consumeResponse.consumerId,
-        producerId: consumeResponse.producerId,
-        kind: consumeResponse.kind,
-        rtpParameters: consumeResponse.rtpParameters as Parameters<typeof mediaService.consumeAudio>[1]['rtpParameters'],
-      });
-
-      await this.request<void>('voice:consumer-resume', { consumerId: consumer.id });
-
-      // Start remote VAD for speaking detection
-      vadService.startRemoteVAD(consumer, payload.peerId, (peerId, speaking) => {
-        import('../stores/useVoiceStore').then(({ useVoiceStore }) => {
-          useVoiceStore.getState().setSpeaking(peerId, speaking);
-        }).catch((err) => {
-          console.warn('[wsClient] Failed to update speaking state:', err);
+      if (payload.kind === 'video') {
+        const consumer = await mediaService.consumeVideo(recvTransport, {
+          consumerId: consumeResponse.consumerId,
+          producerId: consumeResponse.producerId,
+          kind: 'video',
+          rtpParameters: consumeResponse.rtpParameters as Parameters<typeof mediaService.consumeVideo>[1]['rtpParameters'],
         });
-      });
+
+        import('../stores/useVoiceStore').then(({ useVoiceStore }) => {
+          useVoiceStore.getState().addVideoParticipant(payload.peerId);
+        }).catch((err) => {
+          console.warn('[wsClient] Failed to add video participant:', err);
+        });
+
+        await this.request<void>('voice:consumer-resume', { consumerId: consumer.id });
+      } else {
+        const consumer = await mediaService.consumeAudio(recvTransport, {
+          consumerId: consumeResponse.consumerId,
+          producerId: consumeResponse.producerId,
+          kind: consumeResponse.kind as 'audio',
+          rtpParameters: consumeResponse.rtpParameters as Parameters<typeof mediaService.consumeAudio>[1]['rtpParameters'],
+        });
+
+        await this.request<void>('voice:consumer-resume', { consumerId: consumer.id });
+
+        // Start remote VAD for speaking detection
+        vadService.startRemoteVAD(consumer, payload.peerId, (peerId, speaking) => {
+          import('../stores/useVoiceStore').then(({ useVoiceStore }) => {
+            useVoiceStore.getState().setSpeaking(peerId, speaking);
+          }).catch((err) => {
+            console.warn('[wsClient] Failed to update speaking state:', err);
+          });
+        });
+      }
     } catch (err) {
-      console.warn('[wsClient] Failed to consume producer audio:', (err as Error).message);
+      console.warn('[wsClient] Failed to consume producer:', (err as Error).message);
     }
   }
 
@@ -290,14 +307,26 @@ class WsClient {
       const payload = message.payload as VoicePeerLeftPayload;
       import('../stores/useVoiceStore').then(({ useVoiceStore }) => {
         useVoiceStore.getState().removePeer(payload.channelId, payload.userId);
+        useVoiceStore.getState().removeVideoParticipant(payload.userId);
       }).catch(() => {});
     } else if (message.type === WS_TYPES.VOICE_NEW_PRODUCER) {
       const payload = message.payload as VoiceNewProducerPayload;
       this.handleNewProducer(payload);
     } else if (message.type === WS_TYPES.VOICE_PRODUCER_CLOSED) {
       const payload = message.payload as VoiceProducerClosedPayload;
-      vadService.stopRemoteVAD(payload.peerId);
-      mediaService.removeConsumerByProducerId(payload.producerId);
+      if (payload.kind === 'video') {
+        mediaService.removeVideoConsumerByProducerId(payload.producerId);
+        if (payload.peerId) {
+          import('../stores/useVoiceStore').then(({ useVoiceStore }) => {
+            useVoiceStore.getState().removeVideoParticipant(payload.peerId);
+          }).catch((err) => {
+            console.warn('[wsClient] Failed to remove video participant:', err);
+          });
+        }
+      } else {
+        vadService.stopRemoteVAD(payload.peerId);
+        mediaService.removeConsumerByProducerId(payload.producerId);
+      }
     } else if (message.type === WS_TYPES.VOICE_PRESENCE_SYNC) {
       const payload = message.payload as VoiceChannelPresencePayload;
       import('../stores/useVoiceStore').then(({ useVoiceStore }) => {

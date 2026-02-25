@@ -16,6 +16,7 @@ function getTurnSecret(): string {
 
 const mediaCodecs: RouterRtpCodecCapability[] = [
   { kind: 'audio', mimeType: 'audio/opus', clockRate: 48000, channels: 2 },
+  { kind: 'video', mimeType: 'video/VP8', clockRate: 90000 },
 ];
 
 let worker: Worker | null = null;
@@ -96,7 +97,7 @@ export async function createWebRtcTransport(userId: string): Promise<TransportRe
     enableUdp: true,
     enableTcp: true,
     preferUdp: true,
-    initialAvailableOutgoingBitrate: 600000,
+    initialAvailableOutgoingBitrate: 3000000,
   });
 
   const iceServers = generateTurnCredentials(userId);
