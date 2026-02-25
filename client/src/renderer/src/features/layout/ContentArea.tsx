@@ -82,7 +82,7 @@ export function ContentArea(): React.ReactNode {
             </div>
           </div>
         ) : (
-          <div className="flex-1 overflow-y-auto">
+          <div className="flex-1 overflow-y-auto" role="log" aria-label={`Messages in ${channel.name}`}>
             <div className="max-w-[720px] mx-auto w-full px-4 py-4">
               {messageGroups.map((group, index) => (
                 <MessageGroup key={`${group.authorId}-${group.firstTimestamp}`} group={group} isFirst={index === 0} />

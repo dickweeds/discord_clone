@@ -105,4 +105,17 @@ describe('MessageGroup', () => {
     const { container } = render(<MessageGroup group={makeGroup()} isFirst={true} />);
     expect(container.firstChild).not.toHaveClass('mt-4');
   });
+
+  it('has role="group" with accessible label', () => {
+    const { container } = render(<MessageGroup group={makeGroup()} isFirst={true} />);
+    expect(container.firstChild).toHaveAttribute('role', 'group');
+    expect(container.firstChild).toHaveAttribute('aria-label', 'Messages from alice');
+  });
+
+  it('marks avatar as aria-hidden', () => {
+    const { container } = render(<MessageGroup group={makeGroup()} isFirst={true} />);
+    const avatar = container.querySelector('[aria-hidden="true"]');
+    expect(avatar).toBeInTheDocument();
+    expect(avatar).toHaveTextContent('A');
+  });
 });

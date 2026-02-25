@@ -1,6 +1,6 @@
 # Story 2.3: Message Feed & Channel Navigation UI
 
-Status: review
+Status: done
 
 <!-- Note: Validation is optional. Run validate-create-story for quality check before dev-story. -->
 
@@ -354,6 +354,7 @@ Claude Opus 4.6
 ### Change Log
 
 - 2026-02-25: Story 2-3 implementation complete. Created message grouping system with MessageGroup component, groupMessages utility, and useUsername hook. Refactored ContentArea for grouped rendering with width capping.
+- 2026-02-25: Code review fixes (8 issues). Fixed username font-weight to font-semibold (AC 2). Extracted formatTimestamp to utility with dedicated tests and invalid-date guard. Added aria-hidden on avatars, role="group" on message groups, role="log" on message feed. Improved ContentArea tests with structural group validation and empty-state heading assertion. Optimized useUsername Zustand selector to target specific member.
 
 ### File List
 
@@ -362,6 +363,8 @@ New files:
 - client/src/renderer/src/features/messages/MessageGroup.test.tsx
 - client/src/renderer/src/utils/groupMessages.ts
 - client/src/renderer/src/utils/groupMessages.test.ts
+- client/src/renderer/src/utils/formatTimestamp.ts
+- client/src/renderer/src/utils/formatTimestamp.test.ts
 - client/src/renderer/src/hooks/useUsername.ts
 - client/src/renderer/src/hooks/useUsername.test.ts
 

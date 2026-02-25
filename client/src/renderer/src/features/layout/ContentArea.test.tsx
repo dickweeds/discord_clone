@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeAll, beforeEach } from 'vitest';
-import { render, screen, waitFor } from '@testing-library/react';
+import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter, Route, Routes } from 'react-router';
 import { useChannelStore } from '../../stores/useChannelStore';
@@ -114,6 +114,8 @@ describe('ContentArea', () => {
   it('shows welcome message for selected channel with no messages', async () => {
     renderContentArea('ch-1');
     await waitFor(() => {
+      const heading = screen.getByRole('heading', { level: 2 });
+      expect(heading).toHaveTextContent('general');
       expect(screen.getByText('This is the beginning of #general. Send the first message!')).toBeInTheDocument();
     });
   });
@@ -283,14 +285,18 @@ describe('ContentArea', () => {
     renderContentArea('ch-1');
 
     await waitFor(() => {
-      // Both usernames should appear as group headers
-      expect(screen.getByText('alice')).toBeInTheDocument();
-      expect(screen.getByText('bob')).toBeInTheDocument();
+      const groups = screen.getAllByRole('group');
+      expect(groups).toHaveLength(2);
+
+      // First group: alice's 2 messages
+      expect(within(groups[0]).getByText('alice')).toBeInTheDocument();
+      expect(within(groups[0]).getByText('Hello from alice')).toBeInTheDocument();
+      expect(within(groups[0]).getByText('Second msg')).toBeInTheDocument();
+
+      // Second group: bob's 1 message
+      expect(within(groups[1]).getByText('bob')).toBeInTheDocument();
+      expect(within(groups[1]).getByText('Hello from bob')).toBeInTheDocument();
     });
-    // All message contents should render
-    expect(screen.getByText('Hello from alice')).toBeInTheDocument();
-    expect(screen.getByText('Second msg')).toBeInTheDocument();
-    expect(screen.getByText('Hello from bob')).toBeInTheDocument();
   });
 
   it('message container has max-width constraint', async () => {
