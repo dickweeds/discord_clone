@@ -17,6 +17,14 @@ export function getClients(): Map<string, WebSocket> {
   return clients;
 }
 
+export function getClientByUserId(userId: string): WebSocket | undefined {
+  return clients.get(userId);
+}
+
+export function removeClientByUserId(userId: string): boolean {
+  return clients.delete(userId);
+}
+
 export default fp(async function wsServer(fastify) {
   await fastify.register(websocket);
 
@@ -67,7 +75,11 @@ export default fp(async function wsServer(fastify) {
     });
 
     socket.on('close', () => {
-      clients.delete(userId);
+      const wasTracked = clients.delete(userId);
+      if (!wasTracked) {
+        // Already removed by admin action — skip duplicate broadcast
+        return;
+      }
       removeUser(userId);
       fastify.log.info({ userId }, 'WebSocket client disconnected');
       broadcastPresenceUpdate(clients, userId, 'offline');

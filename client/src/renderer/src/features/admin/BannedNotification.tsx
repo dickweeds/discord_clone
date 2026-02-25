@@ -10,8 +10,8 @@ export function BannedNotification(): React.ReactNode {
   const logout = useAuthStore((s) => s.logout);
 
   const handleOk = async () => {
-    dismiss();
     await logout();
+    dismiss();
   };
 
   return (

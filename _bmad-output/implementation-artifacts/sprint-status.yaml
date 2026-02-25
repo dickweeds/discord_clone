@@ -75,7 +75,7 @@ development_status:
   # Epic 5: Server Administration & User Management
   epic-5: backlog
   5-1-channel-management: backlog
-  5-2-user-management-and-administration: review
+  5-2-user-management-and-administration: done
   epic-5-retrospective: optional
 
   # Epic 6: Desktop App Polish & Production Deployment

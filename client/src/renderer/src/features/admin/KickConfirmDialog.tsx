@@ -12,14 +12,16 @@ interface KickConfirmDialogProps {
 
 export function KickConfirmDialog({ open, onOpenChange, userId, username }: KickConfirmDialogProps): React.ReactNode {
   const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   const handleKick = async () => {
     setIsLoading(true);
+    setError(null);
     try {
       await apiRequest(`/api/admin/kick/${userId}`, { method: 'POST' });
       onOpenChange(false);
-    } catch {
-      // Error handled by apiClient
+    } catch (err) {
+      setError((err as Error).message);
     } finally {
       setIsLoading(false);
     }
@@ -36,6 +38,7 @@ export function KickConfirmDialog({ open, onOpenChange, userId, username }: Kick
           <Dialog.Description className="mt-2 text-sm text-text-secondary">
             They will be removed from the server but can rejoin with a new invite.
           </Dialog.Description>
+          {error && <p className="mt-2 text-sm text-error">{error}</p>}
           <div className="mt-4 flex justify-end gap-2">
             <Button variant="secondary" onClick={() => onOpenChange(false)}>
               Cancel

@@ -35,7 +35,7 @@ class WsClient {
     this.socket.onclose = (event: CloseEvent) => {
       this.socket = null;
 
-      if (this.intentionalClose || event.code === 4001) {
+      if (this.intentionalClose || event.code === 4001 || event.code === 4003) {
         usePresenceStore.getState().setConnectionState('disconnected');
         return;
       }

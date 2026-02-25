@@ -1,6 +1,6 @@
 import type { WebSocket } from 'ws';
 import { WS_TYPES } from 'discord-clone-shared';
-import type { WsMessage, PresenceUpdatePayload, PresenceSyncPayload } from 'discord-clone-shared';
+import type { WsMessage, PresenceUpdatePayload, PresenceSyncPayload, MemberRemovedPayload } from 'discord-clone-shared';
 
 interface PresenceEntry {
   status: 'online';
@@ -56,6 +56,27 @@ export function sendPresenceSync(ws: WebSocket): void {
     payload: { users: getOnlineUsers() },
   };
   ws.send(JSON.stringify(message));
+}
+
+export function broadcastMemberRemoved(
+  clients: Map<string, WebSocket>,
+  userId: string,
+): void {
+  const message: WsMessage<MemberRemovedPayload> = {
+    type: WS_TYPES.MEMBER_REMOVED,
+    payload: { userId },
+  };
+  const data = JSON.stringify(message);
+
+  for (const [clientUserId, ws] of clients) {
+    if (clientUserId !== userId && ws.readyState === ws.OPEN) {
+      try {
+        ws.send(data);
+      } catch {
+        // Failed to send to this client — continue broadcasting to others
+      }
+    }
+  }
 }
 
 export function clearAllPresence(): void {

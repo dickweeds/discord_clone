@@ -1,9 +1,12 @@
 import type { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import { WS_TYPES } from 'discord-clone-shared';
 import { requireOwner } from '../auth/authMiddleware.js';
-import { kickUser, banUser, unbanUser, resetPassword, getBannedUsers } from './adminService.js';
-import { getClients } from '../../ws/wsServer.js';
-import { broadcastPresenceUpdate } from '../presence/presenceService.js';
+import {
+  kickUser, banUser, unbanUser, resetPassword, getBannedUsers,
+  UserNotFoundError, BanNotFoundError, UserAlreadyBannedError,
+} from './adminService.js';
+import { getClients, getClientByUserId, removeClientByUserId } from '../../ws/wsServer.js';
+import { broadcastPresenceUpdate, broadcastMemberRemoved } from '../presence/presenceService.js';
 
 interface UserIdParams {
   userId: string;
@@ -34,22 +37,22 @@ export default async function adminRoutes(fastify: FastifyInstance) {
     try {
       kickUser(fastify.db, userId);
     } catch (err) {
-      if (err instanceof Error && err.message === 'User not found') {
+      if (err instanceof UserNotFoundError) {
         return reply.status(404).send({ error: { code: 'NOT_FOUND', message: 'User not found' } });
       }
       throw err;
     }
 
     // Send WS notification to kicked user, then close their connection
-    const clients = getClients();
-    const ws = clients.get(userId);
+    const ws = getClientByUserId(userId);
     if (ws && ws.readyState === ws.OPEN) {
       ws.send(JSON.stringify({ type: WS_TYPES.USER_KICKED, payload: { userId } }));
       ws.close(4003, 'Kicked by admin');
     }
-    clients.delete(userId);
+    removeClientByUserId(userId);
 
     // Broadcast presence offline + member removed to remaining clients
+    const clients = getClients();
     broadcastPresenceUpdate(clients, userId, 'offline');
     broadcastMemberRemoved(clients, userId);
 
@@ -70,22 +73,25 @@ export default async function adminRoutes(fastify: FastifyInstance) {
     try {
       banUser(fastify.db, userId, request.user!.userId);
     } catch (err) {
-      if (err instanceof Error && err.message === 'User not found') {
+      if (err instanceof UserNotFoundError) {
         return reply.status(404).send({ error: { code: 'NOT_FOUND', message: 'User not found' } });
+      }
+      if (err instanceof UserAlreadyBannedError) {
+        return reply.status(400).send({ error: { code: 'ALREADY_BANNED', message: 'User is already banned' } });
       }
       throw err;
     }
 
     // Send WS notification to banned user, then close their connection
-    const clients = getClients();
-    const ws = clients.get(userId);
+    const ws = getClientByUserId(userId);
     if (ws && ws.readyState === ws.OPEN) {
       ws.send(JSON.stringify({ type: WS_TYPES.USER_BANNED, payload: { userId } }));
       ws.close(4003, 'Banned by admin');
     }
-    clients.delete(userId);
+    removeClientByUserId(userId);
 
     // Broadcast presence offline + member removed to remaining clients
+    const clients = getClients();
     broadcastPresenceUpdate(clients, userId, 'offline');
     broadcastMemberRemoved(clients, userId);
 
@@ -101,7 +107,7 @@ export default async function adminRoutes(fastify: FastifyInstance) {
     try {
       unbanUser(fastify.db, userId);
     } catch (err) {
-      if (err instanceof Error && err.message === 'Ban not found') {
+      if (err instanceof BanNotFoundError) {
         return reply.status(404).send({ error: { code: 'NOT_FOUND', message: 'Ban not found' } });
       }
       throw err;
@@ -125,7 +131,7 @@ export default async function adminRoutes(fastify: FastifyInstance) {
     try {
       temporaryPassword = await resetPassword(fastify.db, userId);
     } catch (err) {
-      if (err instanceof Error && err.message === 'User not found') {
+      if (err instanceof UserNotFoundError) {
         return reply.status(404).send({ error: { code: 'NOT_FOUND', message: 'User not found' } });
       }
       throw err;
@@ -139,17 +145,4 @@ export default async function adminRoutes(fastify: FastifyInstance) {
     const bannedUsers = getBannedUsers(fastify.db);
     return reply.send({ data: bannedUsers, count: bannedUsers.length });
   });
-}
-
-function broadcastMemberRemoved(clients: Map<string, import('ws').WebSocket>, userId: string): void {
-  const message = JSON.stringify({ type: WS_TYPES.MEMBER_REMOVED, payload: { userId } });
-  for (const [clientUserId, ws] of clients) {
-    if (clientUserId !== userId && ws.readyState === ws.OPEN) {
-      try {
-        ws.send(message);
-      } catch {
-        // Failed to send to this client — continue broadcasting
-      }
-    }
-  }
 }

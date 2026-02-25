@@ -75,6 +75,14 @@ describe('adminService', () => {
       const owner = await seedOwner(app);
       expect(() => banUser(app.db, 'non-existent-id', owner.id)).toThrow('User not found');
     });
+
+    it('throws when user is already banned', async () => {
+      const owner = await seedOwner(app);
+      const user = await seedRegularUser(app);
+
+      banUser(app.db, user.id, owner.id);
+      expect(() => banUser(app.db, user.id, owner.id)).toThrow('User is already banned');
+    });
   });
 
   describe('unbanUser', () => {

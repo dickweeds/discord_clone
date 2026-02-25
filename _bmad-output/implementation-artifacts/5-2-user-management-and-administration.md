@@ -1,6 +1,6 @@
 # Story 5.2: User Management & Administration
 
-Status: review
+Status: done
 
 <!-- Note: Validation is optional. Run validate-create-story for quality check before dev-story. -->
 
@@ -553,6 +553,7 @@ Claude Opus 4.6
 ### Change Log
 
 - 2026-02-24: Implemented Story 5-2 — User Management & Administration (kick, ban, unban, reset password, context menu, dialogs, WS notifications)
+- 2026-02-24: Code review — Fixed 10 issues (4 HIGH, 3 MEDIUM, 3 LOW): WS reconnect after kick/ban, double presence broadcast, missing tests, BannedUsersPanel entry point, dismiss/logout order, existing ban check, error feedback in dialogs, custom error classes, getClientByUserId helper, broadcastMemberRemoved refactor. Server: 162 tests pass (+5 new). Client: 111 tests pass. 0 lint errors.
 
 ### File List
 
@@ -577,10 +578,12 @@ Claude Opus 4.6
 
 **Modified files:**
 - server/src/app.ts — registered adminRoutes plugin
+- server/src/ws/wsServer.ts — added getClientByUserId/removeClientByUserId helpers, guarded close handler against double broadcast
+- server/src/plugins/presence/presenceService.ts — added broadcastMemberRemoved function
 - shared/src/ws-messages.ts — added UserKickedPayload, UserBannedPayload, MemberRemovedPayload, WS_TYPES entries
 - shared/src/index.ts — exported new payload types
 - client/src/renderer/src/App.tsx — mounted KickedNotification + BannedNotification
-- client/src/renderer/src/features/members/MemberList.tsx — wrapped MemberItem with MemberContextMenu
+- client/src/renderer/src/features/members/MemberList.tsx — wrapped MemberItem with MemberContextMenu, added BannedUsersPanel entry point (owner-only)
 - client/src/renderer/src/stores/useMemberStore.ts — added removeMember action
 - client/src/renderer/src/stores/useMemberStore.test.ts — added removeMember test
-- client/src/renderer/src/services/wsClient.ts — added user:kicked, user:banned, member:removed handlers
+- client/src/renderer/src/services/wsClient.ts — added user:kicked, user:banned, member:removed handlers, added 4003 close code to no-reconnect list

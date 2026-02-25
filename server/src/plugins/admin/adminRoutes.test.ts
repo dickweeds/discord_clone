@@ -8,7 +8,7 @@ vi.hoisted(() => {
 });
 vi.stubEnv('DATABASE_PATH', ':memory:');
 
-import { setupApp, seedOwner, seedRegularUser } from '../../test/helpers.js';
+import { setupApp, seedOwner, seedRegularUser, seedInvite } from '../../test/helpers.js';
 import { bans } from '../../db/schema.js';
 import { verifyPassword } from '../auth/authService.js';
 import { users } from '../../db/schema.js';
@@ -118,6 +118,91 @@ describe('adminRoutes', () => {
       expect(response.statusCode).toBe(400);
       const body = JSON.parse(response.payload);
       expect(body.error.code).toBe('INVALID_ACTION');
+    });
+
+    it('returns 404 for non-existent user', async () => {
+      const owner = await seedOwner(app);
+
+      const response = await app.inject({
+        method: 'POST',
+        url: '/api/admin/ban/non-existent-id',
+        headers: { authorization: `Bearer ${owner.token}` },
+      });
+
+      expect(response.statusCode).toBe(404);
+      const body = JSON.parse(response.payload);
+      expect(body.error.code).toBe('NOT_FOUND');
+    });
+
+    it('returns 400 when user is already banned', async () => {
+      const owner = await seedOwner(app);
+      const user = await seedRegularUser(app);
+
+      // Ban the user first
+      await app.inject({
+        method: 'POST',
+        url: `/api/admin/ban/${user.id}`,
+        headers: { authorization: `Bearer ${owner.token}` },
+      });
+
+      // Try to ban again
+      const response = await app.inject({
+        method: 'POST',
+        url: `/api/admin/ban/${user.id}`,
+        headers: { authorization: `Bearer ${owner.token}` },
+      });
+
+      expect(response.statusCode).toBe(400);
+      const body = JSON.parse(response.payload);
+      expect(body.error.code).toBe('ALREADY_BANNED');
+    });
+
+    it('banned user cannot login', async () => {
+      const owner = await seedOwner(app);
+      await seedRegularUser(app);
+
+      // Ban the user via admin route
+      const usersResult = app.db.select().from(users).where(eq(users.username, 'regular')).get();
+      await app.inject({
+        method: 'POST',
+        url: `/api/admin/ban/${usersResult!.id}`,
+        headers: { authorization: `Bearer ${owner.token}` },
+      });
+
+      // Try to login as banned user
+      const loginResponse = await app.inject({
+        method: 'POST',
+        url: '/api/auth/login',
+        payload: { username: 'regular', password: 'userPass123' },
+      });
+
+      expect(loginResponse.statusCode).toBe(403);
+      const body = JSON.parse(loginResponse.payload);
+      expect(body.error.code).toBe('ACCOUNT_BANNED');
+    });
+
+    it('banned user cannot register with same username', async () => {
+      const owner = await seedOwner(app);
+      const user = await seedRegularUser(app);
+      const inviteToken = seedInvite(app, owner.id);
+
+      // Ban the user
+      await app.inject({
+        method: 'POST',
+        url: `/api/admin/ban/${user.id}`,
+        headers: { authorization: `Bearer ${owner.token}` },
+      });
+
+      // Try to register with the banned username
+      const registerResponse = await app.inject({
+        method: 'POST',
+        url: '/api/auth/register',
+        payload: { username: 'regular', password: 'newPass12345', inviteToken },
+      });
+
+      expect(registerResponse.statusCode).toBe(403);
+      const body = JSON.parse(registerResponse.payload);
+      expect(body.error.code).toBe('REGISTRATION_BLOCKED');
     });
   });
 

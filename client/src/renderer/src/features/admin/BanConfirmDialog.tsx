@@ -12,14 +12,16 @@ interface BanConfirmDialogProps {
 
 export function BanConfirmDialog({ open, onOpenChange, userId, username }: BanConfirmDialogProps): React.ReactNode {
   const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   const handleBan = async () => {
     setIsLoading(true);
+    setError(null);
     try {
       await apiRequest(`/api/admin/ban/${userId}`, { method: 'POST' });
       onOpenChange(false);
-    } catch {
-      // Error handled by apiClient
+    } catch (err) {
+      setError((err as Error).message);
     } finally {
       setIsLoading(false);
     }
@@ -36,6 +38,7 @@ export function BanConfirmDialog({ open, onOpenChange, userId, username }: BanCo
           <Dialog.Description className="mt-2 text-sm text-text-secondary">
             They will be permanently removed and cannot log in or create new accounts.
           </Dialog.Description>
+          {error && <p className="mt-2 text-sm text-error">{error}</p>}
           <div className="mt-4 flex justify-end gap-2">
             <Button variant="secondary" onClick={() => onOpenChange(false)}>
               Cancel

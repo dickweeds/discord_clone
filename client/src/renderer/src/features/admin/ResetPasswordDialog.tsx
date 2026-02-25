@@ -14,18 +14,20 @@ export function ResetPasswordDialog({ open, onOpenChange, userId, username }: Re
   const [isLoading, setIsLoading] = useState(false);
   const [temporaryPassword, setTemporaryPassword] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     if (open) {
       setTemporaryPassword(null);
       setCopied(false);
+      setError(null);
       setIsLoading(true);
       apiRequest<{ temporaryPassword: string }>(`/api/admin/reset-password/${userId}`, { method: 'POST' })
         .then((data) => {
           setTemporaryPassword(data.temporaryPassword);
         })
-        .catch(() => {
-          // Error handled by apiClient
+        .catch((err) => {
+          setError((err as Error).message);
         })
         .finally(() => {
           setIsLoading(false);
@@ -51,6 +53,10 @@ export function ResetPasswordDialog({ open, onOpenChange, userId, username }: Re
 
           {isLoading && (
             <p className="mt-3 text-sm text-text-muted">Generating temporary password...</p>
+          )}
+
+          {error && (
+            <p className="mt-3 text-sm text-error">{error}</p>
           )}
 
           {temporaryPassword && (
