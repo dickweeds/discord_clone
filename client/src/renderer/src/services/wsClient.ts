@@ -19,6 +19,7 @@ import { useChannelStore } from '../stores/useChannelStore';
 import { useMemberStore } from '../stores/useMemberStore';
 import { useAdminNotificationStore } from '../stores/useAdminNotificationStore';
 import * as mediaService from './mediaService';
+import * as vadService from './vadService';
 
 type MessageCallback = (payload: unknown) => void;
 type PendingRequest = {
@@ -166,6 +167,15 @@ class WsClient {
       });
 
       await this.request<void>('voice:consumer-resume', { consumerId: consumer.id });
+
+      // Start remote VAD for speaking detection
+      vadService.startRemoteVAD(consumer, payload.peerId, (peerId, speaking) => {
+        import('../stores/useVoiceStore').then(({ useVoiceStore }) => {
+          useVoiceStore.getState().setSpeaking(peerId, speaking);
+        }).catch((err) => {
+          console.warn('[wsClient] Failed to update speaking state:', err);
+        });
+      });
     } catch (err) {
       console.warn('[wsClient] Failed to consume producer audio:', (err as Error).message);
     }
@@ -286,6 +296,7 @@ class WsClient {
       this.handleNewProducer(payload);
     } else if (message.type === WS_TYPES.VOICE_PRODUCER_CLOSED) {
       const payload = message.payload as VoiceProducerClosedPayload;
+      vadService.stopRemoteVAD(payload.peerId);
       mediaService.removeConsumerByProducerId(payload.producerId);
     } else if (message.type === WS_TYPES.VOICE_PRESENCE_SYNC) {
       const payload = message.payload as VoiceChannelPresencePayload;

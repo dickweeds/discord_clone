@@ -31,6 +31,11 @@ import {
   getConsumers,
   removeConsumerByProducerId,
   cleanup,
+  muteAudio,
+  unmuteAudio,
+  deafenAudio,
+  undeafenAudio,
+  getLocalStream,
 } from './mediaService';
 
 // Store originals for cleanup
@@ -350,6 +355,159 @@ describe('mediaService', () => {
       removeConsumerByProducerId('non-existent-producer');
 
       expect(getConsumers().size).toBe(1);
+    });
+  });
+
+  describe('muteAudio', () => {
+    it('sets producer.track.enabled = false', async () => {
+      const mockTrack = { kind: 'audio', stop: vi.fn(), enabled: true };
+      const mockStream = { getAudioTracks: () => [mockTrack], getTracks: () => [mockTrack] };
+      Object.defineProperty(globalThis, 'navigator', {
+        value: { mediaDevices: { getUserMedia: vi.fn().mockResolvedValue(mockStream) } },
+        writable: true,
+        configurable: true,
+      });
+
+      const transport = makeMockTransport('send-1');
+      transport.produce = vi.fn().mockResolvedValue({
+        id: 'producer-id',
+        track: mockTrack,
+        on: vi.fn(),
+        close: vi.fn(),
+      });
+      mockCreateSendTransport.mockReturnValue(transport);
+      await initDevice({ codecs: [] } as Parameters<typeof initDevice>[0]);
+      createSendTransport(
+        { id: 'send-1', iceParameters: {}, iceCandidates: [], dtlsParameters: {} } as unknown as Parameters<typeof createSendTransport>[0],
+        [],
+      );
+      await produceAudio(transport as unknown as Parameters<typeof produceAudio>[0]);
+
+      muteAudio();
+
+      expect(mockTrack.enabled).toBe(false);
+    });
+  });
+
+  describe('unmuteAudio', () => {
+    it('sets producer.track.enabled = true', async () => {
+      const mockTrack = { kind: 'audio', stop: vi.fn(), enabled: false };
+      const mockStream = { getAudioTracks: () => [mockTrack], getTracks: () => [mockTrack] };
+      Object.defineProperty(globalThis, 'navigator', {
+        value: { mediaDevices: { getUserMedia: vi.fn().mockResolvedValue(mockStream) } },
+        writable: true,
+        configurable: true,
+      });
+
+      const transport = makeMockTransport('send-1');
+      transport.produce = vi.fn().mockResolvedValue({
+        id: 'producer-id',
+        track: mockTrack,
+        on: vi.fn(),
+        close: vi.fn(),
+      });
+      mockCreateSendTransport.mockReturnValue(transport);
+      await initDevice({ codecs: [] } as Parameters<typeof initDevice>[0]);
+      createSendTransport(
+        { id: 'send-1', iceParameters: {}, iceCandidates: [], dtlsParameters: {} } as unknown as Parameters<typeof createSendTransport>[0],
+        [],
+      );
+      await produceAudio(transport as unknown as Parameters<typeof produceAudio>[0]);
+
+      unmuteAudio();
+
+      expect(mockTrack.enabled).toBe(true);
+    });
+  });
+
+  describe('deafenAudio', () => {
+    it('mutes all consumer audio elements and mutes producer', async () => {
+      // Setup consumer with audio element
+      const mockPlay = vi.fn().mockResolvedValue(undefined);
+      const mockAudioEl = { play: mockPlay, pause: vi.fn(), srcObject: null, muted: false };
+      globalThis.Audio = function MockAudio(this: Record<string, unknown>) {
+        Object.assign(this, mockAudioEl);
+      } as unknown as typeof Audio;
+      globalThis.MediaStream = function MockMediaStream() {
+        return {};
+      } as unknown as typeof MediaStream;
+
+      const transport = makeMockTransport('recv-1');
+      await consumeAudio(
+        transport as unknown as Parameters<typeof consumeAudio>[0],
+        {
+          consumerId: 'c-1',
+          producerId: 'p-1',
+          kind: 'audio',
+          rtpParameters: {} as Parameters<typeof consumeAudio>[1]['rtpParameters'],
+        },
+      );
+
+      deafenAudio();
+
+      // Verify consumer audio was muted
+      const consumers = getConsumers();
+      for (const [, entry] of consumers) {
+        expect(entry.audio.muted).toBe(true);
+      }
+    });
+  });
+
+  describe('undeafenAudio', () => {
+    it('unmutes all consumer audio elements', async () => {
+      const mockPlay = vi.fn().mockResolvedValue(undefined);
+      const mockAudioEl = { play: mockPlay, pause: vi.fn(), srcObject: null, muted: true };
+      globalThis.Audio = function MockAudio(this: Record<string, unknown>) {
+        Object.assign(this, mockAudioEl);
+      } as unknown as typeof Audio;
+      globalThis.MediaStream = function MockMediaStream() {
+        return {};
+      } as unknown as typeof MediaStream;
+
+      const transport = makeMockTransport('recv-1');
+      await consumeAudio(
+        transport as unknown as Parameters<typeof consumeAudio>[0],
+        {
+          consumerId: 'c-1',
+          producerId: 'p-1',
+          kind: 'audio',
+          rtpParameters: {} as Parameters<typeof consumeAudio>[1]['rtpParameters'],
+        },
+      );
+
+      undeafenAudio(false);
+
+      const consumers = getConsumers();
+      for (const [, entry] of consumers) {
+        expect(entry.audio.muted).toBe(false);
+      }
+    });
+  });
+
+  describe('getLocalStream', () => {
+    it('returns null when no stream exists', () => {
+      expect(getLocalStream()).toBeNull();
+    });
+
+    it('returns the stream after producing audio', async () => {
+      const mockTrack = { kind: 'audio', stop: vi.fn(), enabled: true };
+      const mockStream = { getAudioTracks: () => [mockTrack], getTracks: () => [mockTrack] };
+      Object.defineProperty(globalThis, 'navigator', {
+        value: { mediaDevices: { getUserMedia: vi.fn().mockResolvedValue(mockStream) } },
+        writable: true,
+        configurable: true,
+      });
+
+      const transport = makeMockTransport('send-1');
+      mockCreateSendTransport.mockReturnValue(transport);
+      await initDevice({ codecs: [] } as Parameters<typeof initDevice>[0]);
+      createSendTransport(
+        { id: 'send-1', iceParameters: {}, iceCandidates: [], dtlsParameters: {} } as unknown as Parameters<typeof createSendTransport>[0],
+        [],
+      );
+      await produceAudio(transport as unknown as Parameters<typeof produceAudio>[0]);
+
+      expect(getLocalStream()).toBe(mockStream);
     });
   });
 

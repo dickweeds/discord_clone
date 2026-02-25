@@ -1,6 +1,6 @@
 # Story 3.3: Real-Time Voice Audio & Speaking Indicators
 
-Status: ready-for-dev
+Status: done
 
 <!-- Note: Validation is optional. Run validate-create-story for quality check before dev-story. -->
 
@@ -28,55 +28,55 @@ So that voice feels as natural as being in the same room.
 
 ## Tasks / Subtasks
 
-- [ ] Task 1: Create VAD (Voice Activity Detection) service (AC: 5, 7)
-  - [ ] 1.1 Create `client/src/renderer/src/services/vadService.ts`
-  - [ ] 1.2 Implement `startLocalVAD(stream: MediaStream, onSpeakingChange: (speaking: boolean) => void)` using Web Audio API `AudioContext` → `MediaStreamSource` → `AnalyserNode` → poll `getByteFrequencyData()` at ~50ms interval
-  - [ ] 1.3 Implement energy threshold detection: compute RMS of frequency data, compare against threshold (~15-20 on 0-255 scale), with 250ms hold time to avoid flickering
-  - [ ] 1.4 Implement `startRemoteVAD(consumer: Consumer, peerId: string, onSpeakingChange: (peerId: string, speaking: boolean) => void)` — same AnalyserNode approach on consumer track's MediaStream
-  - [ ] 1.5 Implement `stopLocalVAD()` and `stopRemoteVAD(peerId: string)` — disconnect AnalyserNodes, clear intervals, close AudioContext nodes
-  - [ ] 1.6 Implement `stopAllVAD()` — cleanup all VAD instances (called on voice leave)
-  - [ ] 1.7 Export: `startLocalVAD`, `startRemoteVAD`, `stopLocalVAD`, `stopRemoteVAD`, `stopAllVAD`
+- [x] Task 1: Create VAD (Voice Activity Detection) service (AC: 5, 7)
+  - [x] 1.1 Create `client/src/renderer/src/services/vadService.ts`
+  - [x] 1.2 Implement `startLocalVAD(stream: MediaStream, onSpeakingChange: (speaking: boolean) => void)` using Web Audio API `AudioContext` → `MediaStreamSource` → `AnalyserNode` → poll `getByteFrequencyData()` at ~50ms interval
+  - [x] 1.3 Implement energy threshold detection: compute RMS of frequency data, compare against threshold (~15-20 on 0-255 scale), with 250ms hold time to avoid flickering
+  - [x] 1.4 Implement `startRemoteVAD(consumer: Consumer, peerId: string, onSpeakingChange: (peerId: string, speaking: boolean) => void)` — same AnalyserNode approach on consumer track's MediaStream
+  - [x] 1.5 Implement `stopLocalVAD()` and `stopRemoteVAD(peerId: string)` — disconnect AnalyserNodes, clear intervals, close AudioContext nodes
+  - [x] 1.6 Implement `stopAllVAD()` — cleanup all VAD instances (called on voice leave)
+  - [x] 1.7 Export: `startLocalVAD`, `startRemoteVAD`, `stopLocalVAD`, `stopRemoteVAD`, `stopAllVAD`
 
-- [ ] Task 2: Add speaking state to useVoiceStore (AC: 5, 7)
-  - [ ] 2.1 Add `speakingUsers: Set<string>` to VoiceState interface
-  - [ ] 2.2 Add `setSpeaking(userId: string, isSpeaking: boolean)` action — adds/removes userId from `speakingUsers` Set
-  - [ ] 2.3 Initialize `speakingUsers: new Set()` in store default state
-  - [ ] 2.4 Clear `speakingUsers` in `leaveChannel()` and `localCleanup()`
+- [x] Task 2: Add speaking state to useVoiceStore (AC: 5, 7)
+  - [x] 2.1 Add `speakingUsers: Set<string>` to VoiceState interface
+  - [x] 2.2 Add `setSpeaking(userId: string, isSpeaking: boolean)` action — adds/removes userId from `speakingUsers` Set
+  - [x] 2.3 Initialize `speakingUsers: new Set()` in store default state
+  - [x] 2.4 Clear `speakingUsers` in `leaveChannel()` and `localCleanup()`
 
-- [ ] Task 3: Wire VAD into voice join/leave lifecycle (AC: 5, 7)
-  - [ ] 3.1 In `voiceService.ts` `joinVoiceChannel()`: after `produceAudio()` returns, call `vadService.startLocalVAD(localStream, callback)` where callback calls `useVoiceStore.getState().setSpeaking(userId, speaking)`
-  - [ ] 3.2 In `wsClient.ts` `handleNewProducer()`: after `consumeAudio()` returns, call `vadService.startRemoteVAD(consumer, peerId, callback)` where callback calls `useVoiceStore.getState().setSpeaking(peerId, speaking)`
-  - [ ] 3.3 In `voiceService.ts` `cleanupMedia()`: call `vadService.stopAllVAD()` before closing transports
-  - [ ] 3.4 In `wsClient.ts` `VOICE_PRODUCER_CLOSED` handler: call `vadService.stopRemoteVAD(peerId)` before removing consumer
-  - [ ] 3.5 Export `getLocalStream()` from `mediaService.ts` so VAD can access the mic stream
+- [x] Task 3: Wire VAD into voice join/leave lifecycle (AC: 5, 7)
+  - [x] 3.1 In `voiceService.ts` `joinVoiceChannel()`: after `produceAudio()` returns, call `vadService.startLocalVAD(localStream, callback)` where callback calls `useVoiceStore.getState().setSpeaking(userId, speaking)`
+  - [x] 3.2 In `wsClient.ts` `handleNewProducer()`: after `consumeAudio()` returns, call `vadService.startRemoteVAD(consumer, peerId, callback)` where callback calls `useVoiceStore.getState().setSpeaking(peerId, speaking)`
+  - [x] 3.3 In `voiceService.ts` `cleanupMedia()`: call `vadService.stopAllVAD()` before closing transports
+  - [x] 3.4 In `wsClient.ts` `VOICE_PRODUCER_CLOSED` handler: call `vadService.stopRemoteVAD(peerId)` before removing consumer
+  - [x] 3.5 Export `getLocalStream()` from `mediaService.ts` so VAD can access the mic stream
 
-- [ ] Task 4: Implement actual mute functionality (AC: 1)
-  - [ ] 4.1 Add `muteAudio()` to `mediaService.ts` — sets `producer.track.enabled = false`, stops local VAD
-  - [ ] 4.2 Add `unmuteAudio()` to `mediaService.ts` — sets `producer.track.enabled = true`, restarts local VAD
-  - [ ] 4.3 Update `toggleMute()` in `useVoiceStore` to call `mediaService.muteAudio()` / `mediaService.unmuteAudio()`
-  - [ ] 4.4 When muted, clear self from `speakingUsers`
+- [x] Task 4: Implement actual mute functionality (AC: 1)
+  - [x] 4.1 Add `muteAudio()` to `mediaService.ts` — sets `producer.track.enabled = false`, stops local VAD
+  - [x] 4.2 Add `unmuteAudio()` to `mediaService.ts` — sets `producer.track.enabled = true`, restarts local VAD
+  - [x] 4.3 Update `toggleMute()` in `useVoiceStore` to call `mediaService.muteAudio()` / `mediaService.unmuteAudio()`
+  - [x] 4.4 When muted, clear self from `speakingUsers`
 
-- [ ] Task 5: Implement actual deafen functionality (AC: 2)
-  - [ ] 5.1 Add `deafenAudio()` to `mediaService.ts` — mutes all consumer audio elements (set `audio.muted = true` on each), also mutes mic (deafen implies mute)
-  - [ ] 5.2 Add `undeafenAudio()` to `mediaService.ts` — unmutes all consumer audio elements, restores mic to previous mute state
-  - [ ] 5.3 Update `toggleDeafen()` in `useVoiceStore` to call `mediaService.deafenAudio()` / `mediaService.undeafenAudio()`, and sync `isMuted` state (deafen always sets muted=true, undeafen restores prior mute state)
+- [x] Task 5: Implement actual deafen functionality (AC: 2)
+  - [x] 5.1 Add `deafenAudio()` to `mediaService.ts` — mutes all consumer audio elements (set `audio.muted = true` on each), also mutes mic (deafen implies mute)
+  - [x] 5.2 Add `undeafenAudio()` to `mediaService.ts` — unmutes all consumer audio elements, restores mic to previous mute state
+  - [x] 5.3 Update `toggleDeafen()` in `useVoiceStore` to call `mediaService.deafenAudio()` / `mediaService.undeafenAudio()`, and sync `isMuted` state (deafen always sets muted=true, undeafen restores prior mute state)
 
-- [ ] Task 6: Update VoiceParticipant with speaking indicator (AC: 5, 6, 7)
-  - [ ] 6.1 Read `speakingUsers` from `useVoiceStore` in `VoiceParticipant`
-  - [ ] 6.2 When `speakingUsers.has(userId)`, add `ring-2 ring-voice-speaking` classes to avatar div
-  - [ ] 6.3 Add CSS animation `animate-speaking-pulse` in `globals.css`: subtle opacity pulse on the ring (1s ease-in-out infinite)
-  - [ ] 6.4 Apply `animate-speaking-pulse` when speaking AND `prefers-reduced-motion` is NOT set
-  - [ ] 6.5 When `prefers-reduced-motion` is set, use static `ring-2 ring-voice-speaking` with no animation
-  - [ ] 6.6 Use `window.matchMedia('(prefers-reduced-motion: reduce)')` or a Tailwind `motion-reduce:` variant
-  - [ ] 6.7 Add ARIA live region: `aria-label` updates to include "(speaking)" when active
+- [x] Task 6: Update VoiceParticipant with speaking indicator (AC: 5, 6, 7)
+  - [x] 6.1 Read `speakingUsers` from `useVoiceStore` in `VoiceParticipant`
+  - [x] 6.2 When `speakingUsers.has(userId)`, add `ring-2 ring-voice-speaking` classes to avatar div
+  - [x] 6.3 Add CSS animation `animate-speaking-pulse` in `globals.css`: subtle opacity pulse on the ring (1s ease-in-out infinite)
+  - [x] 6.4 Apply `animate-speaking-pulse` when speaking AND `prefers-reduced-motion` is NOT set
+  - [x] 6.5 When `prefers-reduced-motion` is set, use static `ring-2 ring-voice-speaking` with no animation
+  - [x] 6.6 Use `window.matchMedia('(prefers-reduced-motion: reduce)')` or a Tailwind `motion-reduce:` variant
+  - [x] 6.7 Add ARIA live region: `aria-label` updates to include "(speaking)" when active
 
-- [ ] Task 7: Add mute icon overlay to VoiceParticipant (AC: related to 3.4 but deferred from 3.2)
-  - [ ] 7.1 Read `isMuted` state — for local user from `useVoiceStore.isMuted`, for remote users this requires broadcasting mute state (defer remote mute display to 3.4, only show local user's mute icon for now)
-  - [ ] 7.2 When local user is muted, show small `MicOff` icon (12px) overlaid on bottom-right of avatar
-  - [ ] 7.3 Style: `absolute bottom-0 right-0 bg-bg-primary rounded-full p-0.5`
+- [x] Task 7: Add mute icon overlay to VoiceParticipant (AC: related to 3.4 but deferred from 3.2)
+  - [x] 7.1 Read `isMuted` state — for local user from `useVoiceStore.isMuted`, for remote users this requires broadcasting mute state (defer remote mute display to 3.4, only show local user's mute icon for now)
+  - [x] 7.2 When local user is muted, show small `MicOff` icon (12px) overlaid on bottom-right of avatar
+  - [x] 7.3 Style: `absolute bottom-0 right-0 bg-bg-primary rounded-full p-0.5`
 
-- [ ] Task 8: Write tests (AC: 1-7)
-  - [ ] 8.1 Create `client/src/renderer/src/services/vadService.test.ts`:
+- [x] Task 8: Write tests (AC: 1-7)
+  - [x] 8.1 Create `client/src/renderer/src/services/vadService.test.ts`:
     - Test `startLocalVAD()` creates AudioContext, AnalyserNode, starts polling
     - Test speaking detection fires callback when energy exceeds threshold
     - Test silence detection fires callback after hold time
@@ -85,29 +85,29 @@ So that voice feels as natural as being in the same room.
     - Test `stopRemoteVAD()` cleans up specific peer's VAD
     - Test `stopAllVAD()` cleans up everything
     - Mock Web Audio API: AudioContext, AnalyserNode, MediaStreamAudioSourceNode
-  - [ ] 8.2 Update `client/src/renderer/src/stores/useVoiceStore.test.ts`:
+  - [x] 8.2 Update `client/src/renderer/src/stores/useVoiceStore.test.ts`:
     - Test `setSpeaking()` adds/removes from speakingUsers Set
     - Test `leaveChannel()` clears speakingUsers
     - Test `localCleanup()` clears speakingUsers
     - Test `toggleMute()` calls mediaService.muteAudio/unmuteAudio
     - Test `toggleDeafen()` calls mediaService.deafenAudio/undeafenAudio
     - Test deafen sets isMuted = true
-  - [ ] 8.3 Update `client/src/renderer/src/features/voice/VoiceParticipant.test.tsx`:
+  - [x] 8.3 Update `client/src/renderer/src/features/voice/VoiceParticipant.test.tsx`:
     - Test speaking indicator ring appears when user is in speakingUsers
     - Test speaking indicator ring absent when user is not speaking
     - Test mute icon overlay appears when local user is muted
     - Test ARIA label includes "(speaking)" when speaking
-  - [ ] 8.4 Update `client/src/renderer/src/services/mediaService.test.ts`:
+  - [x] 8.4 Update `client/src/renderer/src/services/mediaService.test.ts`:
     - Test `muteAudio()` sets producer.track.enabled = false
     - Test `unmuteAudio()` sets producer.track.enabled = true
     - Test `deafenAudio()` mutes all consumer audio elements
     - Test `undeafenAudio()` unmutes all consumer audio elements
     - Test `getLocalStream()` returns the stream
 
-- [ ] Task 9: Final verification (AC: 1-7)
-  - [ ] 9.1 Run `npm test -w client` — all new + existing tests pass
-  - [ ] 9.2 Run `npm run lint` — no lint errors
-  - [ ] 9.3 Run `npm run build -w client` — builds successfully
+- [x] Task 9: Final verification (AC: 1-7)
+  - [x] 9.1 Run `npm test -w client` — all new + existing tests pass
+  - [x] 9.2 Run `npm run lint` — no lint errors
+  - [x] 9.3 Run `npm run build -w client` — builds successfully
   - [ ] 9.4 Manual test: join voice channel, speak → green ring appears around own avatar
   - [ ] 9.5 Manual test: other user speaks → green ring appears around their avatar
   - [ ] 9.6 Manual test: stop speaking → green ring disappears after ~250ms hold time
@@ -400,10 +400,66 @@ client/src/renderer/src/
 
 ### Agent Model Used
 
-{{agent_model_name_version}}
+Claude Opus 4.6
 
 ### Debug Log References
 
+- vadService.test.ts mock needed proper `function` constructor syntax for AudioContext (vi.fn arrow functions don't work as constructors in Vitest)
+
 ### Completion Notes List
 
+- **Task 1:** Created `vadService.ts` with full VAD implementation using Web Audio API AnalyserNode. Includes 50ms polling interval, RMS energy threshold detection (15), 250ms hold time, silent GainNode for remote audio analysis.
+- **Task 2:** Added `speakingUsers: Set<string>` and `setSpeaking()` action to useVoiceStore. Clears on leave/cleanup.
+- **Task 3:** Wired VAD into voice lifecycle — local VAD starts after `produceAudio()`, remote VAD starts after `consumeAudio()`, all VAD stops on cleanup/leave/producer-closed. Added `getLocalStream()` export to mediaService.
+- **Task 4:** Implemented real mute via `producer.track.enabled = false/true`. Stops/restarts local VAD on mute/unmute. Clears self from speakingUsers when muting.
+- **Task 5:** Implemented real deafen via `audio.muted` on all consumer elements. Tracks `wasMutedBeforeDeafen` to restore correct mute state on undeafen.
+- **Task 6:** Added green ring (`ring-2 ring-voice-speaking`) + `speakingPulse` CSS animation to VoiceParticipant. Respects `prefers-reduced-motion`. Added ARIA labels.
+- **Task 7:** Added MicOff icon overlay on local user avatar when muted (12px, bottom-right positioned).
+- **Task 8:** Wrote comprehensive tests: 11 VAD tests, 13 new voice store tests, 9 new VoiceParticipant tests, 5 new mediaService tests. All 303 tests pass across 35 files.
+- **Task 9:** Tests pass (303/303), lint clean, build successful. Manual tests deferred to user.
+
+### Senior Developer Review (AI)
+
+**Reviewer:** Code Review Workflow — 2026-02-25
+**Outcome:** Changes Requested → Fixed
+
+**Issues Found:** 3 High, 4 Medium, 3 Low (10 total)
+**Issues Fixed:** 9 (all HIGH, all MEDIUM except M4, all LOW)
+**Issues Deferred:** 1 (M4: per-peer AudioContext optimization — within browser limits, defer to scale)
+
+**Fixes Applied:**
+1. **H1: Stale speakingUsers on peer departure** — Added `speakingUsers.delete(userId)` in `removePeer()` (`useVoiceStore.ts`)
+2. **H2: No error handling in createVADInstance** — Wrapped in try/catch, returns null on failure, callers handle gracefully (`vadService.ts`)
+3. **H3: destroyVADInstance doesn't clear speaking state** — Resolved by H1 fix (cleanup at store level)
+4. **M1: Test gap — unmute VAD restart** — Added test with mock stream verifying `startLocalVAD` called on unmute (`useVoiceStore.test.ts`)
+5. **M2: Test gap — undeafen wasMutedBeforeDeafen** — Added 3 tests: restoreMuted=false, restoreMuted=true, VAD restart on undeafen (`useVoiceStore.test.ts`)
+6. **M3+L2: Redundant JS matchMedia** — Removed JS check from VoiceParticipant, CSS `@media (prefers-reduced-motion)` in globals.css handles it (`VoiceParticipant.tsx`)
+7. **L1: Silent error swallowing** — Added `console.warn` to vadService AudioContext close and wsClient speaking state import (`vadService.ts`, `wsClient.ts`)
+8. **L3: No warning when VAD can't start** — Added `console.warn` when localStream unavailable (`voiceService.ts`)
+9. **H1 regression test** — Added test verifying `removePeer` clears departed user from speakingUsers (`useVoiceStore.test.ts`)
+
+**Test Results After Fixes:** 305/305 pass (35 files), lint clean, build successful
+
+### Change Log
+
+- 2026-02-25: Implemented story 3-3 — VAD service, speaking indicators, actual mute/deafen functionality, comprehensive tests
+- 2026-02-25: Code review — fixed 9 issues (3H, 3M, 3L): stale speakingUsers cleanup, VAD error handling, test coverage gaps, CSS-only reduced motion, warning logs
+
 ### File List
+
+**New files:**
+- `client/src/renderer/src/services/vadService.ts`
+- `client/src/renderer/src/services/vadService.test.ts`
+
+**Modified files:**
+- `client/src/renderer/src/services/mediaService.ts` — added muteAudio, unmuteAudio, deafenAudio, undeafenAudio, getLocalStream
+- `client/src/renderer/src/services/mediaService.test.ts` — added tests for new functions
+- `client/src/renderer/src/services/voiceService.ts` — wired VAD start in joinVoiceChannel, stopAllVAD in cleanupMedia
+- `client/src/renderer/src/services/wsClient.ts` — wired remote VAD in handleNewProducer, stopRemoteVAD in producer-closed
+- `client/src/renderer/src/stores/useVoiceStore.ts` — added speakingUsers, setSpeaking, real toggleMute/toggleDeafen with mediaService calls
+- `client/src/renderer/src/stores/useVoiceStore.test.ts` — added tests for setSpeaking, mute/deafen with mediaService, speakingUsers cleanup
+- `client/src/renderer/src/features/voice/VoiceParticipant.tsx` — added speaking ring, pulse animation, mute icon overlay, ARIA labels
+- `client/src/renderer/src/features/voice/VoiceParticipant.test.tsx` — added tests for speaking indicator, mute icon, ARIA
+- `client/src/renderer/src/globals.css` — added speakingPulse keyframe animation
+- `_bmad-output/implementation-artifacts/sprint-status.yaml` — updated story status
+- `_bmad-output/implementation-artifacts/3-3-real-time-voice-audio-and-speaking-indicators.md` — updated tasks, dev record, file list

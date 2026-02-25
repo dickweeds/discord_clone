@@ -140,6 +140,38 @@ export async function consumeAudio(
   return consumer;
 }
 
+export function muteAudio(): void {
+  if (producer && producer.track) {
+    producer.track.enabled = false;
+  }
+}
+
+export function unmuteAudio(): void {
+  if (producer && producer.track) {
+    producer.track.enabled = true;
+  }
+}
+
+export function deafenAudio(): void {
+  for (const [, entry] of consumers) {
+    entry.audio.muted = true;
+  }
+  muteAudio();
+}
+
+export function undeafenAudio(restoreMuted: boolean): void {
+  for (const [, entry] of consumers) {
+    entry.audio.muted = false;
+  }
+  if (!restoreMuted) {
+    unmuteAudio();
+  }
+}
+
+export function getLocalStream(): MediaStream | null {
+  return localStream;
+}
+
 export function getRecvTransport(): types.Transport | null {
   return recvTransport;
 }

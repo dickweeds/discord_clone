@@ -1,5 +1,6 @@
 import { wsClient } from './wsClient';
 import * as mediaService from './mediaService';
+import * as vadService from './vadService';
 import type {
   VoiceJoinPayload,
   VoiceJoinResponse,
@@ -44,6 +45,20 @@ export async function joinVoiceChannel(channelId: string): Promise<JoinVoiceResu
   // 5. Produce audio (capture mic and start sending)
   await mediaService.produceAudio(sendTransport);
 
+  // 6. Start local VAD for speaking detection
+  const localStream = mediaService.getLocalStream();
+  if (localStream) {
+    const { useVoiceStore } = await import('../stores/useVoiceStore');
+    const userId = useVoiceStore.getState().currentUserId;
+    if (userId) {
+      vadService.startLocalVAD(localStream, (speaking) => {
+        useVoiceStore.getState().setSpeaking(userId, speaking);
+      });
+    }
+  } else {
+    console.warn('[voiceService] Local stream unavailable — speaking indicator disabled');
+  }
+
   return { existingPeers };
 }
 
@@ -52,5 +67,6 @@ export async function leaveVoiceChannel(channelId: string): Promise<void> {
 }
 
 export function cleanupMedia(): void {
+  vadService.stopAllVAD();
   mediaService.cleanup();
 }

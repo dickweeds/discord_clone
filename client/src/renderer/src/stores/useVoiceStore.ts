@@ -1,8 +1,13 @@
 import { create } from 'zustand';
 import * as voiceService from '../services/voiceService';
+import * as mediaService from '../services/mediaService';
+import * as vadService from '../services/vadService';
 import { playConnectSound, playDisconnectSound } from '../utils/soundPlayer';
 
 type ConnectionState = 'disconnected' | 'connecting' | 'connected';
+
+// Internal flag to track mute state before deafen was activated
+let wasMutedBeforeDeafen = false;
 
 interface VoiceState {
   currentChannelId: string | null;
@@ -13,6 +18,7 @@ interface VoiceState {
   channelParticipants: Map<string, string[]>;
   isMuted: boolean;
   isDeafened: boolean;
+  speakingUsers: Set<string>;
 
   joinChannel: (channelId: string, userId: string) => Promise<void>;
   leaveChannel: () => Promise<void>;
@@ -20,6 +26,7 @@ interface VoiceState {
   addPeer: (channelId: string, userId: string) => void;
   removePeer: (channelId: string, userId: string) => void;
   setConnectionState: (state: ConnectionState) => void;
+  setSpeaking: (userId: string, isSpeaking: boolean) => void;
   toggleMute: () => void;
   toggleDeafen: () => void;
   clearError: () => void;
@@ -35,6 +42,7 @@ export const useVoiceStore = create<VoiceState>((set, get) => ({
   channelParticipants: new Map(),
   isMuted: false,
   isDeafened: false,
+  speakingUsers: new Set<string>(),
 
   joinChannel: async (channelId: string, userId: string) => {
     const state = get();
@@ -111,6 +119,7 @@ export const useVoiceStore = create<VoiceState>((set, get) => ({
       connectionState: 'disconnected',
       isMuted: false,
       isDeafened: false,
+      speakingUsers: new Set<string>(),
       channelParticipants: participants,
     });
 
@@ -127,6 +136,7 @@ export const useVoiceStore = create<VoiceState>((set, get) => ({
       isLoading: false,
       isMuted: false,
       isDeafened: false,
+      speakingUsers: new Set<string>(),
       channelParticipants: new Map(),
     });
   },
@@ -152,15 +162,81 @@ export const useVoiceStore = create<VoiceState>((set, get) => ({
       } else {
         participants.delete(channelId);
       }
-      return { channelParticipants: participants };
+      const speakingUsers = new Set(state.speakingUsers);
+      speakingUsers.delete(userId);
+      return { channelParticipants: participants, speakingUsers };
     });
   },
 
   setConnectionState: (connectionState: ConnectionState) => set({ connectionState }),
 
-  toggleMute: () => set((state) => ({ isMuted: !state.isMuted })),
+  setSpeaking: (userId: string, isSpeaking: boolean) => {
+    set((state) => {
+      const speakingUsers = new Set(state.speakingUsers);
+      if (isSpeaking) {
+        speakingUsers.add(userId);
+      } else {
+        speakingUsers.delete(userId);
+      }
+      return { speakingUsers };
+    });
+  },
 
-  toggleDeafen: () => set((state) => ({ isDeafened: !state.isDeafened })),
+  toggleMute: () => {
+    const state = get();
+    const newMuted = !state.isMuted;
+    if (newMuted) {
+      mediaService.muteAudio();
+      vadService.stopLocalVAD();
+      // Clear self from speaking users when muting
+      if (state.currentUserId) {
+        const speakingUsers = new Set(state.speakingUsers);
+        speakingUsers.delete(state.currentUserId);
+        set({ isMuted: true, speakingUsers });
+        return;
+      }
+    } else {
+      mediaService.unmuteAudio();
+      // Restart local VAD
+      const localStream = mediaService.getLocalStream();
+      if (localStream && state.currentUserId) {
+        const userId = state.currentUserId;
+        vadService.startLocalVAD(localStream, (speaking) => {
+          useVoiceStore.getState().setSpeaking(userId, speaking);
+        });
+      }
+    }
+    set({ isMuted: newMuted });
+  },
+
+  toggleDeafen: () => {
+    const state = get();
+    const newDeafened = !state.isDeafened;
+    if (newDeafened) {
+      wasMutedBeforeDeafen = state.isMuted;
+      mediaService.deafenAudio();
+      vadService.stopLocalVAD();
+      // Clear self from speaking users
+      const speakingUsers = new Set(state.speakingUsers);
+      if (state.currentUserId) {
+        speakingUsers.delete(state.currentUserId);
+      }
+      set({ isDeafened: true, isMuted: true, speakingUsers });
+    } else {
+      mediaService.undeafenAudio(wasMutedBeforeDeafen);
+      if (!wasMutedBeforeDeafen) {
+        // Restart local VAD since mic is being unmuted
+        const localStream = mediaService.getLocalStream();
+        if (localStream && state.currentUserId) {
+          const userId = state.currentUserId;
+          vadService.startLocalVAD(localStream, (speaking) => {
+            useVoiceStore.getState().setSpeaking(userId, speaking);
+          });
+        }
+      }
+      set({ isDeafened: false, isMuted: wasMutedBeforeDeafen });
+    }
+  },
 
   clearError: () => set({ error: null }),
 
