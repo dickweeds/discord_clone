@@ -46,8 +46,8 @@ development_status:
   1-2-database-schema-and-core-server-configuration: done
   1-3-user-registration-and-invite-system: done
   1-4-user-login-logout-and-session-management: done
-  1-5-e2e-encryption-foundation: backlog
-  1-6-discord-familiar-app-shell-and-navigation: backlog
+  1-5-e2e-encryption-foundation: ready-for-dev
+  1-6-discord-familiar-app-shell-and-navigation: ready-for-dev
   epic-1-retrospective: optional
 
   # Epic 2: Real-Time Text Communication
