@@ -4,7 +4,7 @@ import App from './App';
 
 // Mock window.api.secureStorage for non-Electron test environment
 beforeAll(() => {
-  (window as Record<string, unknown>).api = {
+  window.api = {
     secureStorage: {
       set: vi.fn().mockResolvedValue(undefined),
       get: vi.fn().mockResolvedValue(null),

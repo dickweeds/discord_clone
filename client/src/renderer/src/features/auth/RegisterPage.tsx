@@ -28,6 +28,7 @@ export function RegisterPage(): React.ReactNode {
     if (!canSubmit) return;
 
     clearError();
+    if (!token) return;
     await register(username, password, token);
 
     const { user } = useAuthStore.getState();
