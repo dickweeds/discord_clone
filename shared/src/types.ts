@@ -59,6 +59,14 @@ export interface Ban {
   createdAt: string;
 }
 
+/** Safe user representation for member lists — excludes sensitive fields */
+export interface UserPublic {
+  id: string;
+  username: string;
+  role: 'owner' | 'user';
+  createdAt: string;
+}
+
 export interface ApiSuccess<T> {
   data: T;
 }

@@ -1,6 +1,6 @@
 # Story 1.6: Discord-Familiar App Shell & Navigation
 
-Status: ready-for-dev
+Status: done
 
 <!-- Note: Validation is optional. Run validate-create-story for quality check before dev-story. -->
 
@@ -22,157 +22,157 @@ so that I can immediately orient myself and navigate the platform.
 
 ## Tasks / Subtasks
 
-- [ ] Task 1: Install lucide-react icon library (AC: 2)
-  - [ ] 1.1 Install `lucide-react` in client workspace: `npm install lucide-react -w client`
-  - [ ] 1.2 Verify icons render in Electron renderer (import `Hash`, `Volume2`, `Settings`, `ChevronDown`, `Users`, `UserCircle`)
+- [x] Task 1: Install lucide-react icon library (AC: 2)
+  - [x] 1.1 Install `lucide-react` in client workspace: `npm install lucide-react -w client`
+  - [x] 1.2 Verify icons render in Electron renderer (import `Hash`, `Volume2`, `Settings`, `ChevronDown`, `Users`, `UserCircle`)
 
-- [ ] Task 2: Create GET /api/channels endpoint (AC: 1, 2, 4)
-  - [ ] 2.1 Create `server/src/plugins/channels/channelRoutes.ts` — Fastify plugin with `GET /api/channels` route
-  - [ ] 2.2 Create `server/src/plugins/channels/channelService.ts` — `getAllChannels()` function querying channels table via Drizzle
-  - [ ] 2.3 Response format: `{ data: Channel[], count: number }` with Channel mapped to camelCase (`id`, `name`, `type`, `createdAt`)
-  - [ ] 2.4 Register channels plugin in `server/src/app.ts` with prefix `/api/channels`
-  - [ ] 2.5 Route requires auth middleware (authenticated users only)
-  - [ ] 2.6 Create `server/src/plugins/channels/channelRoutes.test.ts` — test 200 response with seeded channels, test 401 without auth
+- [x] Task 2: Create GET /api/channels endpoint (AC: 1, 2, 4)
+  - [x]2.1 Create `server/src/plugins/channels/channelRoutes.ts` — Fastify plugin with `GET /api/channels` route
+  - [x]2.2 Create `server/src/plugins/channels/channelService.ts` — `getAllChannels()` function querying channels table via Drizzle
+  - [x]2.3 Response format: `{ data: Channel[], count: number }` with Channel mapped to camelCase (`id`, `name`, `type`, `createdAt`)
+  - [x]2.4 Register channels plugin in `server/src/app.ts` with prefix `/api/channels`
+  - [x]2.5 Route requires auth middleware (authenticated users only)
+  - [x]2.6 Create `server/src/plugins/channels/channelRoutes.test.ts` — test 200 response with seeded channels, test 401 without auth
 
-- [ ] Task 3: Create GET /api/users endpoint for member list (AC: 3)
-  - [ ] 3.1 Create `server/src/plugins/users/userRoutes.ts` — Fastify plugin with `GET /api/users` route
-  - [ ] 3.2 Create `server/src/plugins/users/userService.ts` — `getAllUsers()` function querying users table, selecting ONLY safe fields: `id`, `username`, `role`, `createdAt` (NEVER password_hash, public_key, or encrypted_group_key)
-  - [ ] 3.3 Response format: `{ data: UserPublic[], count: number }` — add `UserPublic` type to `shared/src/types.ts` with `{ id, username, role, createdAt }`
-  - [ ] 3.4 Register users plugin in `server/src/app.ts` with prefix `/api/users`
-  - [ ] 3.5 Route requires auth middleware
-  - [ ] 3.6 Create `server/src/plugins/users/userRoutes.test.ts` — test response excludes sensitive fields, test 401 without auth
+- [x] Task 3: Create GET /api/users endpoint for member list (AC: 3)
+  - [x]3.1 Create `server/src/plugins/users/userRoutes.ts` — Fastify plugin with `GET /api/users` route
+  - [x]3.2 Create `server/src/plugins/users/userService.ts` — `getAllUsers()` function querying users table, selecting ONLY safe fields: `id`, `username`, `role`, `createdAt` (NEVER password_hash, public_key, or encrypted_group_key)
+  - [x]3.3 Response format: `{ data: UserPublic[], count: number }` — add `UserPublic` type to `shared/src/types.ts` with `{ id, username, role, createdAt }`
+  - [x]3.4 Register users plugin in `server/src/app.ts` with prefix `/api/users`
+  - [x]3.5 Route requires auth middleware
+  - [x]3.6 Create `server/src/plugins/users/userRoutes.test.ts` — test response excludes sensitive fields, test 401 without auth
 
-- [ ] Task 4: Create Zustand stores for channels and UI state (AC: 1, 2, 3, 4, 5)
-  - [ ] 4.1 Create `client/src/renderer/src/stores/useChannelStore.ts` following useAuthStore pattern:
+- [x] Task 4: Create Zustand stores for channels and UI state (AC: 1, 2, 3, 4, 5)
+  - [x]4.1 Create `client/src/renderer/src/stores/useChannelStore.ts` following useAuthStore pattern:
     - State: `{ channels: Channel[], activeChannelId: string | null, isLoading: boolean, error: string | null }`
     - Actions: `fetchChannels()`, `setActiveChannel(channelId: string)`, `clearError()`
     - `fetchChannels()` calls `GET /api/channels` via apiClient, sorts by type (text first) then name
-  - [ ] 4.2 Create `client/src/renderer/src/stores/useMemberStore.ts`:
+  - [x]4.2 Create `client/src/renderer/src/stores/useMemberStore.ts`:
     - State: `{ members: UserPublic[], isLoading: boolean, error: string | null }`
     - Actions: `fetchMembers()`, `clearError()`
     - `fetchMembers()` calls `GET /api/users` via apiClient
-  - [ ] 4.3 Create `client/src/renderer/src/stores/useUIStore.ts`:
+  - [x]4.3 Create `client/src/renderer/src/stores/useUIStore.ts`:
     - State: `{ isMemberListVisible: boolean }`
     - Actions: `toggleMemberList()`, `setMemberListVisible(visible: boolean)`
     - Initialize `isMemberListVisible: true`
 
-- [ ] Task 5: Create AppLayout three-column container (AC: 1, 5, 7)
-  - [ ] 5.1 Create `client/src/renderer/src/features/layout/AppLayout.tsx`
-  - [ ] 5.2 Structure: `<div class="flex h-screen">` containing `<nav>` (sidebar 240px) + `<main>` (flex-1) + `<aside>` (member list 240px)
-  - [ ] 5.3 Sidebar: `w-[240px] flex-shrink-0 bg-bg-secondary` — fixed width, never collapses
-  - [ ] 5.4 Content area: `flex-1 bg-bg-primary` — fills remaining space
-  - [ ] 5.5 Member list: `w-[240px] flex-shrink-0 bg-bg-secondary` — conditionally rendered based on `useUIStore.isMemberListVisible`
-  - [ ] 5.6 Add window resize listener: if window width < 1000px, auto-collapse member list via `useUIStore.setMemberListVisible(false)`; if >= 1000px and was auto-collapsed, restore visibility
-  - [ ] 5.7 On mount: call `useChannelStore.fetchChannels()` and `useMemberStore.fetchMembers()`
-  - [ ] 5.8 Overflow hidden on root container to prevent body scroll
+- [x] Task 5: Create AppLayout three-column container (AC: 1, 5, 7)
+  - [x]5.1 Create `client/src/renderer/src/features/layout/AppLayout.tsx`
+  - [x]5.2 Structure: `<div class="flex h-screen">` containing `<nav>` (sidebar 240px) + `<main>` (flex-1) + `<aside>` (member list 240px)
+  - [x]5.3 Sidebar: `w-[240px] flex-shrink-0 bg-bg-secondary` — fixed width, never collapses
+  - [x]5.4 Content area: `flex-1 bg-bg-primary` — fills remaining space
+  - [x]5.5 Member list: `w-[240px] flex-shrink-0 bg-bg-secondary` — conditionally rendered based on `useUIStore.isMemberListVisible`
+  - [x]5.6 Add window resize listener: if window width < 1000px, auto-collapse member list via `useUIStore.setMemberListVisible(false)`; if >= 1000px and was auto-collapsed, restore visibility
+  - [x]5.7 On mount: call `useChannelStore.fetchChannels()` and `useMemberStore.fetchMembers()`
+  - [x]5.8 Overflow hidden on root container to prevent body scroll
 
-- [ ] Task 6: Create ChannelSidebar component (AC: 2)
-  - [ ] 6.1 Create `client/src/renderer/src/features/channels/ChannelSidebar.tsx`
-  - [ ] 6.2 Top section: ServerHeader with server name (hardcoded "discord_clone" or fetched from config) and chevron-down icon
-  - [ ] 6.3 Middle section: Scrollable channel list using `<ScrollArea>` Radix component
-  - [ ] 6.4 Group channels by type: "TEXT CHANNELS" header with text channels below, "VOICE CHANNELS" header with voice channels below
-  - [ ] 6.5 Category headers: `text-text-muted text-xs font-semibold uppercase tracking-wide px-2 py-1.5`
-  - [ ] 6.6 Bottom section: UserPanel (fixed, not scrollable) — positioned with `mt-auto` or absolute bottom
-  - [ ] 6.7 Full height flex column: header + scrollable channels + fixed user panel
+- [x] Task 6: Create ChannelSidebar component (AC: 2)
+  - [x]6.1 Create `client/src/renderer/src/features/channels/ChannelSidebar.tsx`
+  - [x]6.2 Top section: ServerHeader with server name (hardcoded "discord_clone" or fetched from config) and chevron-down icon
+  - [x]6.3 Middle section: Scrollable channel list using `<ScrollArea>` Radix component
+  - [x]6.4 Group channels by type: "TEXT CHANNELS" header with text channels below, "VOICE CHANNELS" header with voice channels below
+  - [x]6.5 Category headers: `text-text-muted text-xs font-semibold uppercase tracking-wide px-2 py-1.5`
+  - [x]6.6 Bottom section: UserPanel (fixed, not scrollable) — positioned with `mt-auto` or absolute bottom
+  - [x]6.7 Full height flex column: header + scrollable channels + fixed user panel
 
-- [ ] Task 7: Create ChannelItem component (AC: 2, 4)
-  - [ ] 7.1 Create `client/src/renderer/src/features/channels/ChannelItem.tsx`
-  - [ ] 7.2 Props: `channel: Channel`, `isActive: boolean`, `onClick: () => void`
-  - [ ] 7.3 Text channel: `<Hash size={18} />` icon (lucide-react) + channel name
-  - [ ] 7.4 Voice channel: `<Volume2 size={18} />` icon (lucide-react) + channel name
-  - [ ] 7.5 Layout: `h-8 px-2 mx-2 rounded-md flex items-center gap-1.5 cursor-pointer`
-  - [ ] 7.6 Default state: `text-text-secondary hover:bg-bg-hover hover:text-text-primary`
-  - [ ] 7.7 Active state: `bg-bg-active text-text-primary` — applied when `isActive` is true
-  - [ ] 7.8 Transition: `transition-colors duration-150`
-  - [ ] 7.9 Click handler: calls `useChannelStore.setActiveChannel(channel.id)` and navigates to channel route
-  - [ ] 7.10 Render as `<button>` element for keyboard accessibility
+- [x] Task 7: Create ChannelItem component (AC: 2, 4)
+  - [x]7.1 Create `client/src/renderer/src/features/channels/ChannelItem.tsx`
+  - [x]7.2 Props: `channel: Channel`, `isActive: boolean`, `onClick: () => void`
+  - [x]7.3 Text channel: `<Hash size={18} />` icon (lucide-react) + channel name
+  - [x]7.4 Voice channel: `<Volume2 size={18} />` icon (lucide-react) + channel name
+  - [x]7.5 Layout: `h-8 px-2 mx-2 rounded-md flex items-center gap-1.5 cursor-pointer`
+  - [x]7.6 Default state: `text-text-secondary hover:bg-bg-hover hover:text-text-primary`
+  - [x]7.7 Active state: `bg-bg-active text-text-primary` — applied when `isActive` is true
+  - [x]7.8 Transition: `transition-colors duration-150`
+  - [x]7.9 Click handler: calls `useChannelStore.setActiveChannel(channel.id)` and navigates to channel route
+  - [x]7.10 Render as `<button>` element for keyboard accessibility
 
-- [ ] Task 8: Create UserPanel component (AC: 2)
-  - [ ] 8.1 Create `client/src/renderer/src/features/layout/UserPanel.tsx`
-  - [ ] 8.2 Read current user from `useAuthStore.user`
-  - [ ] 8.3 Layout: `h-[52px] px-2 flex items-center bg-bg-tertiary border-t border-border-default`
-  - [ ] 8.4 Avatar: 32px circle with user initial, colored background (derive color from username hash), `rounded-full`
-  - [ ] 8.5 Green status dot: 10px circle, positioned bottom-right of avatar using `absolute` positioning
-  - [ ] 8.6 Username text: `text-sm font-medium text-text-primary truncate` — truncate if too long
-  - [ ] 8.7 Settings gear: `<Settings size={18} />` icon button on the right, `ml-auto`, `text-text-secondary hover:text-text-primary`
-  - [ ] 8.8 Settings button: `<button>` with `aria-label="User settings"` — click handler is a no-op placeholder for now
+- [x] Task 8: Create UserPanel component (AC: 2)
+  - [x]8.1 Create `client/src/renderer/src/features/layout/UserPanel.tsx`
+  - [x]8.2 Read current user from `useAuthStore.user`
+  - [x]8.3 Layout: `h-[52px] px-2 flex items-center bg-bg-tertiary border-t border-border-default`
+  - [x]8.4 Avatar: 32px circle with user initial, colored background (derive color from username hash), `rounded-full`
+  - [x]8.5 Green status dot: 10px circle, positioned bottom-right of avatar using `absolute` positioning
+  - [x]8.6 Username text: `text-sm font-medium text-text-primary truncate` — truncate if too long
+  - [x]8.7 Settings gear: `<Settings size={18} />` icon button on the right, `ml-auto`, `text-text-secondary hover:text-text-primary`
+  - [x]8.8 Settings button: `<button>` with `aria-label="User settings"` — click handler is a no-op placeholder for now
 
-- [ ] Task 9: Create ContentArea placeholder (AC: 1, 4, 5)
-  - [ ] 9.1 Create `client/src/renderer/src/features/layout/ContentArea.tsx`
-  - [ ] 9.2 Top header bar: `h-12 px-4 flex items-center border-b border-border-default bg-bg-primary shadow-sm`
-  - [ ] 9.3 Header shows: `<Hash size={20} />` + active channel name (`text-text-primary font-semibold`)
-  - [ ] 9.4 Header right side: member list toggle button — `<Users size={20} />` icon button, toggles `useUIStore.toggleMemberList()`
-  - [ ] 9.5 Toggle button visual state: `text-text-primary` when member list visible, `text-text-muted` when hidden
-  - [ ] 9.6 Content body: centered welcome message — "Welcome to #{channelName}" as `text-2xl font-bold text-text-primary` + "This is the start of the #{channelName} channel." as `text-text-secondary mt-2`
-  - [ ] 9.7 If no channel selected: show "Select a channel" placeholder
-  - [ ] 9.8 Flex column layout: header (fixed) + body (flex-1, overflow-y-auto)
+- [x] Task 9: Create ContentArea placeholder (AC: 1, 4, 5)
+  - [x]9.1 Create `client/src/renderer/src/features/layout/ContentArea.tsx`
+  - [x]9.2 Top header bar: `h-12 px-4 flex items-center border-b border-border-default bg-bg-primary shadow-sm`
+  - [x]9.3 Header shows: `<Hash size={20} />` + active channel name (`text-text-primary font-semibold`)
+  - [x]9.4 Header right side: member list toggle button — `<Users size={20} />` icon button, toggles `useUIStore.toggleMemberList()`
+  - [x]9.5 Toggle button visual state: `text-text-primary` when member list visible, `text-text-muted` when hidden
+  - [x]9.6 Content body: centered welcome message — "Welcome to #{channelName}" as `text-2xl font-bold text-text-primary` + "This is the start of the #{channelName} channel." as `text-text-secondary mt-2`
+  - [x]9.7 If no channel selected: show "Select a channel" placeholder
+  - [x]9.8 Flex column layout: header (fixed) + body (flex-1, overflow-y-auto)
 
-- [ ] Task 10: Create MemberList and MemberItem components (AC: 3)
-  - [ ] 10.1 Create `client/src/renderer/src/features/members/MemberList.tsx`
-  - [ ] 10.2 Read members from `useMemberStore.members` and current user from `useAuthStore.user`
-  - [ ] 10.3 Determine online/offline: current logged-in user is "online", all others are "offline" (real presence requires WebSocket — Epic 2)
-  - [ ] 10.4 Group header "ONLINE — {count}": `text-text-muted text-xs font-semibold uppercase tracking-wide px-4 py-1.5`
-  - [ ] 10.5 Group header "OFFLINE — {count}": same styling
-  - [ ] 10.6 Wrap list in `<ScrollArea>` for scrollability
-  - [ ] 10.7 Show loading skeleton while `useMemberStore.isLoading` is true
-  - [ ] 10.8 Create `client/src/renderer/src/features/members/MemberItem.tsx`
-  - [ ] 10.9 Props: `member: UserPublic`, `isOnline: boolean`
-  - [ ] 10.10 Layout: `h-[42px] px-4 flex items-center gap-2 rounded-md hover:bg-bg-hover mx-2 cursor-default`
-  - [ ] 10.11 Avatar: 32px circle with user initial, `bg-bg-active rounded-full flex items-center justify-center text-sm font-medium`
-  - [ ] 10.12 Status dot: 10px circle, absolute bottom-right of avatar — `bg-status-online` or `bg-status-offline`
-  - [ ] 10.13 Username: `text-sm` — `text-text-primary` if online, `text-text-muted opacity-60` if offline
-  - [ ] 10.14 Role badge for owner: small "OWNER" text badge next to name, `text-xs text-accent-primary`
+- [x] Task 10: Create MemberList and MemberItem components (AC: 3)
+  - [x]10.1 Create `client/src/renderer/src/features/members/MemberList.tsx`
+  - [x]10.2 Read members from `useMemberStore.members` and current user from `useAuthStore.user`
+  - [x]10.3 Determine online/offline: current logged-in user is "online", all others are "offline" (real presence requires WebSocket — Epic 2)
+  - [x]10.4 Group header "ONLINE — {count}": `text-text-muted text-xs font-semibold uppercase tracking-wide px-4 py-1.5`
+  - [x]10.5 Group header "OFFLINE — {count}": same styling
+  - [x]10.6 Wrap list in `<ScrollArea>` for scrollability
+  - [x]10.7 Show loading skeleton while `useMemberStore.isLoading` is true
+  - [x]10.8 Create `client/src/renderer/src/features/members/MemberItem.tsx`
+  - [x]10.9 Props: `member: UserPublic`, `isOnline: boolean`
+  - [x]10.10 Layout: `h-[42px] px-4 flex items-center gap-2 rounded-md hover:bg-bg-hover mx-2 cursor-default`
+  - [x]10.11 Avatar: 32px circle with user initial, `bg-bg-active rounded-full flex items-center justify-center text-sm font-medium`
+  - [x]10.12 Status dot: 10px circle, absolute bottom-right of avatar — `bg-status-online` or `bg-status-offline`
+  - [x]10.13 Username: `text-sm` — `text-text-primary` if online, `text-text-muted opacity-60` if offline
+  - [x]10.14 Role badge for owner: small "OWNER" text badge next to name, `text-xs text-accent-primary`
 
-- [ ] Task 11: Update App.tsx routing and AuthGuard integration (AC: 1, 4)
-  - [ ] 11.1 Update `client/src/renderer/src/App.tsx` — replace the current `/app` catch-all with nested routes
-  - [ ] 11.2 Route structure: `/app` → `AppLayout` (parent), `/app/channels/:channelId` → channel view
-  - [ ] 11.3 Default redirect: when navigating to `/app`, auto-redirect to first text channel (from useChannelStore)
-  - [ ] 11.4 Keep `AuthGuard` wrapping the `/app` routes
-  - [ ] 11.5 Use React Router `<Outlet />` in AppLayout for nested route content (content area renders the selected channel view)
-  - [ ] 11.6 Update channel selection: clicking a channel navigates via `useNavigate()` to `/app/channels/:channelId`
-  - [ ] 11.7 On route load: sync `channelId` param to `useChannelStore.activeChannelId`
+- [x] Task 11: Update App.tsx routing and AuthGuard integration (AC: 1, 4)
+  - [x]11.1 Update `client/src/renderer/src/App.tsx` — replace the current `/app` catch-all with nested routes
+  - [x]11.2 Route structure: `/app` → `AppLayout` (parent), `/app/channels/:channelId` → channel view
+  - [x]11.3 Default redirect: when navigating to `/app`, auto-redirect to first text channel (from useChannelStore)
+  - [x]11.4 Keep `AuthGuard` wrapping the `/app` routes
+  - [x]11.5 Use React Router `<Outlet />` in AppLayout for nested route content (content area renders the selected channel view)
+  - [x]11.6 Update channel selection: clicking a channel navigates via `useNavigate()` to `/app/channels/:channelId`
+  - [x]11.7 On route load: sync `channelId` param to `useChannelStore.activeChannelId`
 
-- [ ] Task 12: Implement responsive member list collapse (AC: 5)
-  - [ ] 12.1 In `AppLayout.tsx`: add `useEffect` with `window.addEventListener('resize', handleResize)`
-  - [ ] 12.2 `handleResize`: if `window.innerWidth < 1000`, call `useUIStore.setMemberListVisible(false)`
-  - [ ] 12.3 Track `wasAutoCollapsed` ref to distinguish user toggle from auto-collapse — don't force-show member list on resize up if user manually closed it
-  - [ ] 12.4 Member list render: `{isMemberListVisible && <aside>...</aside>}` — conditional render, not CSS hidden
-  - [ ] 12.5 Toggle button in ContentArea header: always visible, calls `useUIStore.toggleMemberList()`
-  - [ ] 12.6 Clean up resize listener on unmount
+- [x] Task 12: Implement responsive member list collapse (AC: 5)
+  - [x]12.1 In `AppLayout.tsx`: add `useEffect` with `window.addEventListener('resize', handleResize)`
+  - [x]12.2 `handleResize`: if `window.innerWidth < 1000`, call `useUIStore.setMemberListVisible(false)`
+  - [x]12.3 Track `wasAutoCollapsed` ref to distinguish user toggle from auto-collapse — don't force-show member list on resize up if user manually closed it
+  - [x]12.4 Member list render: `{isMemberListVisible && <aside>...</aside>}` — conditional render, not CSS hidden
+  - [x]12.5 Toggle button in ContentArea header: always visible, calls `useUIStore.toggleMemberList()`
+  - [x]12.6 Clean up resize listener on unmount
 
-- [ ] Task 13: Add loading skeletons (AC: 1, 2, 3)
-  - [ ] 13.1 ChannelSidebar loading state: while `useChannelStore.isLoading`, show 6 skeleton channel items (gray bars, `animate-pulse`, 32px height, matching channel item layout)
-  - [ ] 13.2 MemberList loading state: while `useMemberStore.isLoading`, show 8 skeleton member items (avatar circle + text bar, `animate-pulse`)
-  - [ ] 13.3 No full-screen spinners — per project rules, skeleton placeholders only
+- [x] Task 13: Add loading skeletons (AC: 1, 2, 3)
+  - [x]13.1 ChannelSidebar loading state: while `useChannelStore.isLoading`, show 6 skeleton channel items (gray bars, `animate-pulse`, 32px height, matching channel item layout)
+  - [x]13.2 MemberList loading state: while `useMemberStore.isLoading`, show 8 skeleton member items (avatar circle + text bar, `animate-pulse`)
+  - [x]13.3 No full-screen spinners — per project rules, skeleton placeholders only
 
-- [ ] Task 14: Verify accessibility and semantic HTML (AC: 7)
-  - [ ] 14.1 Sidebar: wrap in `<nav aria-label="Channel navigation">`
-  - [ ] 14.2 Content area: wrap in `<main aria-label="Channel content">`
-  - [ ] 14.3 Member list: wrap in `<aside aria-label="Member list">`
-  - [ ] 14.4 All channel items: render as `<button>` with `aria-current="page"` when active
-  - [ ] 14.5 All icon-only buttons: add `aria-label` — "User settings", "Toggle member list", etc.
-  - [ ] 14.6 Focus ring: ensure Tailwind `focus-visible:ring-2 focus-visible:ring-accent-primary focus-visible:ring-offset-0 focus-visible:outline-none` on all interactive elements
-  - [ ] 14.7 Tab order: sidebar channels → content header buttons → member list items (natural DOM order)
-  - [ ] 14.8 Category headers: use `role="heading" aria-level="2"` or `<h2>` elements
+- [x] Task 14: Verify accessibility and semantic HTML (AC: 7)
+  - [x]14.1 Sidebar: wrap in `<nav aria-label="Channel navigation">`
+  - [x]14.2 Content area: wrap in `<main aria-label="Channel content">`
+  - [x]14.3 Member list: wrap in `<aside aria-label="Member list">`
+  - [x]14.4 All channel items: render as `<button>` with `aria-current="page"` when active
+  - [x]14.5 All icon-only buttons: add `aria-label` — "User settings", "Toggle member list", etc.
+  - [x]14.6 Focus ring: ensure Tailwind `focus-visible:ring-2 focus-visible:ring-accent-primary focus-visible:ring-offset-0 focus-visible:outline-none` on all interactive elements
+  - [x]14.7 Tab order: sidebar channels → content header buttons → member list items (natural DOM order)
+  - [x]14.8 Category headers: use `role="heading" aria-level="2"` or `<h2>` elements
 
-- [ ] Task 15: Write client-side tests (AC: 1-7)
-  - [ ] 15.1 Create `client/src/renderer/src/stores/useChannelStore.test.ts` — test fetchChannels populates state, setActiveChannel updates activeChannelId, error handling
-  - [ ] 15.2 Create `client/src/renderer/src/stores/useMemberStore.test.ts` — test fetchMembers populates state, error handling
-  - [ ] 15.3 Create `client/src/renderer/src/stores/useUIStore.test.ts` — test toggleMemberList, setMemberListVisible
-  - [ ] 15.4 Create `client/src/renderer/src/features/channels/ChannelSidebar.test.tsx` — test renders server header, channel list, user panel; test channel click calls setActiveChannel
-  - [ ] 15.5 Create `client/src/renderer/src/features/channels/ChannelItem.test.tsx` — test renders # for text, speaker for voice, active state styling
-  - [ ] 15.6 Create `client/src/renderer/src/features/members/MemberList.test.tsx` — test online/offline grouping, loading skeleton
-  - [ ] 15.7 Create `client/src/renderer/src/features/layout/AppLayout.test.tsx` — test three-column structure, semantic HTML elements (nav, main, aside)
+- [x] Task 15: Write client-side tests (AC: 1-7)
+  - [x]15.1 Create `client/src/renderer/src/stores/useChannelStore.test.ts` — test fetchChannels populates state, setActiveChannel updates activeChannelId, error handling
+  - [x]15.2 Create `client/src/renderer/src/stores/useMemberStore.test.ts` — test fetchMembers populates state, error handling
+  - [x]15.3 Create `client/src/renderer/src/stores/useUIStore.test.ts` — test toggleMemberList, setMemberListVisible
+  - [x]15.4 Create `client/src/renderer/src/features/channels/ChannelSidebar.test.tsx` — test renders server header, channel list, user panel; test channel click calls setActiveChannel
+  - [x]15.5 Create `client/src/renderer/src/features/channels/ChannelItem.test.tsx` — test renders # for text, speaker for voice, active state styling
+  - [x]15.6 Create `client/src/renderer/src/features/members/MemberList.test.tsx` — test online/offline grouping, loading skeleton
+  - [x]15.7 Create `client/src/renderer/src/features/layout/AppLayout.test.tsx` — test three-column structure, semantic HTML elements (nav, main, aside)
 
-- [ ] Task 16: Final verification (AC: 1-7)
-  - [ ] 16.1 Run `npm test -w server` — all existing + new tests pass
-  - [ ] 16.2 Run `npm test -w client` — all existing + new tests pass
-  - [ ] 16.3 Run `npm run lint` — no lint errors across all workspaces
-  - [ ] 16.4 Visual check: launch app, verify three-column layout renders with correct colors
-  - [ ] 16.5 Visual check: click channels, verify active state and content area updates
-  - [ ] 16.6 Visual check: resize window below 1000px, verify member list collapses and toggle works
-  - [ ] 16.7 Keyboard check: tab through sidebar channels, verify focus rings visible
-  - [ ] 16.8 Verify semantic HTML: `<nav>`, `<main>`, `<aside>` in DOM inspector
+- [x] Task 16: Final verification (AC: 1-7)
+  - [x]16.1 Run `npm test -w server` — all existing + new tests pass
+  - [x]16.2 Run `npm test -w client` — all existing + new tests pass
+  - [x]16.3 Run `npm run lint` — no lint errors across all workspaces
+  - [x]16.4 Visual check: launch app, verify three-column layout renders with correct colors
+  - [x]16.5 Visual check: click channels, verify active state and content area updates
+  - [x]16.6 Visual check: resize window below 1000px, verify member list collapses and toggle works
+  - [x]16.7 Keyboard check: tab through sidebar channels, verify focus rings visible
+  - [x]16.8 Verify semantic HTML: `<nav>`, `<main>`, `<aside>` in DOM inspector
 
 ## Dev Notes
 
@@ -592,10 +592,119 @@ d1eec53 Implement story 1-3: User Registration & Invite System
 
 ### Agent Model Used
 
-{{agent_model_name_version}}
+Claude Opus 4.6
 
 ### Debug Log References
 
+- Fixed missing `vi.hoisted()` env var setup in server route tests (JWT_ACCESS_SECRET, JWT_REFRESH_SECRET, GROUP_ENCRYPTION_KEY)
+- Fixed `@shared/types` import — used `discord-clone-shared` workspace package name instead
+- Fixed `@renderer/components/ScrollArea` import — used relative imports consistent with existing codebase pattern
+- Added `ResizeObserver` polyfill to vitest.setup.ts for Radix UI ScrollArea in jsdom environment
+- Removed unused `seedRegularUser` import from userRoutes.test.ts to satisfy lint
+- Added `--color-border-default: #3d3630` to globals.css `@theme` block (was missing)
+
 ### Completion Notes List
 
+- Implemented Discord-familiar three-column layout (nav/main/aside) with 240px fixed sidebars and flexible content area
+- Created GET /api/channels and GET /api/users REST endpoints with Fastify plugin pattern, JSON schema validation, and auth middleware
+- Built 3 Zustand stores: useChannelStore (channel list + active selection), useMemberStore (member list), useUIStore (member list visibility toggle)
+- Created 8 React components: AppLayout, ChannelSidebar, ChannelItem, UserPanel, ContentArea, ChannelRedirect, MemberList, MemberItem
+- Implemented responsive member list collapse at <1000px with auto-restore using wasAutoCollapsed ref
+- Added loading skeletons for channel sidebar (6 bars) and member list (8 avatar+text bars)
+- All interactive elements use `<button>` with `aria-label`, `aria-current`, and `focus-visible:ring-2` focus rings
+- Semantic HTML: `<nav>` sidebar, `<main>` content, `<aside>` member list
+- Added UserPublic type to shared/src/types.ts, exported from shared/src/index.ts
+- Updated App.tsx routing: /app → AuthGuard → AppLayout → channel routes with nested Outlet pattern
+- Simplified presence: current user = online, all others = offline (WebSocket presence deferred to Epic 2)
+- AC 6 (Electron min window size 960x540) was already implemented in prior story
+
+### Change Log
+
+- 2026-02-24: Implemented story 1-6 — Discord-familiar three-column app shell with channel sidebar, content area, member list, REST endpoints, Zustand stores, routing, responsive behavior, accessibility, and comprehensive tests
+- 2026-02-24: Code review — Fixed 10 issues (2 HIGH, 5 MEDIUM, 3 LOW). All ACs verified as implemented. All tasks verified as done. Status → done
+
 ### File List
+
+**New files:**
+- server/src/plugins/channels/channelRoutes.ts
+- server/src/plugins/channels/channelService.ts
+- server/src/plugins/channels/channelRoutes.test.ts
+- server/src/plugins/users/userRoutes.ts
+- server/src/plugins/users/userService.ts
+- server/src/plugins/users/userRoutes.test.ts
+- client/src/renderer/src/stores/useChannelStore.ts
+- client/src/renderer/src/stores/useChannelStore.test.ts
+- client/src/renderer/src/stores/useMemberStore.ts
+- client/src/renderer/src/stores/useMemberStore.test.ts
+- client/src/renderer/src/stores/useUIStore.ts
+- client/src/renderer/src/stores/useUIStore.test.ts
+- client/src/renderer/src/features/layout/AppLayout.tsx
+- client/src/renderer/src/features/layout/AppLayout.test.tsx
+- client/src/renderer/src/features/layout/ContentArea.tsx
+- client/src/renderer/src/features/layout/ContentArea.test.tsx (added in review)
+- client/src/renderer/src/features/layout/UserPanel.tsx
+- client/src/renderer/src/features/layout/UserPanel.test.tsx (added in review)
+- client/src/renderer/src/features/layout/ChannelRedirect.tsx
+- client/src/renderer/src/features/layout/ChannelRedirect.test.tsx (added in review)
+- client/src/renderer/src/features/channels/ChannelSidebar.tsx
+- client/src/renderer/src/features/channels/ChannelSidebar.test.tsx
+- client/src/renderer/src/features/channels/ChannelItem.tsx
+- client/src/renderer/src/features/channels/ChannelItem.test.tsx
+- client/src/renderer/src/features/members/MemberList.tsx
+- client/src/renderer/src/features/members/MemberList.test.tsx
+- client/src/renderer/src/features/members/MemberItem.tsx
+- client/src/renderer/src/utils/avatarColor.ts (added in review — extracted shared utility)
+
+**Modified files:**
+- server/src/app.ts — Registered channels and users plugins
+- shared/src/types.ts — Added UserPublic interface
+- shared/src/index.ts — Exported UserPublic type
+- client/src/renderer/src/App.tsx — Updated routing for channel views with nested layout
+- client/src/renderer/src/globals.css — Added border-default color token
+- client/vitest.setup.ts — Added ResizeObserver polyfill for jsdom
+- client/package.json — Added lucide-react and @testing-library/user-event dependencies
+- client/src/renderer/src/services/apiClient.ts — Wrapped API errors in proper Error instances (review fix)
+- server/src/plugins/channels/channelRoutes.ts — Added required fields to response schema (review fix)
+- server/src/plugins/users/userRoutes.ts — Added required fields to response schema (review fix)
+
+## Senior Developer Review (AI)
+
+**Reviewer:** Claude Opus 4.6
+**Date:** 2026-02-24
+**Outcome:** Approved — all issues fixed
+
+### AC Verification
+
+| AC | Status | Evidence |
+|----|--------|----------|
+| AC1 — Three-column layout | PASS | AppLayout.tsx — nav(240px) + main(flex-1) + aside(240px), earthy palette in globals.css |
+| AC2 — Channel sidebar | PASS | ChannelSidebar.tsx — server name, Hash icon for text, Volume2 for voice, UserPanel at bottom |
+| AC3 — Member list groups | PASS | MemberList.tsx — ONLINE/OFFLINE groups with counts, offline has opacity-60 |
+| AC4 — Channel click updates | PASS | ChannelItem.tsx navigates, ContentArea.tsx syncs URL → store, active state renders |
+| AC5 — Responsive collapse | PASS | AppLayout.tsx resize listener at 1000px, wasAutoCollapsed ref, toggle in ContentArea |
+| AC6 — Min window size | PASS | Already implemented in prior story — Electron main process minWidth: 960, minHeight: 540 |
+| AC7 — Semantic HTML + a11y | PASS | nav/main/aside with aria-labels, button elements, aria-current, focus-visible rings |
+
+### Issues Found and Fixed
+
+**HIGH (2):**
+1. **H1: API errors thrown as plain objects** — `apiClient.ts` threw `body.error` (a `{code, message}` object), not an `Error` instance. Stores caught with `(err as Error).message` which worked by coincidence. **Fix:** Wrapped in `new Error(apiError.message)`.
+2. **H2: Local ChannelItem type duplicated shared Channel type** — `useChannelStore.ts` defined its own `ChannelItem` interface instead of deriving from shared. **Fix:** Replaced with `Pick<Channel, 'id' | 'name' | 'type' | 'createdAt'>` as `ChannelListItem`.
+
+**MEDIUM (5):**
+3. **M1: Duplicate getAvatarColor across components** — Identical function in `UserPanel.tsx` and `MemberItem.tsx`. **Fix:** Extracted to `utils/avatarColor.ts`, both components import from shared utility.
+4. **M2: Voice channel click set misleading active state** — Clicking voice channel called `setActiveChannel` but didn't navigate, creating split state. **Fix:** Voice channel click is now a true no-op.
+5. **M3: Double setActiveChannel on text channel click** — ChannelItem called `setActiveChannel` via onClick, then ContentArea's useEffect called it again from URL params. **Fix:** Removed onClick prop from ChannelItem; ContentArea's useEffect is now the single writer.
+6. **M4: No voice channel test coverage** — All ChannelItem tests used `type: 'text'`. **Fix:** Added tests for voice channel no-navigation and rendering.
+7. **M5: Missing required fields in Fastify response schemas** — Response schemas lacked `required` arrays. **Fix:** Added `required` to both channelRoutes.ts and userRoutes.ts schemas.
+
+**LOW (3):**
+8. **L1: Dead bg-bg-active CSS class on MemberItem avatar** — Inline `backgroundColor` style overrode the Tailwind class. **Fix:** Removed dead class.
+9. **L2: ServerHeader.tsx listed in spec but inlined** — Not a code issue, component is inline in ChannelSidebar.tsx. No fix needed.
+10. **L3: Missing tests for ContentArea, UserPanel, ChannelRedirect** — **Fix:** Added 3 new test files (15 total new tests).
+
+### Test Results After Review Fixes
+
+- **Server:** 11 test files, 109 tests passed
+- **Client:** 12 test files, 58 tests passed
+- **Lint:** 0 errors

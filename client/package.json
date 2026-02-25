@@ -14,6 +14,7 @@
   "dependencies": {
     "discord-clone-shared": "*",
     "libsodium-wrappers": "^0.8.2",
+    "lucide-react": "^0.575.0",
     "radix-ui": "^1.4.3",
     "react": "^19.1.0",
     "react-dom": "^19.1.0",
@@ -26,6 +27,7 @@
     "@tailwindcss/vite": "^4.2.0",
     "@testing-library/jest-dom": "^6.9.1",
     "@testing-library/react": "^16.3.2",
+    "@testing-library/user-event": "^14.6.1",
     "@types/libsodium-wrappers": "^0.7.14",
     "@types/react": "^19.1.0",
     "@types/react-dom": "^19.1.0",

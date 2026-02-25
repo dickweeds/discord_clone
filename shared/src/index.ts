@@ -10,6 +10,7 @@ export type {
   ApiError,
   AuthTokens,
   EncryptedGroupKeyBlob,
+  UserPublic,
 } from './types.js';
 
 export type {
