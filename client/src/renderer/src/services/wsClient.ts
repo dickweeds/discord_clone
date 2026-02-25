@@ -1,4 +1,4 @@
-import type { WsMessage, PresenceUpdatePayload, PresenceSyncPayload } from 'discord-clone-shared';
+import type { WsMessage, PresenceUpdatePayload, PresenceSyncPayload, TextReceivePayload } from 'discord-clone-shared';
 import { WS_TYPES, WS_RECONNECT_DELAY, WS_MAX_RECONNECT_DELAY } from 'discord-clone-shared';
 import { usePresenceStore } from '../stores/usePresenceStore';
 
@@ -32,6 +32,7 @@ class WsClient {
 
     this.socket.onclose = (event: CloseEvent) => {
       this.socket = null;
+      this.markPendingMessagesFailed();
 
       if (this.intentionalClose || event.code === 4001) {
         usePresenceStore.getState().setConnectionState('disconnected');
@@ -89,6 +90,38 @@ class WsClient {
     return usePresenceStore.getState().connectionState;
   }
 
+  private markPendingMessagesFailed(): void {
+    import('../stores/useMessageStore').then(({ default: useMessageStore }) => {
+      const { messages } = useMessageStore.getState();
+      for (const [, channelMessages] of messages) {
+        for (const msg of channelMessages) {
+          if (msg.status === 'sending' && msg.tempId) {
+            useMessageStore.getState().markMessageFailed(msg.tempId);
+          }
+        }
+      }
+    }).catch(() => {});
+  }
+
+  private async handleTextReceive(message: WsMessage<TextReceivePayload>): Promise<void> {
+    const payload = message.payload;
+    try {
+      const useAuthStore = (await import('../stores/useAuthStore')).default;
+      const useMessageStore = (await import('../stores/useMessageStore')).default;
+      const currentUserId = useAuthStore.getState().user?.id;
+
+      if (payload.authorId === currentUserId && message.id) {
+        // Sender confirmation — match by tempId
+        useMessageStore.getState().confirmMessage(message.id, payload);
+      } else {
+        // Message from another user
+        useMessageStore.getState().addReceivedMessage(payload);
+      }
+    } catch {
+      // Module import failed — ignore
+    }
+  }
+
   private buildWsUrl(token: string): string {
     const baseUrl = import.meta.env.VITE_WS_URL || 'ws://localhost:3000';
     return `${baseUrl}/ws?token=${encodeURIComponent(token)}`;
@@ -114,6 +147,8 @@ class WsClient {
     } else if (message.type === WS_TYPES.PRESENCE_SYNC) {
       const payload = message.payload as PresenceSyncPayload;
       usePresenceStore.getState().syncOnlineUsers(payload.users);
+    } else if (message.type === WS_TYPES.TEXT_RECEIVE) {
+      this.handleTextReceive(message as WsMessage<TextReceivePayload>);
     }
 
     // Dispatch to registered handlers

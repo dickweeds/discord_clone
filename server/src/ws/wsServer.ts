@@ -10,6 +10,7 @@ import {
   broadcastPresenceUpdate,
   sendPresenceSync,
 } from '../plugins/presence/presenceService.js';
+import { registerMessageHandlers } from '../plugins/messages/messageWsHandler.js';
 
 const clients = new Map<string, WebSocket>();
 
@@ -24,6 +25,9 @@ export default fp(async function wsServer(fastify) {
   registerHandler(WS_TYPES.PRESENCE_SYNC, (ws) => {
     sendPresenceSync(ws);
   });
+
+  // Register message handlers
+  registerMessageHandlers(clients, fastify.db);
 
   fastify.get('/ws', { websocket: true }, (socket, request) => {
     const url = new URL(request.url, 'http://localhost');
