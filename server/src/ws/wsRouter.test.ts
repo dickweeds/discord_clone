@@ -111,6 +111,15 @@ describe('wsRouter', () => {
       expect(sent.payload).toEqual({ data: 'test' });
     });
 
+    it('does not send when WebSocket is not OPEN', () => {
+      const closedWs = createMockSocket();
+      Object.defineProperty(closedWs, 'readyState', { value: 3 }); // CLOSED
+      Object.defineProperty(closedWs, 'OPEN', { value: 1 });
+
+      respond(closedWs, 'req-closed', { data: 'test' });
+      expect(closedWs.send).not.toHaveBeenCalled();
+    });
+
     it('sends a response with empty payload', () => {
       respond(ws, 'req-2', {});
 
@@ -129,6 +138,15 @@ describe('wsRouter', () => {
       expect(sent.type).toBe('error');
       expect(sent.id).toBe('req-3');
       expect(sent.payload.error).toBe('Something went wrong');
+    });
+
+    it('does not send when WebSocket is not OPEN', () => {
+      const closedWs = createMockSocket();
+      Object.defineProperty(closedWs, 'readyState', { value: 3 }); // CLOSED
+      Object.defineProperty(closedWs, 'OPEN', { value: 1 });
+
+      respondError(closedWs, 'req-closed', 'test');
+      expect(closedWs.send).not.toHaveBeenCalled();
     });
   });
 });

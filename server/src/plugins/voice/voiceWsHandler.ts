@@ -10,16 +10,20 @@ import {
   createWebRtcTransport,
   getRouter,
   getRouterRtpCapabilities,
+  onWorkerDied,
 } from './mediasoupManager.js';
 import {
   joinVoiceChannel,
   leaveVoiceChannel,
   getChannelPeers,
   getPeer,
+  getAllPeers,
+  findProducerOwner,
   setPeerTransport,
   setPeerProducer,
   addPeerConsumer,
   removePeer,
+  clearAllVoiceState,
 } from './voiceService.js';
 import { getChannelById } from '../channels/channelService.js';
 
@@ -29,6 +33,16 @@ let log: FastifyBaseLogger;
 export function registerVoiceHandlers(appDb: AppDatabase, logger: FastifyBaseLogger): void {
   db = appDb;
   log = logger;
+
+  // Clean up all voice state if mediasoup Worker dies
+  onWorkerDied(() => {
+    const peers = getAllPeers();
+    for (const [userId, peer] of peers) {
+      broadcastToChannel(peer.channelId, userId, WS_TYPES.VOICE_PEER_LEFT, { userId, channelId: peer.channelId });
+    }
+    clearAllVoiceState();
+    log.warn('All voice sessions cleared due to mediasoup Worker death');
+  });
 
   registerHandler(WS_TYPES.VOICE_JOIN, handleVoiceJoin);
   registerHandler(WS_TYPES.VOICE_LEAVE, handleVoiceLeave);
@@ -60,6 +74,10 @@ function handleVoiceJoin(ws: WebSocket, message: WsMessage, userId: string): voi
   }
 
   const existingPeers = joinVoiceChannel(userId, channelId, rtpCapabilities);
+  if (existingPeers === null) {
+    if (requestId) respondError(ws, requestId, 'Voice channel is full');
+    return;
+  }
   const routerRtpCapabilities = getRouterRtpCapabilities();
 
   if (requestId) {
@@ -99,6 +117,12 @@ function handleCreateTransport(ws: WebSocket, message: WsMessage, userId: string
   const peer = getPeer(userId);
   if (!peer) {
     if (requestId) respondError(ws, requestId, 'Not in a voice channel — join first');
+    return;
+  }
+
+  // Reject if transport already exists for this direction
+  if ((direction === 'send' && peer.sendTransport) || (direction === 'recv' && peer.recvTransport)) {
+    if (requestId) respondError(ws, requestId, `Transport for "${direction}" already exists`);
     return;
   }
 
@@ -231,6 +255,7 @@ function handleConsume(ws: WebSocket, message: WsMessage, userId: string): void 
     })
     .then((consumer: Consumer) => {
       addPeerConsumer(userId, consumer);
+      const producerPeerId = findProducerOwner(producerId);
 
       consumer.on('transportclose', () => {
         log.info({ userId, consumerId: consumer.id }, 'Consumer transport closed');
@@ -238,6 +263,19 @@ function handleConsume(ws: WebSocket, message: WsMessage, userId: string): void 
       consumer.on('producerclose', () => {
         log.info({ userId, consumerId: consumer.id }, 'Consumer producer closed');
         peer.consumers.delete(consumer.id);
+
+        // Notify the consuming client that this producer is gone
+        const clientWs = getClients().get(userId);
+        if (clientWs && clientWs.readyState === clientWs.OPEN) {
+          try {
+            clientWs.send(JSON.stringify({
+              type: WS_TYPES.VOICE_PRODUCER_CLOSED,
+              payload: { producerId, peerId: producerPeerId },
+            }));
+          } catch {
+            log.debug({ userId }, 'Failed to send producer-closed notification');
+          }
+        }
       });
 
       if (requestId) {
@@ -301,7 +339,7 @@ function broadcastToChannel(channelId: string, excludeUserId: string, type: stri
       try {
         ws.send(JSON.stringify({ type, payload }));
       } catch {
-        // Failed to send to this client
+        log.debug({ peerId, type }, 'Failed to broadcast to voice peer');
       }
     }
   }

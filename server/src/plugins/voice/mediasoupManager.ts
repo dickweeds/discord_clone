@@ -9,7 +9,10 @@ const MIN_PORT = parseInt(process.env.MEDIASOUP_MIN_PORT || '40000', 10);
 const MAX_PORT = parseInt(process.env.MEDIASOUP_MAX_PORT || '49999', 10);
 const TURN_HOST = process.env.TURN_HOST || '127.0.0.1';
 const TURN_PORT = process.env.TURN_PORT || '3478';
-const TURN_SECRET = process.env.TURN_SECRET || '';
+
+function getTurnSecret(): string {
+  return process.env.TURN_SECRET || '';
+}
 
 const mediaCodecs: RouterRtpCodecCapability[] = [
   { kind: 'audio', mimeType: 'audio/opus', clockRate: 48000, channels: 2 },
@@ -18,12 +21,20 @@ const mediaCodecs: RouterRtpCodecCapability[] = [
 let worker: Worker | null = null;
 let router: Router | null = null;
 let log: { info: (...args: unknown[]) => void; error: (...args: unknown[]) => void; warn: (...args: unknown[]) => void } = console;
+let workerDiedCallback: (() => void) | null = null;
 
 export function setLogger(logger: typeof log): void {
   log = logger;
 }
 
+export function onWorkerDied(cb: () => void): void {
+  workerDiedCallback = cb;
+}
+
 export async function initMediasoup(): Promise<void> {
+  if (!getTurnSecret()) {
+    log.warn('TURN_SECRET is not set — TURN credentials will be unavailable. Only STUN will be provided. Set TURN_SECRET for production.');
+  }
   await createWorkerAndRouter();
 }
 
@@ -37,6 +48,7 @@ async function createWorkerAndRouter(): Promise<void> {
     log.error('mediasoup Worker died — attempting restart in 2s');
     worker = null;
     router = null;
+    if (workerDiedCallback) workerDiedCallback();
     setTimeout(async () => {
       try {
         await createWorkerAndRouter();
@@ -101,13 +113,19 @@ export async function createWebRtcTransport(userId: string): Promise<TransportRe
 
 export function generateTurnCredentials(userId: string): {
   urls: string[];
-  username: string;
-  credential: string;
+  username?: string;
+  credential?: string;
 } {
+  // STUN-only when no TURN secret is configured (local dev)
+  const turnSecret = getTurnSecret();
+  if (!turnSecret) {
+    return { urls: [`stun:${TURN_HOST}:${TURN_PORT}`] };
+  }
+
   const ttl = 24 * 3600;
   const unixTimestamp = Math.floor(Date.now() / 1000) + ttl;
   const username = `${unixTimestamp}:${userId}`;
-  const credential = crypto.createHmac('sha1', TURN_SECRET).update(username).digest('base64');
+  const credential = crypto.createHmac('sha1', turnSecret).update(username).digest('base64');
   return {
     username,
     credential,

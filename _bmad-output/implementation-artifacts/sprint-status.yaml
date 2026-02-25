@@ -59,8 +59,8 @@ development_status:
   epic-2-retrospective: optional
 
   # Epic 3: Voice Communication
-  epic-3: backlog
-  3-1-voice-server-infrastructure: review
+  epic-3: in-progress
+  3-1-voice-server-infrastructure: done
   3-2-voice-channel-join-leave-and-presence: backlog
   3-3-real-time-voice-audio-and-speaking-indicators: backlog
   3-4-audio-device-management-and-voice-controls: backlog

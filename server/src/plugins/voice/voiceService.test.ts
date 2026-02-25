@@ -1,9 +1,12 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
+import { MAX_PARTICIPANTS } from 'discord-clone-shared';
 import {
   joinVoiceChannel,
   leaveVoiceChannel,
   getChannelPeers,
   getPeer,
+  getAllPeers,
+  findProducerOwner,
   setPeerTransport,
   setPeerProducer,
   addPeerConsumer,
@@ -72,6 +75,15 @@ describe('voiceService', () => {
       expect(getPeer('user-1')!.channelId).toBe('channel-2');
       expect(getChannelPeers('channel-1')).toEqual([]);
       expect(getChannelPeers('channel-2')).toContain('user-1');
+    });
+
+    it('returns null when channel is at MAX_PARTICIPANTS', () => {
+      for (let i = 0; i < MAX_PARTICIPANTS; i++) {
+        joinVoiceChannel(`user-${i}`, 'channel-1', null);
+      }
+      const result = joinVoiceChannel('user-overflow', 'channel-1', null);
+      expect(result).toBeNull();
+      expect(getPeer('user-overflow')).toBeUndefined();
     });
 
     it('stores rtpCapabilities on join', () => {
@@ -194,6 +206,31 @@ describe('voiceService', () => {
       expect(channelId).toBe('channel-1');
       expect(getPeer('user-1')).toBeUndefined();
       expect(transport.close).toHaveBeenCalled();
+    });
+  });
+
+  describe('getAllPeers', () => {
+    it('returns the internal peers map', () => {
+      joinVoiceChannel('user-1', 'channel-1', null);
+      joinVoiceChannel('user-2', 'channel-1', null);
+      const peers = getAllPeers();
+      expect(peers.size).toBe(2);
+      expect(peers.has('user-1')).toBe(true);
+      expect(peers.has('user-2')).toBe(true);
+    });
+  });
+
+  describe('findProducerOwner', () => {
+    it('returns userId of the peer who owns the producer', () => {
+      joinVoiceChannel('user-1', 'channel-1', null);
+      const producer = createMockProducer();
+      (producer as unknown as { id: string }).id = 'producer-abc';
+      setPeerProducer('user-1', producer);
+      expect(findProducerOwner('producer-abc')).toBe('user-1');
+    });
+
+    it('returns null for unknown producerId', () => {
+      expect(findProducerOwner('nonexistent')).toBeNull();
     });
   });
 

@@ -1,4 +1,5 @@
 import type { WebRtcTransport, Producer, Consumer } from 'mediasoup/types';
+import { MAX_PARTICIPANTS } from 'discord-clone-shared';
 
 export interface VoicePeer {
   userId: string;
@@ -16,10 +17,16 @@ export function joinVoiceChannel(
   userId: string,
   channelId: string,
   rtpCapabilities: unknown,
-): string[] {
+): string[] | null {
   // If already in a voice channel, leave it first
   if (voicePeers.has(userId)) {
     leaveVoiceChannel(userId);
+  }
+
+  // Enforce participant limit
+  const currentPeers = getChannelPeers(channelId);
+  if (currentPeers.length >= MAX_PARTICIPANTS) {
+    return null;
   }
 
   const peer: VoicePeer = {
@@ -96,6 +103,17 @@ export function addPeerConsumer(userId: string, consumer: Consumer): void {
 
 export function removePeer(userId: string): string | null {
   return leaveVoiceChannel(userId);
+}
+
+export function findProducerOwner(producerId: string): string | null {
+  for (const [userId, peer] of voicePeers) {
+    if (peer.producer?.id === producerId) return userId;
+  }
+  return null;
+}
+
+export function getAllPeers(): Map<string, VoicePeer> {
+  return voicePeers;
 }
 
 export function clearAllVoiceState(): void {

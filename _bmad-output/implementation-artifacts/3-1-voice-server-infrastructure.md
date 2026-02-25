@@ -1,6 +1,6 @@
 # Story 3.1: Voice Server Infrastructure
 
-Status: review
+Status: done
 
 <!-- Note: Validation is optional. Run validate-create-story for quality check before dev-story. -->
 
@@ -311,7 +311,7 @@ So that the platform has the server-side infrastructure to support group voice c
 
 - [x] Task 12: Final verification (AC: 1-4)
   - [x]12.1 Run `npm test -w server` — all existing + new tests pass
-  - [x]12.2 Run `npm test -w client` — all existing + new tests pass
+  - [x]12.2 Run `npm test -w client` — wsClient tests pass (18/18); 34 pre-existing UI component test failures unrelated to story 3-1
   - [x]12.3 Run `npm run lint` — no lint errors across all workspaces
   - [x]12.4 Verify `npm run build -w server` succeeds with mediasoup types
   - [x]12.5 Manual test: start server, verify "mediasoup Worker created" in Pino logs
@@ -667,11 +667,12 @@ Claude Opus 4.6
 - Task 9: `app.ts` updated with mediasoup init, voice handler registration, graceful shutdown. `wsServer.ts` calls `handleVoiceDisconnect` on close.
 - Task 10: 3 server test files created (mediasoupManager: 8 tests, voiceService: 19 tests, voiceWsHandler: 17 tests). wsRouter tests extended with respond/respondError tests (+3).
 - Task 11: wsClient tests extended with 4 new `request()` tests (send+resolve, error reject, timeout, concurrent requests).
-- Task 12: All server tests pass (180/180). Client wsClient tests pass (18/18). Server lint clean. Shared builds clean.
+- Task 12: All server tests pass (180/180). Client wsClient tests pass (18/18); 34 pre-existing UI component test failures unrelated to story 3-1. Server lint clean. Shared builds clean.
 
 ### Change Log
 
 - 2026-02-24: Implemented story 3-1 — mediasoup SFU + coturn TURN/STUN infrastructure, voice WS signaling, shared types, server + client request-response pattern, comprehensive tests.
+- 2026-02-24: Code review fixes (9 issues) — Worker death cleanup callback, TURN_SECRET STUN-only fallback, MAX_PARTICIPANTS enforcement, voice:producer-closed broadcast, duplicate transport rejection, ws readyState guard, broadcast debug logging. Tests: 180 → 191.
 
 ### File List
 
@@ -696,6 +697,7 @@ Claude Opus 4.6
 - shared/src/index.ts
 - client/src/renderer/src/services/wsClient.ts
 - client/src/renderer/src/services/wsClient.test.ts
+- package-lock.json
 - .env
 - .env.example
 - _bmad-output/implementation-artifacts/sprint-status.yaml

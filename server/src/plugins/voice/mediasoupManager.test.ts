@@ -33,6 +33,7 @@ import {
   generateTurnCredentials,
   closeMediasoup,
   setLogger,
+  onWorkerDied,
 } from './mediasoupManager.js';
 
 const mockLogger = {
@@ -119,18 +120,29 @@ describe('mediasoupManager', () => {
   describe('generateTurnCredentials', () => {
     it('generates valid HMAC-SHA1 credentials', () => {
       const creds = generateTurnCredentials('user-1');
-      expect(creds.username).toMatch(/^\d+:user-1$/);
+      expect(creds.username).toBeDefined();
+      expect(creds.username!).toMatch(/^\d+:user-1$/);
       expect(creds.credential).toBeTruthy();
-      expect(() => Buffer.from(creds.credential, 'base64')).not.toThrow();
+      expect(() => Buffer.from(creds.credential!, 'base64')).not.toThrow();
       expect(creds.urls).toHaveLength(3);
       expect(creds.urls[0]).toBe('stun:127.0.0.1:3478');
       expect(creds.urls[1]).toBe('turn:127.0.0.1:3478?transport=udp');
       expect(creds.urls[2]).toBe('turn:127.0.0.1:3478?transport=tcp');
     });
 
+    it('returns STUN-only when TURN_SECRET is empty', () => {
+      process.env.TURN_SECRET = '';
+      const creds = generateTurnCredentials('user-1');
+      expect(creds.urls).toHaveLength(1);
+      expect(creds.urls[0]).toBe('stun:127.0.0.1:3478');
+      expect(creds.username).toBeUndefined();
+      expect(creds.credential).toBeUndefined();
+    });
+
     it('generates credentials with correct TTL (24 hours)', () => {
       const creds = generateTurnCredentials('user-1');
-      const timestamp = parseInt(creds.username.split(':')[0], 10);
+      expect(creds.username).toBeDefined();
+      const timestamp = parseInt(creds.username!.split(':')[0], 10);
       const now = Math.floor(Date.now() / 1000);
       const ttl = timestamp - now;
       expect(ttl).toBeGreaterThan(86395);
@@ -142,6 +154,19 @@ describe('mediasoupManager', () => {
     it('registers a died event handler on the Worker', async () => {
       await initMediasoup();
       expect(mockWorkerOn).toHaveBeenCalledWith('died', expect.any(Function));
+    });
+
+    it('invokes onWorkerDied callback when Worker dies', async () => {
+      const diedCallback = vi.fn();
+      onWorkerDied(diedCallback);
+
+      await initMediasoup();
+
+      // Get the 'died' handler and invoke it
+      const diedHandler = mockWorkerOn.mock.calls.find((c: unknown[]) => c[0] === 'died')![1] as () => void;
+      diedHandler();
+
+      expect(diedCallback).toHaveBeenCalledOnce();
     });
   });
 

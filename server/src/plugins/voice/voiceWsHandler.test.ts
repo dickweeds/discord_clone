@@ -1,7 +1,8 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import type { WsMessage } from 'discord-clone-shared';
 import { WS_TYPES } from 'discord-clone-shared';
-import { clearAllVoiceState, getPeer, joinVoiceChannel, setPeerTransport } from './voiceService.js';
+import { MAX_PARTICIPANTS } from 'discord-clone-shared';
+import { clearAllVoiceState, getPeer, getAllPeers, joinVoiceChannel, setPeerTransport } from './voiceService.js';
 
 // Mock mediasoupManager
 const mockCreateWebRtcTransport = vi.fn();
@@ -10,11 +11,13 @@ const mockGetRouterRtpCapabilities = vi.fn().mockReturnValue({
   codecs: [{ kind: 'audio', mimeType: 'audio/opus', clockRate: 48000, channels: 2 }],
   headerExtensions: [],
 });
+let capturedWorkerDiedCallback: (() => void) | null = null;
 
 vi.mock('./mediasoupManager.js', () => ({
   createWebRtcTransport: (...args: unknown[]) => mockCreateWebRtcTransport(...args),
   getRouter: () => mockGetRouter(),
   getRouterRtpCapabilities: () => mockGetRouterRtpCapabilities(),
+  onWorkerDied: (cb: () => void) => { capturedWorkerDiedCallback = cb; },
 }));
 
 // Mock channelService
@@ -163,6 +166,21 @@ describe('voiceWsHandler', () => {
       expect(sent.payload.error).toContain('not found');
     });
 
+    it('rejects when voice channel is full', () => {
+      // Fill channel to MAX_PARTICIPANTS
+      for (let i = 0; i < MAX_PARTICIPANTS; i++) {
+        joinVoiceChannel(`fill-user-${i}`, 'voice-channel-1', null);
+      }
+
+      const ws = createMockWs();
+      const handler = registeredHandlers.get(WS_TYPES.VOICE_JOIN)!;
+      handler(ws, { type: WS_TYPES.VOICE_JOIN, payload: { channelId: 'voice-channel-1' }, id: 'req-full' }, 'overflow-user');
+
+      const sent = JSON.parse(ws.send.mock.calls[0][0]);
+      expect(sent.type).toBe('error');
+      expect(sent.payload.error).toContain('full');
+    });
+
     it('broadcasts peer-joined to other peers', () => {
       joinVoiceChannel('user-1', 'voice-channel-1', null);
       const otherWs = createMockWs();
@@ -214,6 +232,20 @@ describe('voiceWsHandler', () => {
       const sent = JSON.parse(ws.send.mock.calls[0][0]);
       expect(sent.type).toBe('error');
       expect(sent.payload.error).toContain('Not in a voice channel');
+    });
+
+    it('rejects duplicate transport for same direction', () => {
+      joinVoiceChannel('user-1', 'voice-channel-1', null);
+      const mockTransport = createMockTransport('existing-transport');
+      setPeerTransport('user-1', 'send', mockTransport as never);
+
+      const ws = createMockWs();
+      const handler = registeredHandlers.get(WS_TYPES.VOICE_CREATE_TRANSPORT)!;
+      handler(ws, { type: WS_TYPES.VOICE_CREATE_TRANSPORT, payload: { direction: 'send' }, id: 'req-dup' }, 'user-1');
+
+      const sent = JSON.parse(ws.send.mock.calls[0][0]);
+      expect(sent.type).toBe('error');
+      expect(sent.payload.error).toContain('already exists');
     });
 
     it('rejects invalid direction', () => {
@@ -383,6 +415,33 @@ describe('voiceWsHandler', () => {
       expect(otherWs.send).toHaveBeenCalled();
       const broadcast = JSON.parse(otherWs.send.mock.calls[0][0]);
       expect(broadcast.type).toBe(WS_TYPES.VOICE_PEER_LEFT);
+    });
+  });
+
+  describe('Worker death cleanup', () => {
+    it('clears all voice state and broadcasts peer-left on Worker death', () => {
+      joinVoiceChannel('user-1', 'voice-channel-1', null);
+      joinVoiceChannel('user-2', 'voice-channel-1', null);
+
+      const ws1 = createMockWs();
+      const ws2 = createMockWs();
+      mockClients.set('user-1', ws1);
+      mockClients.set('user-2', ws2);
+
+      // Trigger Worker death callback
+      expect(capturedWorkerDiedCallback).not.toBeNull();
+      capturedWorkerDiedCallback!();
+
+      // All peers should be cleared
+      expect(getPeer('user-1')).toBeUndefined();
+      expect(getPeer('user-2')).toBeUndefined();
+      expect(getAllPeers().size).toBe(0);
+
+      // Both peers should have received peer-left broadcasts (each gets the other's departure)
+      expect(ws2.send).toHaveBeenCalled();
+      const broadcast2 = JSON.parse(ws2.send.mock.calls[0][0]);
+      expect(broadcast2.type).toBe(WS_TYPES.VOICE_PEER_LEFT);
+      expect(broadcast2.payload.userId).toBe('user-1');
     });
   });
 
