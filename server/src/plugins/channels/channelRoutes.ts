@@ -7,11 +7,13 @@ export default async function channelRoutes(fastify: FastifyInstance) {
       response: {
         200: {
           type: 'object',
+          required: ['data', 'count'],
           properties: {
             data: {
               type: 'array',
               items: {
                 type: 'object',
+                required: ['id', 'name', 'type', 'createdAt'],
                 properties: {
                   id: { type: 'string' },
                   name: { type: 'string' },

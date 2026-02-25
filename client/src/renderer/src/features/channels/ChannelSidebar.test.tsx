@@ -1,10 +1,18 @@
 import { describe, it, expect, vi, beforeEach, beforeAll } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { MemoryRouter } from 'react-router';
+import { MemoryRouter, useLocation } from 'react-router';
 import { useChannelStore } from '../../stores/useChannelStore';
 import useAuthStore from '../../stores/useAuthStore';
 import { ChannelSidebar } from './ChannelSidebar';
+
+let capturedPathname = '';
+
+function LocationSpy() {
+  const location = useLocation();
+  capturedPathname = location.pathname;
+  return null;
+}
 
 beforeAll(() => {
   window.api = {
@@ -40,8 +48,10 @@ beforeEach(() => {
 });
 
 function renderSidebar() {
+  capturedPathname = '';
   return render(
-    <MemoryRouter>
+    <MemoryRouter initialEntries={['/app']}>
+      <LocationSpy />
       <ChannelSidebar />
     </MemoryRouter>,
   );
@@ -79,10 +89,10 @@ describe('ChannelSidebar', () => {
     expect(skeletons.length).toBeGreaterThan(0);
   });
 
-  it('calls setActiveChannel when channel is clicked', async () => {
+  it('navigates to channel route when text channel is clicked', async () => {
     renderSidebar();
     const user = userEvent.setup();
     await user.click(screen.getByText('general'));
-    expect(useChannelStore.getState().activeChannelId).toBe('1');
+    expect(capturedPathname).toBe('/app/channels/1');
   });
 });

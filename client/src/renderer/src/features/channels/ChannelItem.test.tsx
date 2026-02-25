@@ -1,22 +1,29 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { MemoryRouter } from 'react-router';
+import { MemoryRouter, useLocation } from 'react-router';
 import { ChannelItem } from './ChannelItem';
 
-const mockOnClick = vi.fn();
+let capturedPathname = '';
+
+function LocationSpy() {
+  const location = useLocation();
+  capturedPathname = location.pathname;
+  return null;
+}
 
 beforeEach(() => {
   vi.clearAllMocks();
+  capturedPathname = '';
 });
 
 function renderItem(props: { type: 'text' | 'voice'; isActive?: boolean }) {
   return render(
-    <MemoryRouter>
+    <MemoryRouter initialEntries={['/app']}>
+      <LocationSpy />
       <ChannelItem
         channel={{ id: 'ch-1', name: 'test-channel', type: props.type, createdAt: '2024-01-01' }}
         isActive={props.isActive ?? false}
-        onClick={mockOnClick}
       />
     </MemoryRouter>,
   );
@@ -46,10 +53,22 @@ describe('ChannelItem', () => {
     expect(button).not.toHaveAttribute('aria-current');
   });
 
-  it('calls onClick when clicked', async () => {
+  it('navigates to channel route when text channel is clicked', async () => {
     renderItem({ type: 'text' });
     const user = userEvent.setup();
     await user.click(screen.getByRole('button'));
-    expect(mockOnClick).toHaveBeenCalledOnce();
+    expect(capturedPathname).toBe('/app/channels/ch-1');
+  });
+
+  it('does not navigate when voice channel is clicked', async () => {
+    renderItem({ type: 'voice' });
+    const user = userEvent.setup();
+    await user.click(screen.getByRole('button'));
+    expect(capturedPathname).toBe('/app');
+  });
+
+  it('renders voice channel with correct button', () => {
+    renderItem({ type: 'voice' });
+    expect(screen.getByRole('button', { name: /test-channel/i })).toBeInTheDocument();
   });
 });

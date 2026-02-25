@@ -65,7 +65,8 @@ export async function apiRequest<T>(path: string, options?: RequestInit): Promis
   const body = await response.json();
 
   if (!response.ok) {
-    throw body.error || { code: 'UNKNOWN', message: 'Request failed' };
+    const apiError = body.error || { code: 'UNKNOWN', message: 'Request failed' };
+    throw new Error(apiError.message);
   }
 
   return body.data;

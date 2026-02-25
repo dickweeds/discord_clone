@@ -1,6 +1,6 @@
 import React from 'react';
 import { ChevronDown } from 'lucide-react';
-import { useChannelStore, type ChannelItem as ChannelItemType } from '../../stores/useChannelStore';
+import { useChannelStore, type ChannelListItem } from '../../stores/useChannelStore';
 import { ScrollArea } from '../../components';
 import { ChannelItem } from './ChannelItem';
 import { UserPanel } from '../layout/UserPanel';
@@ -9,7 +9,6 @@ export function ChannelSidebar(): React.ReactNode {
   const channels = useChannelStore((s) => s.channels);
   const activeChannelId = useChannelStore((s) => s.activeChannelId);
   const isLoading = useChannelStore((s) => s.isLoading);
-  const setActiveChannel = useChannelStore((s) => s.setActiveChannel);
 
   const textChannels = channels.filter((c) => c.type === 'text');
   const voiceChannels = channels.filter((c) => c.type === 'voice');
@@ -29,8 +28,8 @@ export function ChannelSidebar(): React.ReactNode {
             <ChannelSkeletons />
           ) : (
             <>
-              <ChannelGroup label="TEXT CHANNELS" channels={textChannels} activeChannelId={activeChannelId} onChannelClick={setActiveChannel} />
-              <ChannelGroup label="VOICE CHANNELS" channels={voiceChannels} activeChannelId={activeChannelId} onChannelClick={setActiveChannel} />
+              <ChannelGroup label="TEXT CHANNELS" channels={textChannels} activeChannelId={activeChannelId} />
+              <ChannelGroup label="VOICE CHANNELS" channels={voiceChannels} activeChannelId={activeChannelId} />
             </>
           )}
         </div>
@@ -46,12 +45,10 @@ function ChannelGroup({
   label,
   channels,
   activeChannelId,
-  onChannelClick,
 }: {
   label: string;
-  channels: ChannelItemType[];
+  channels: ChannelListItem[];
   activeChannelId: string | null;
-  onChannelClick: (channelId: string) => void;
 }): React.ReactNode {
   if (channels.length === 0) return null;
 
@@ -65,7 +62,6 @@ function ChannelGroup({
           key={channel.id}
           channel={channel}
           isActive={channel.id === activeChannelId}
-          onClick={() => onChannelClick(channel.id)}
         />
       ))}
     </div>
