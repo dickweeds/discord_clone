@@ -33,6 +33,7 @@ export type {
   VoiceProducerClosedPayload,
   VoicePeerJoinedPayload,
   VoicePeerLeftPayload,
+  VoiceChannelPresencePayload,
   PresenceUpdatePayload,
   PresenceSyncPayload,
   ChannelCreatedPayload,

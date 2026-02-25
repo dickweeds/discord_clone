@@ -42,4 +42,24 @@
   --radius-default: 8px;
   --radius-lg: 12px;
   --radius-full: 9999px;
+
+  /* Animations */
+  --animate-slideUp: slideUp 0.2s ease-out;
+}
+
+@keyframes slideUp {
+  from {
+    transform: translateY(100%);
+    opacity: 0;
+  }
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .animate-slideUp {
+    animation: none;
+  }
 }

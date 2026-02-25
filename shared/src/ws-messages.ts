@@ -107,6 +107,10 @@ export interface VoicePeerLeftPayload {
   channelId: string;
 }
 
+export interface VoiceChannelPresencePayload {
+  participants: { userId: string; channelId: string }[];
+}
+
 // Presence
 export interface PresenceUpdatePayload {
   userId: string;
@@ -162,6 +166,7 @@ export const WS_TYPES = {
   VOICE_PRODUCER_CLOSED: 'voice:producer-closed',
   VOICE_PEER_JOINED: 'voice:peer-joined',
   VOICE_PEER_LEFT: 'voice:peer-left',
+  VOICE_PRESENCE_SYNC: 'voice:presence-sync',
   PRESENCE_UPDATE: 'presence:update',
   PRESENCE_SYNC: 'presence:sync',
   CHANNEL_UPDATE: 'channel:update',

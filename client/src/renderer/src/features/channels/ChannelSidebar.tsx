@@ -1,10 +1,13 @@
 import React from 'react';
 import { useChannelStore, type ChannelListItem } from '../../stores/useChannelStore';
+import { useVoiceStore } from '../../stores/useVoiceStore';
 import { ScrollArea } from '../../components';
 import { ChannelItem } from './ChannelItem';
 import { ChannelContextMenu } from './ChannelContextMenu';
 import { ServerHeader } from './ServerHeader';
 import { UserPanel } from '../layout/UserPanel';
+import { VoiceStatusBar } from '../voice/VoiceStatusBar';
+import { VoiceParticipant } from '../voice/VoiceParticipant';
 import useAuthStore from '../../stores/useAuthStore';
 
 export function ChannelSidebar(): React.ReactNode {
@@ -12,6 +15,7 @@ export function ChannelSidebar(): React.ReactNode {
   const activeChannelId = useChannelStore((s) => s.activeChannelId);
   const isLoading = useChannelStore((s) => s.isLoading);
   const userRole = useAuthStore((s) => s.user?.role);
+  const channelParticipants = useVoiceStore((s) => s.channelParticipants);
 
   const textChannels = channels.filter((c) => c.type === 'text');
   const voiceChannels = channels.filter((c) => c.type === 'voice');
@@ -26,13 +30,14 @@ export function ChannelSidebar(): React.ReactNode {
             <ChannelSkeletons />
           ) : (
             <>
-              <ChannelGroup label="TEXT CHANNELS" channels={textChannels} activeChannelId={activeChannelId} isOwner={userRole === 'owner'} />
-              <ChannelGroup label="VOICE CHANNELS" channels={voiceChannels} activeChannelId={activeChannelId} isOwner={userRole === 'owner'} />
+              <ChannelGroup label="TEXT CHANNELS" channels={textChannels} activeChannelId={activeChannelId} isOwner={userRole === 'owner'} channelParticipants={channelParticipants} />
+              <ChannelGroup label="VOICE CHANNELS" channels={voiceChannels} activeChannelId={activeChannelId} isOwner={userRole === 'owner'} channelParticipants={channelParticipants} />
             </>
           )}
         </div>
       </ScrollArea>
 
+      <VoiceStatusBar />
       <UserPanel />
     </>
   );
@@ -43,11 +48,13 @@ function ChannelGroup({
   channels,
   activeChannelId,
   isOwner,
+  channelParticipants,
 }: {
   label: string;
   channels: ChannelListItem[];
   activeChannelId: string | null;
   isOwner: boolean;
+  channelParticipants: Map<string, string[]>;
 }): React.ReactNode {
   if (channels.length === 0) return null;
 
@@ -57,12 +64,21 @@ function ChannelGroup({
         {label}
       </h2>
       {channels.map((channel) => {
+        const participants = channelParticipants.get(channel.id) ?? [];
         const item = (
-          <ChannelItem
-            key={channel.id}
-            channel={channel}
-            isActive={channel.id === activeChannelId}
-          />
+          <React.Fragment key={channel.id}>
+            <ChannelItem
+              channel={channel}
+              isActive={channel.id === activeChannelId}
+            />
+            {channel.type === 'voice' && participants.length > 0 && (
+              <div>
+                {participants.map((userId) => (
+                  <VoiceParticipant key={userId} userId={userId} />
+                ))}
+              </div>
+            )}
+          </React.Fragment>
         );
 
         if (isOwner) {

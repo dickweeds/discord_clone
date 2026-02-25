@@ -1,9 +1,10 @@
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect, useRef, useCallback } from 'react';
 import { Outlet } from 'react-router';
 import useAuthStore from '../../stores/useAuthStore';
 import { useChannelStore } from '../../stores/useChannelStore';
 import { useMemberStore } from '../../stores/useMemberStore';
 import { useUIStore } from '../../stores/useUIStore';
+import { useVoiceStore } from '../../stores/useVoiceStore';
 import { wsClient } from '../../services/wsClient';
 import { ChannelSidebar } from '../channels/ChannelSidebar';
 import { MemberList } from '../members/MemberList';
@@ -48,6 +49,29 @@ export function AppLayout(): React.ReactNode {
       }
     };
   }, []);
+
+  // Voice keyboard shortcuts
+  const handleVoiceShortcuts = useCallback((e: KeyboardEvent) => {
+    if (!(e.metaKey || e.ctrlKey) || !e.shiftKey) return;
+    if (!useVoiceStore.getState().currentChannelId) return;
+
+    const key = e.key.toLowerCase();
+    if (key === 'm') {
+      e.preventDefault();
+      useVoiceStore.getState().toggleMute();
+    } else if (key === 'd') {
+      e.preventDefault();
+      useVoiceStore.getState().toggleDeafen();
+    } else if (key === 'e') {
+      e.preventDefault();
+      useVoiceStore.getState().leaveChannel();
+    }
+  }, []);
+
+  useEffect(() => {
+    window.addEventListener('keydown', handleVoiceShortcuts);
+    return () => window.removeEventListener('keydown', handleVoiceShortcuts);
+  }, [handleVoiceShortcuts]);
 
   useEffect(() => {
     const handleResize = () => {
