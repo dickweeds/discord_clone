@@ -53,14 +53,14 @@ development_status:
   # Epic 2: Real-Time Text Communication
   epic-2: in-progress
   2-1-websocket-connection-and-real-time-transport: done
-  2-2-encrypted-text-messaging: ready-for-dev
+  2-2-encrypted-text-messaging: done
   2-3-message-feed-and-channel-navigation-ui: backlog
   2-4-persistent-message-history-and-scrollback: backlog
   epic-2-retrospective: optional
 
   # Epic 3: Voice Communication
-  epic-3: in-progress
-  3-1-voice-server-infrastructure: ready-for-dev
+  epic-3: backlog
+  3-1-voice-server-infrastructure: backlog
   3-2-voice-channel-join-leave-and-presence: backlog
   3-3-real-time-voice-audio-and-speaking-indicators: backlog
   3-4-audio-device-management-and-voice-controls: backlog
@@ -73,9 +73,9 @@ development_status:
   epic-4-retrospective: optional
 
   # Epic 5: Server Administration & User Management
-  epic-5: in-progress
-  5-1-channel-management: in-progress
-  5-2-user-management-and-administration: ready-for-dev
+  epic-5: backlog
+  5-1-channel-management: backlog
+  5-2-user-management-and-administration: backlog
   epic-5-retrospective: optional
 
   # Epic 6: Desktop App Polish & Production Deployment

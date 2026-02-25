@@ -8,7 +8,7 @@ export interface WsMessage<T = unknown> {
 export interface TextSendPayload {
   channelId: string;
   content: string;
-  nonce?: string;
+  nonce: string;
 }
 
 export interface TextReceivePayload {
@@ -16,7 +16,7 @@ export interface TextReceivePayload {
   channelId: string;
   authorId: string;
   content: string;
-  nonce?: string;
+  nonce: string;
   createdAt: string;
 }
 
