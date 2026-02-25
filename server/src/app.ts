@@ -5,6 +5,8 @@ import dbPlugin from './plugins/db.js';
 import authMiddleware from './plugins/auth/authMiddleware.js';
 import authRoutes from './plugins/auth/authRoutes.js';
 import inviteRoutes from './plugins/invites/inviteRoutes.js';
+import channelRoutes from './plugins/channels/channelRoutes.js';
+import userRoutes from './plugins/users/userRoutes.js';
 
 export async function buildApp(): Promise<FastifyInstance> {
   const app = Fastify({
@@ -25,6 +27,8 @@ export async function buildApp(): Promise<FastifyInstance> {
   await app.register(authMiddleware);
   await app.register(authRoutes);
   await app.register(inviteRoutes);
+  await app.register(channelRoutes);
+  await app.register(userRoutes);
 
   // Future domain plugins:
   // app.register(channelRoutes);

@@ -10,6 +10,14 @@ export interface User {
   updatedAt: string;
 }
 
+/** Safe user representation for member lists — excludes sensitive fields */
+export interface UserPublic {
+  id: string;
+  username: string;
+  role: 'owner' | 'user';
+  createdAt: string;
+}
+
 export interface Channel {
   id: string;
   serverId: string;
