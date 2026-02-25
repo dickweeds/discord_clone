@@ -1,6 +1,6 @@
 # Story 2.3: Message Feed & Channel Navigation UI
 
-Status: ready-for-dev
+Status: review
 
 <!-- Note: Validation is optional. Run validate-create-story for quality check before dev-story. -->
 
@@ -28,77 +28,77 @@ so that I can follow conversations naturally and know who said what.
 
 ## Tasks / Subtasks
 
-- [ ] Task 1: Create MessageGroup component for same-author message grouping (AC: 2, 3)
-  - [ ] 1.1 Create `client/src/renderer/src/features/messages/MessageGroup.tsx` — renders a group of consecutive messages from the same author
-  - [ ] 1.2 Group header: 32px avatar circle (colored initial using `getAvatarColor` from `utils/avatarColor.ts`), username (16px, font-medium/500 weight, `text-text-primary`), timestamp (12px, `text-text-muted`)
-  - [ ] 1.3 Message body lines: each message content rendered below header with 4px vertical spacing, 16px font size, `text-text-secondary`, `whitespace-pre-wrap break-words`
-  - [ ] 1.4 Group container: 16px gap from previous group (use `mt-4` on non-first groups), hover effect `hover:bg-bg-hover` with `transition-colors duration-150` on the entire group
-  - [ ] 1.5 Failed/sending status indicators: same as current — "Sending..." italic muted text, "Message not delivered" red text on failed messages
-  - [ ] 1.6 Avatar column: fixed 32px width with 12px right gap, message content flows in adjacent column
+- [x] Task 1: Create MessageGroup component for same-author message grouping (AC: 2, 3)
+  - [x] 1.1 Create `client/src/renderer/src/features/messages/MessageGroup.tsx` — renders a group of consecutive messages from the same author
+  - [x] 1.2 Group header: 32px avatar circle (colored initial using `getAvatarColor` from `utils/avatarColor.ts`), username (16px, font-medium/500 weight, `text-text-primary`), timestamp (12px, `text-text-muted`)
+  - [x] 1.3 Message body lines: each message content rendered below header with 4px vertical spacing, 16px font size, `text-text-secondary`, `whitespace-pre-wrap break-words`
+  - [x] 1.4 Group container: 16px gap from previous group (use `mt-4` on non-first groups), hover effect `hover:bg-bg-hover` with `transition-colors duration-150` on the entire group
+  - [x] 1.5 Failed/sending status indicators: same as current — "Sending..." italic muted text, "Message not delivered" red text on failed messages
+  - [x] 1.6 Avatar column: fixed 32px width with 12px right gap, message content flows in adjacent column
 
-- [ ] Task 2: Create message grouping logic utility (AC: 2, 3)
-  - [ ] 2.1 Create `client/src/renderer/src/utils/groupMessages.ts` — pure function `groupMessages(messages: DecryptedMessage[]): MessageGroupData[]`
-  - [ ] 2.2 `MessageGroupData` type: `{ authorId: string, messages: DecryptedMessage[], firstTimestamp: string }`
-  - [ ] 2.3 Grouping rules: same `authorId` AND each subsequent message is within 5 minutes of the previous message in the group
-  - [ ] 2.4 A new group starts when: (a) different authorId, OR (b) >5 minute gap from previous message
-  - [ ] 2.5 Input messages assumed chronologically sorted (already guaranteed by store)
+- [x] Task 2: Create message grouping logic utility (AC: 2, 3)
+  - [x] 2.1 Create `client/src/renderer/src/utils/groupMessages.ts` — pure function `groupMessages(messages: DecryptedMessage[]): MessageGroupData[]`
+  - [x] 2.2 `MessageGroupData` type: `{ authorId: string, messages: DecryptedMessage[], firstTimestamp: string }`
+  - [x] 2.3 Grouping rules: same `authorId` AND each subsequent message is within 5 minutes of the previous message in the group
+  - [x] 2.4 A new group starts when: (a) different authorId, OR (b) >5 minute gap from previous message
+  - [x] 2.5 Input messages assumed chronologically sorted (already guaranteed by store)
 
-- [ ] Task 3: Create username resolver hook (AC: 2)
-  - [ ] 3.1 Create `client/src/renderer/src/hooks/useUsername.ts` — hook `useUsername(authorId: string): { username: string, avatarColor: string }`
-  - [ ] 3.2 Look up user from `useMemberStore.members` array by matching `member.id === authorId`
-  - [ ] 3.3 Return `{ username: member.username, avatarColor: getAvatarColor(member.username) }` if found
-  - [ ] 3.4 Fallback if member not found: `{ username: authorId.slice(0, 8), avatarColor: getAvatarColor(authorId) }` (handles deleted users or race conditions)
+- [x] Task 3: Create username resolver hook (AC: 2)
+  - [x] 3.1 Create `client/src/renderer/src/hooks/useUsername.ts` — hook `useUsername(authorId: string): { username: string, avatarColor: string }`
+  - [x] 3.2 Look up user from `useMemberStore.members` array by matching `member.id === authorId`
+  - [x] 3.3 Return `{ username: member.username, avatarColor: getAvatarColor(member.username) }` if found
+  - [x] 3.4 Fallback if member not found: `{ username: authorId.slice(0, 8), avatarColor: getAvatarColor(authorId) }` (handles deleted users or race conditions)
 
-- [ ] Task 4: Refactor ContentArea to use MessageGroup and message width capping (AC: 1, 2, 3, 6, 7)
-  - [ ] 4.1 Replace the flat `MessageBubble` rendering with grouped rendering: call `groupMessages(channelMessages)` then map each group to `<MessageGroup />`
-  - [ ] 4.2 Remove the inline `MessageBubble` function from ContentArea.tsx — it's replaced by MessageGroup
-  - [ ] 4.3 Add message width capping: wrap the message list in a container with `max-w-[720px] mx-auto w-full` so messages are centered and capped at 720px on wide screens
-  - [ ] 4.4 The outer scroll container keeps full width (scrollbar stays at edge), only the inner message content area is width-capped
-  - [ ] 4.5 Update empty channel state text to match spec exactly: channel name bold + "This is the beginning of #channel-name. Send the first message!"
-  - [ ] 4.6 Keep ContentHeader as-is (already shows # prefix + channel name + member toggle — it works correctly)
-  - [ ] 4.7 Keep MessageInput integration as-is (already functional from story 2-2)
+- [x] Task 4: Refactor ContentArea to use MessageGroup and message width capping (AC: 1, 2, 3, 6, 7)
+  - [x] 4.1 Replace the flat `MessageBubble` rendering with grouped rendering: call `groupMessages(channelMessages)` then map each group to `<MessageGroup />`
+  - [x] 4.2 Remove the inline `MessageBubble` function from ContentArea.tsx — it's replaced by MessageGroup
+  - [x] 4.3 Add message width capping: wrap the message list in a container with `max-w-[720px] mx-auto w-full` so messages are centered and capped at 720px on wide screens
+  - [x] 4.4 The outer scroll container keeps full width (scrollbar stays at edge), only the inner message content area is width-capped
+  - [x] 4.5 Update empty channel state text to match spec exactly: channel name bold + "This is the beginning of #channel-name. Send the first message!"
+  - [x] 4.6 Keep ContentHeader as-is (already shows # prefix + channel name + member toggle — it works correctly)
+  - [x] 4.7 Keep MessageInput integration as-is (already functional from story 2-2)
 
-- [ ] Task 5: Ensure channel sidebar active state works correctly (AC: 5)
-  - [ ] 5.1 Verify ChannelItem already highlights active channel with `bg-bg-active` and `text-text-primary` — confirm this works when clicking between channels
-  - [ ] 5.2 Verify that clicking a different channel instantly fetches new messages via the `useEffect` in ContentArea that calls `fetchMessages(channelId)` on channelId change
-  - [ ] 5.3 Verify previous channel loses selected state and new channel gains it (this should already work via `activeChannelId` in `useChannelStore`)
-  - [ ] 5.4 If any of the above don't work, fix them. If they all work, mark this task as already complete with a note
+- [x] Task 5: Ensure channel sidebar active state works correctly (AC: 5)
+  - [x] 5.1 Verify ChannelItem already highlights active channel with `bg-bg-active` and `text-text-primary` — confirmed working
+  - [x] 5.2 Verify that clicking a different channel instantly fetches new messages via the `useEffect` in ContentArea that calls `fetchMessages(channelId)` on channelId change — confirmed working
+  - [x] 5.3 Verify previous channel loses selected state and new channel gains it (this should already work via `activeChannelId` in `useChannelStore`) — confirmed working
+  - [x] 5.4 All subtasks already work correctly. No changes needed.
 
-- [ ] Task 6: Write tests for message grouping utility (AC: 2, 3)
-  - [ ] 6.1 Create `client/src/renderer/src/utils/groupMessages.test.ts`
-  - [ ] 6.2 Test: single message produces single group
-  - [ ] 6.3 Test: consecutive messages from same author within 5 min are grouped together
-  - [ ] 6.4 Test: messages from different authors create separate groups
-  - [ ] 6.5 Test: messages from same author >5 min apart create separate groups
-  - [ ] 6.6 Test: mixed scenario with multiple authors and time gaps
-  - [ ] 6.7 Test: empty message array returns empty group array
+- [x] Task 6: Write tests for message grouping utility (AC: 2, 3)
+  - [x] 6.1 Create `client/src/renderer/src/utils/groupMessages.test.ts`
+  - [x] 6.2 Test: single message produces single group
+  - [x] 6.3 Test: consecutive messages from same author within 5 min are grouped together
+  - [x] 6.4 Test: messages from different authors create separate groups
+  - [x] 6.5 Test: messages from same author >5 min apart create separate groups
+  - [x] 6.6 Test: mixed scenario with multiple authors and time gaps
+  - [x] 6.7 Test: empty message array returns empty group array
 
-- [ ] Task 7: Write tests for MessageGroup component (AC: 2, 3)
-  - [ ] 7.1 Create `client/src/renderer/src/features/messages/MessageGroup.test.tsx`
-  - [ ] 7.2 Test: renders avatar with correct initial and color
-  - [ ] 7.3 Test: renders username (not authorId) from member store
-  - [ ] 7.4 Test: renders timestamp in readable format
-  - [ ] 7.5 Test: renders all messages in the group
-  - [ ] 7.6 Test: failed message shows red "Message not delivered" indicator
-  - [ ] 7.7 Test: sending message shows "Sending..." indicator
-  - [ ] 7.8 Test: fallback to truncated authorId when member not found
+- [x] Task 7: Write tests for MessageGroup component (AC: 2, 3)
+  - [x] 7.1 Create `client/src/renderer/src/features/messages/MessageGroup.test.tsx`
+  - [x] 7.2 Test: renders avatar with correct initial and color
+  - [x] 7.3 Test: renders username (not authorId) from member store
+  - [x] 7.4 Test: renders timestamp in readable format
+  - [x] 7.5 Test: renders all messages in the group
+  - [x] 7.6 Test: failed message shows red "Message not delivered" indicator
+  - [x] 7.7 Test: sending message shows "Sending..." indicator
+  - [x] 7.8 Test: fallback to truncated authorId when member not found
 
-- [ ] Task 8: Write tests for useUsername hook (AC: 2)
-  - [ ] 8.1 Create `client/src/renderer/src/hooks/useUsername.test.ts`
-  - [ ] 8.2 Test: returns username and avatarColor for known member
-  - [ ] 8.3 Test: returns truncated ID fallback for unknown member
-  - [ ] 8.4 Mock `useMemberStore` with test members
+- [x] Task 8: Write tests for useUsername hook (AC: 2)
+  - [x] 8.1 Create `client/src/renderer/src/hooks/useUsername.test.ts`
+  - [x] 8.2 Test: returns username and avatarColor for known member
+  - [x] 8.3 Test: returns truncated ID fallback for unknown member
+  - [x] 8.4 Mock `useMemberStore` with test members
 
-- [ ] Task 9: Update ContentArea tests (AC: 1, 6, 7)
-  - [ ] 9.1 Update `client/src/renderer/src/features/layout/ContentArea.test.tsx`
-  - [ ] 9.2 Test: messages render as grouped (MessageGroup components) not as flat list
-  - [ ] 9.3 Test: empty channel shows "This is the beginning of #channel-name. Send the first message!"
-  - [ ] 9.4 Test: message container has max-width constraint
+- [x] Task 9: Update ContentArea tests (AC: 1, 6, 7)
+  - [x] 9.1 Update `client/src/renderer/src/features/layout/ContentArea.test.tsx`
+  - [x] 9.2 Test: messages render as grouped (MessageGroup components) not as flat list
+  - [x] 9.3 Test: empty channel shows "This is the beginning of #channel-name. Send the first message!"
+  - [x] 9.4 Test: message container has max-width constraint
 
-- [ ] Task 10: Final verification (AC: 1-7)
-  - [ ] 10.1 Run `npm test -w client` — all existing + new tests pass
-  - [ ] 10.2 Run `npm run lint` — no lint errors across all workspaces
-  - [ ] 10.3 Run `npm test -w server` — confirm no regressions (no server changes expected)
+- [x] Task 10: Final verification (AC: 1-7)
+  - [x] 10.1 Run `npm test -w client` — 195 tests pass (29 test files)
+  - [x] 10.2 Run `npm run lint` — clean, no lint errors
+  - [x] 10.3 Run `npm test -w server` — 270 tests pass, no regressions
   - [ ] 10.4 Manual test: send messages from two users, verify grouping (same author grouped, different authors separated)
   - [ ] 10.5 Manual test: send messages >5 min apart from same user, verify new group starts
   - [ ] 10.6 Manual test: click between channels, verify instant swap with correct active state
@@ -334,10 +334,39 @@ client/src/renderer/src/features/layout/ContentArea.test.tsx  # Update tests for
 
 ### Agent Model Used
 
-{{agent_model_name_version}}
+Claude Opus 4.6
 
 ### Debug Log References
 
+- ContentArea test fix: `getByText('general')` matched multiple elements after empty state text change. Fixed by using `getAllByText` for header test and checking unique welcome text for empty state test.
+
 ### Completion Notes List
 
+- Created `groupMessages.ts` pure utility — groups consecutive messages by same author within 5-minute window. 7 unit tests.
+- Created `useUsername.ts` hook — resolves authorId to username/avatarColor via useMemberStore lookup with truncated-ID fallback. 3 unit tests.
+- Created `MessageGroup.tsx` component — renders grouped messages with avatar, username header, timestamps, and status indicators. 9 unit tests.
+- Refactored `ContentArea.tsx` — replaced flat MessageBubble rendering with grouped MessageGroup rendering, added `max-w-[720px] mx-auto` width capping, updated empty channel text to match AC 7 spec.
+- Updated `ContentArea.test.tsx` — added useMemberStore setup, updated empty state assertions, added tests for grouped rendering and max-width constraint. 2 new tests.
+- Verified channel sidebar active state (Task 5) — ChannelItem already handles bg-bg-active/bg-bg-hover correctly via activeChannelId store. No changes needed.
+- All automated tests pass: 195 client tests, 270 server tests, lint clean.
+- Manual tests (10.4-10.8) deferred to user for visual verification.
+
+### Change Log
+
+- 2026-02-25: Story 2-3 implementation complete. Created message grouping system with MessageGroup component, groupMessages utility, and useUsername hook. Refactored ContentArea for grouped rendering with width capping.
+
 ### File List
+
+New files:
+- client/src/renderer/src/features/messages/MessageGroup.tsx
+- client/src/renderer/src/features/messages/MessageGroup.test.tsx
+- client/src/renderer/src/utils/groupMessages.ts
+- client/src/renderer/src/utils/groupMessages.test.ts
+- client/src/renderer/src/hooks/useUsername.ts
+- client/src/renderer/src/hooks/useUsername.test.ts
+
+Modified files:
+- client/src/renderer/src/features/layout/ContentArea.tsx
+- client/src/renderer/src/features/layout/ContentArea.test.tsx
+- _bmad-output/implementation-artifacts/sprint-status.yaml
+- _bmad-output/implementation-artifacts/2-3-message-feed-and-channel-navigation-ui.md
