@@ -9,7 +9,7 @@ export function useDeepLink(): void {
   useEffect(() => {
     if (!window.api?.onDeepLink) return;
 
-    window.api.onDeepLink((url: string) => {
+    const unsubscribe = window.api.onDeepLink((url: string) => {
       if (!url.startsWith(PROTOCOL_PREFIX)) return;
 
       const token = url.slice(PROTOCOL_PREFIX.length);
@@ -17,5 +17,7 @@ export function useDeepLink(): void {
 
       navigate(`/register/${token}`);
     });
+
+    return unsubscribe;
   }, [navigate]);
 }

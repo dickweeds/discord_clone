@@ -9,8 +9,8 @@ COPY package.json package-lock.json ./
 COPY server/package.json server/
 COPY shared/package.json shared/
 
-# Install production deps only (native modules compiled here)
-RUN npm ci --workspace=server --workspace=shared --omit=dev
+# Install ALL deps (including devDeps like typescript) for building
+RUN npm ci --workspace=server --workspace=shared
 
 # Copy source and compile TypeScript
 COPY shared/src/ shared/src/
@@ -19,6 +19,9 @@ COPY server/src/ server/src/
 COPY server/tsconfig.json server/
 COPY tsconfig.base.json ./
 RUN npm run build -w shared && npm run build -w server
+
+# Prune devDependencies after build — production image only gets runtime deps
+RUN npm prune --omit=dev --workspace=server --workspace=shared
 
 # Stage 2: Production — minimal runtime image
 FROM node:20-alpine

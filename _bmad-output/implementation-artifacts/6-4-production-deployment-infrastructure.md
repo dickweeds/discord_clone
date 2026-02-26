@@ -1,6 +1,6 @@
 # Story 6.4: Production Deployment Infrastructure
 
-Status: review
+Status: done
 
 <!-- Note: Validation is optional. Run validate-create-story for quality check before dev-story. -->
 
@@ -341,6 +341,7 @@ None — clean implementation with no blocking issues.
 ### Change Log
 
 - 2026-02-25: Story 6-4 implemented — production deployment infrastructure (Docker, Nginx, TLS, landing page, protocol handler, setup script)
+- 2026-02-25: Code review fixes — 6 issues resolved: Dockerfile build fix (--omit=dev → prune after build), certbot standalone bootstrap, landing page meta tag for download URLs, idempotent nginx sed replacement, preload onDeepLink unsubscribe, useDeepLink cleanup on unmount
 
 ### File List
 

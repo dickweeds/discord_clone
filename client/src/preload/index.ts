@@ -10,8 +10,12 @@ const api = {
     delete: (key: string): Promise<void> =>
       ipcRenderer.invoke('secure-storage:delete', key),
   },
-  onDeepLink: (callback: (url: string) => void): void => {
-    ipcRenderer.on('deep-link', (_event, url: string) => callback(url));
+  onDeepLink: (callback: (url: string) => void): (() => void) => {
+    const handler = (_event: Electron.IpcRendererEvent, url: string): void => callback(url);
+    ipcRenderer.on('deep-link', handler);
+    return () => {
+      ipcRenderer.removeListener('deep-link', handler);
+    };
   },
 };
 

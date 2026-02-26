@@ -96,42 +96,46 @@ if [ -f "$COTURN_CONF" ]; then
   echo "  coturn config updated"
 fi
 
-# 9. Update nginx.conf with domain
+# 9. Update nginx.conf with domain (idempotent — safe to run multiple times)
 NGINX_CONF="docker/nginx/nginx.conf"
 if [ -f "$NGINX_CONF" ]; then
   sed -i.bak \
-    -e "s|DOMAIN|${DOMAIN}|g" \
+    -e "s|ssl_certificate /etc/letsencrypt/live/[^/]*/fullchain.pem;|ssl_certificate /etc/letsencrypt/live/${DOMAIN}/fullchain.pem;|" \
+    -e "s|ssl_certificate_key /etc/letsencrypt/live/[^/]*/privkey.pem;|ssl_certificate_key /etc/letsencrypt/live/${DOMAIN}/privkey.pem;|" \
     "$NGINX_CONF"
   rm -f "${NGINX_CONF}.bak"
   echo "  nginx config updated"
 fi
 
-# 10. Create data directories
+# 10. Update landing page with GitHub Releases URL
+LANDING_HTML="docker/nginx/landing/index.html"
+if [ -f "$LANDING_HTML" ] && [ -n "$GITHUB_RELEASES_URL" ]; then
+  sed -i.bak \
+    -e "s|content=\"[^\"]*\" <!-- releases-url -->|content=\"${GITHUB_RELEASES_URL}\" <!-- releases-url -->|" \
+    "$LANDING_HTML"
+  rm -f "${LANDING_HTML}.bak"
+  echo "  landing page updated"
+fi
+
+# 11. Create data directories
 mkdir -p data/sqlite data/certs data/certbot-webroot
 echo "  data directories created"
 
-# 11. Initial certificate generation
+# 12. Initial certificate generation (standalone mode — no nginx needed yet)
 echo ""
 echo "Generating initial TLS certificate..."
-echo "Starting nginx temporarily for ACME challenge..."
 
-# Start nginx with a self-signed cert first for certbot to validate
-docker compose up -d nginx || true
-
-docker compose run --rm certbot certonly \
-  --webroot \
-  -w /var/www/certbot \
+docker compose run --rm -p 80:80 certbot certonly \
+  --standalone \
   -d "$DOMAIN" \
   --agree-tos \
   --email "$CERTBOT_EMAIL" \
   --non-interactive || {
     echo ""
     echo "WARNING: Certificate generation failed."
-    echo "Make sure DNS for $DOMAIN points to this server."
-    echo "You can retry later: docker compose run --rm certbot certonly --webroot -w /var/www/certbot -d $DOMAIN --agree-tos --email $CERTBOT_EMAIL --non-interactive"
+    echo "Make sure DNS for $DOMAIN points to this server and port 80 is open."
+    echo "You can retry later: docker compose run --rm -p 80:80 certbot certonly --standalone -d $DOMAIN --agree-tos --email $CERTBOT_EMAIL --non-interactive"
   }
-
-docker compose down || true
 
 echo ""
 echo "========================================"

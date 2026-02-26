@@ -11,7 +11,7 @@ declare global {
     electron: ElectronAPI;
     api: {
       secureStorage: SecureStorageAPI;
-      onDeepLink(callback: (url: string) => void): void;
+      onDeepLink(callback: (url: string) => void): () => void;
     };
   }
 }

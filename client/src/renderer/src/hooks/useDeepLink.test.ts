@@ -18,9 +18,10 @@ describe('useDeepLink', () => {
 
     Object.defineProperty(window, 'api', {
       value: {
-        onDeepLink: (cb: (url: string) => void) => {
+        onDeepLink: vi.fn((cb: (url: string) => void) => {
           deepLinkCallback = cb;
-        },
+          return vi.fn(); // unsubscribe function
+        }),
         secureStorage: {
           set: vi.fn(),
           get: vi.fn(),
@@ -57,6 +58,14 @@ describe('useDeepLink', () => {
     renderHook(() => useDeepLink());
     deepLinkCallback!('discord-clone://invite/');
     expect(mockNavigate).not.toHaveBeenCalled();
+  });
+
+  it('cleans up the listener on unmount', () => {
+    const { unmount } = renderHook(() => useDeepLink());
+    const unsubscribe = (window.api.onDeepLink as ReturnType<typeof vi.fn>).mock.results[0].value;
+    expect(unsubscribe).not.toHaveBeenCalled();
+    unmount();
+    expect(unsubscribe).toHaveBeenCalledOnce();
   });
 
   it('does not crash when window.api is undefined', () => {
