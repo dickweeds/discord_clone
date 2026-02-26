@@ -1,0 +1,92 @@
+# Release Process:
+# 1. Update version in client/package.json (and optionally root + server)
+# 2. Commit: "Release vX.Y.Z"
+# 3. Tag: git tag vX.Y.Z
+# 4. Push: git push && git push --tags
+# 5. GitHub Actions builds all platforms and publishes to GitHub Releases
+# 6. electron-updater in running apps detects the new version
+
+name: Release
+
+on:
+  push:
+    tags: ['v*']
+
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build shared package
+        run: npm run build -w shared
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Test shared
+        run: npm test -w shared
+
+      - name: Test server
+        run: npm test -w server
+
+      - name: Test client
+        run: npm test -w client
+
+  build-electron:
+    needs: validate
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build shared package
+        run: npm run build -w shared
+
+      - name: Build and publish Electron app
+        run: cd client && npx electron-builder --publish always
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  build-server-image:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Check for Dockerfile
+        id: check
+        run: |
+          if [ -f server/Dockerfile ]; then
+            echo "exists=true" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Build server Docker image
+        if: steps.check.outputs.exists == 'true'
+        run: docker build -t discord-clone-server:${{ github.ref_name }} -f server/Dockerfile .

@@ -19,11 +19,21 @@ win:
     - target: nsis
       arch:
         - x64
+    - target: msi
+      arch:
+        - x64
 linux:
   target:
     - target: AppImage
       arch:
         - x64
+    - target: deb
+      arch:
+        - x64
+publish:
+  provider: github
+  owner: AidenWoodside
+  repo: discord_clone
 protocols:
   - name: "Discord Clone Invite"
     schemes:

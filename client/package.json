@@ -13,6 +13,7 @@
   },
   "dependencies": {
     "discord-clone-shared": "*",
+    "electron-updater": "^6.8.3",
     "libsodium-wrappers": "^0.8.2",
     "lucide-react": "^0.575.0",
     "mediasoup-client": "^3.18.7",

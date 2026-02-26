@@ -84,5 +84,5 @@ development_status:
   6-2-auto-update-system: backlog
   6-3-privacy-enforcement-and-zero-telemetry: done
   6-4-production-deployment-infrastructure: done
-  6-5-ci-cd-pipeline-and-cross-platform-distribution: ready-for-dev
+  6-5-ci-cd-pipeline-and-cross-platform-distribution: in-progress
   epic-6-retrospective: optional
