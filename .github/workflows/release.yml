@@ -77,6 +77,9 @@ jobs:
       - name: Build shared package
         run: npm run build -w shared
 
+      - name: Build client
+        run: npm run build -w client
+
       - name: Build and publish Electron app
         run: cd client && npx electron-builder --publish always
         env:
