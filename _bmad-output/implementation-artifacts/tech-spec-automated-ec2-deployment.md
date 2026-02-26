@@ -2,7 +2,7 @@
 title: 'Automated EC2 Deployment via GitHub Actions'
 slug: 'automated-ec2-deployment'
 created: '2026-02-25'
-status: 'ready-for-dev'
+status: 'implementation-complete'
 stepsCompleted: [1, 2, 3, 4]
 tech_stack: ['GitHub Actions', 'appleboy/ssh-action@v1', 'Docker Compose']
 files_to_modify: ['.github/workflows/release.yml']
@@ -72,7 +72,7 @@ Add a `deploy-server` job to the existing `release.yml` workflow that SSHs into 
 
 ### Tasks
 
-- [ ] Task 1: Add deploy-server job to release.yml
+- [x] Task 1: Add deploy-server job to release.yml
   - File: `.github/workflows/release.yml`
   - Action: Add a new `deploy-server` job with the following structure:
     - `needs: [build-electron, build-server-image]` — runs after both existing jobs complete
@@ -81,7 +81,7 @@ Add a `deploy-server` job to the existing `release.yml` workflow that SSHs into 
     - Uses `appleboy/ssh-action@v1` with secrets: `EC2_SSH_KEY`, `EC2_HOST`, `EC2_USER`
     - The SSH script executes the full deploy sequence (Tasks 2-4 below are logical subtasks within the single SSH script)
 
-- [ ] Task 2: Implement pre-deploy image backup (within SSH script)
+- [x] Task 2: Implement pre-deploy image backup (within SSH script)
   - File: `.github/workflows/release.yml` (inside `deploy-server` job's SSH script)
   - Action: Before any changes, tag the current app Docker image for rollback:
     ```bash
@@ -90,7 +90,7 @@ Add a `deploy-server` job to the existing `release.yml` workflow that SSHs into 
     ```
   - Notes: `|| true` handles first-ever deploy where no image exists yet
 
-- [ ] Task 3: Implement deploy sequence (within SSH script)
+- [x] Task 3: Implement deploy sequence (within SSH script)
   - File: `.github/workflows/release.yml` (inside `deploy-server` job's SSH script)
   - Action: Pull latest code, rebuild, and restart:
     ```bash
@@ -99,7 +99,7 @@ Add a `deploy-server` job to the existing `release.yml` workflow that SSHs into 
     docker compose up -d
     ```
 
-- [ ] Task 4: Implement health check loop with auto-rollback (within SSH script)
+- [x] Task 4: Implement health check loop with auto-rollback (within SSH script)
   - File: `.github/workflows/release.yml` (inside `deploy-server` job's SSH script)
   - Action: Poll health endpoint, rollback on failure:
     ```bash
@@ -122,7 +122,7 @@ Add a `deploy-server` job to the existing `release.yml` workflow that SSHs into 
     ```
   - Notes: 30 attempts x 2s = 60s timeout. Polls app directly on port 3000, bypassing nginx. Exit 1 on failure marks the GitHub Actions job as failed
 
-- [ ] Task 5: Document required GitHub secrets in release.yml
+- [x] Task 5: Document required GitHub secrets in release.yml
   - File: `.github/workflows/release.yml`
   - Action: Update the comment block at the top of the file to include deployment secrets setup:
     ```yaml
@@ -133,7 +133,7 @@ Add a `deploy-server` job to the existing `release.yml` workflow that SSHs into 
     #   EC2_DEPLOY_PATH — Absolute path to repo on EC2 (e.g., "/home/ubuntu/discord_clone")
     ```
 
-- [ ] Task 6: Validate workflow YAML syntax
+- [x] Task 6: Validate workflow YAML syntax
   - Action: Verify the updated `release.yml` is valid YAML and follows GitHub Actions schema. Ensure `needs`, `if`, `secrets` references, and `appleboy/ssh-action` parameters are correct
 
 ### Acceptance Criteria

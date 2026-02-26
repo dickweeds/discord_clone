@@ -5,6 +5,13 @@
 # 4. Push: git push && git push --tags
 # 5. GitHub Actions builds all platforms and publishes to GitHub Releases
 # 6. electron-updater in running apps detects the new version
+# 7. Server auto-deploys to EC2 (deploy-server job)
+#
+# Deployment Secrets (required for auto-deploy to EC2):
+#   EC2_SSH_KEY     — Private SSH key for EC2 access (dedicated deploy key recommended)
+#   EC2_HOST        — EC2 public IP or domain name
+#   EC2_USER        — SSH username (e.g., "ubuntu")
+#   EC2_DEPLOY_PATH — Absolute path to repo on EC2 (e.g., "/home/ubuntu/discord_clone")
 
 name: Release
 
@@ -90,3 +97,54 @@ jobs:
       - name: Build server Docker image
         if: steps.check.outputs.exists == 'true'
         run: docker build -t discord-clone-server:${{ github.ref_name }} -f server/Dockerfile .
+
+  deploy-server:
+    needs: [build-electron, build-server-image]
+    if: always() && needs.build-electron.result == 'success'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Deploy to EC2
+        uses: appleboy/ssh-action@v1
+        with:
+          host: ${{ secrets.EC2_HOST }}
+          username: ${{ secrets.EC2_USER }}
+          key: ${{ secrets.EC2_SSH_KEY }}
+          script: |
+            cd ${{ secrets.EC2_DEPLOY_PATH }}
+
+            # Pre-deploy: tag current app image for rollback
+            CURRENT_IMAGE_ID=$(docker compose images app -q 2>/dev/null || echo "")
+            if [ -n "$CURRENT_IMAGE_ID" ]; then
+              docker tag "$CURRENT_IMAGE_ID" app:rollback
+              echo "Saved current image for rollback: $CURRENT_IMAGE_ID"
+            fi
+
+            # Deploy: pull latest code, rebuild, restart
+            git pull origin main
+            docker compose build app
+            docker compose up -d
+
+            # Health check: 30 attempts, 2s apart = 60s timeout
+            echo "Waiting for health check..."
+            for i in $(seq 1 30); do
+              if curl -sf http://127.0.0.1:3000/api/health > /dev/null 2>&1; then
+                echo "Deploy successful — health check passed on attempt $i"
+                docker rmi app:rollback 2>/dev/null || true
+                exit 0
+              fi
+              echo "Attempt $i/30 — waiting..."
+              sleep 2
+            done
+
+            # Health check failed — rollback
+            echo "DEPLOY FAILED — health check timed out after 60s. Rolling back..."
+            if docker image inspect app:rollback > /dev/null 2>&1; then
+              COMPOSE_PROJECT=$(basename "$(pwd)")
+              docker tag app:rollback "${COMPOSE_PROJECT}-app:latest"
+              docker compose up -d --force-recreate app
+              docker rmi app:rollback 2>/dev/null || true
+              echo "Rollback complete"
+            else
+              echo "No rollback image available (first deploy). Manual intervention required."
+            fi
+            exit 1
