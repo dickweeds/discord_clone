@@ -14,6 +14,7 @@ const MEMBER_LIST_BREAKPOINT = 1000;
 
 export function AppLayout(): React.ReactNode {
   const isMemberListVisible = useUIStore((s) => s.isMemberListVisible);
+  const hasVideoParticipants = useVoiceStore((s) => s.videoParticipants.size > 0);
   const setMemberListVisible = useUIStore((s) => s.setMemberListVisible);
   const fetchChannels = useChannelStore((s) => s.fetchChannels);
   const fetchMembers = useMemberStore((s) => s.fetchMembers);
@@ -101,7 +102,7 @@ export function AppLayout(): React.ReactNode {
         <ChannelSidebar />
       </nav>
       <main aria-label="Channel content" className="flex-1 min-w-0 bg-bg-primary flex flex-col">
-        <VideoGrid />
+        {hasVideoParticipants && <VideoGrid />}
         <Outlet />
       </main>
       {isMemberListVisible && (

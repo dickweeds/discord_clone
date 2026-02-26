@@ -46,6 +46,17 @@ describe('VideoGrid', () => {
     expect(container.firstChild).toBeNull();
   });
 
+  it('renders nothing when currentChannelId is null', () => {
+    mockGetLocalVideoStream.mockReturnValue(makeMockStream('local'));
+    useVoiceStore.setState({
+      currentChannelId: null,
+      videoParticipants: new Set(['local-user']),
+    });
+
+    const { container } = render(<VideoGrid />);
+    expect(container.firstChild).toBeNull();
+  });
+
   it('renders one tile for single participant (grid-cols-1)', () => {
     mockGetLocalVideoStream.mockReturnValue(makeMockStream('local'));
     useVoiceStore.setState({ videoParticipants: new Set(['local-user']) });
@@ -133,6 +144,36 @@ describe('VideoGrid', () => {
     rerender(<VideoGrid />);
 
     expect(screen.queryByText('Alice')).not.toBeInTheDocument();
+  });
+
+  it.each([
+    { count: 1, expected: 'grid-cols-1' },
+    { count: 4, expected: 'grid-cols-2' },
+    { count: 5, expected: 'grid-cols-3' },
+    { count: 9, expected: 'grid-cols-3' },
+    { count: 10, expected: 'grid-cols-4' },
+    { count: 16, expected: 'grid-cols-4' },
+    { count: 17, expected: 'grid-cols-5' },
+  ])('renders $expected for $count participants', ({ count, expected }) => {
+    const participants = new Set<string>();
+    const memberList: Array<{ id: string; username: string; role: string }> = [];
+
+    for (let i = 0; i < count; i++) {
+      const id = i === 0 ? 'local-user' : `remote-${i}`;
+      participants.add(id);
+      memberList.push({ id, username: `User${i}`, role: 'member' });
+    }
+
+    useMemberStore.setState({ members: memberList });
+    mockGetLocalVideoStream.mockReturnValue(makeMockStream('local'));
+    mockGetVideoStreamByPeerId.mockImplementation((peerId: string) =>
+      participants.has(peerId) ? makeMockStream(peerId) : null,
+    );
+    useVoiceStore.setState({ videoParticipants: participants });
+
+    const { container } = render(<VideoGrid />);
+    const grid = container.firstChild as HTMLElement;
+    expect(grid.className).toContain(expected);
   });
 
   it('passes correct speaking state to each tile', () => {

@@ -14,7 +14,7 @@ let localStream: MediaStream | null = null;
 let videoProducer: types.Producer | null = null;
 let localVideoStream: MediaStream | null = null;
 const consumers = new Map<string, { consumer: types.Consumer; audio: HTMLAudioElement }>();
-const videoConsumers = new Map<string, { consumer: types.Consumer; element: HTMLVideoElement; peerId: string }>();
+const videoConsumers = new Map<string, { consumer: types.Consumer; element: HTMLVideoElement; peerId: string; stream: MediaStream | null }>();
 
 export function getDevice(): Device | null {
   return device;
@@ -217,19 +217,22 @@ export async function consumeVideo(
   video.playsInline = true;
   video.muted = true;
 
-  videoConsumers.set(consumer.id, { consumer, element: video, peerId });
+  videoConsumers.set(consumer.id, { consumer, element: video, peerId, stream: null });
 
   return consumer;
 }
 
-export function getVideoConsumers(): Map<string, { consumer: types.Consumer; element: HTMLVideoElement; peerId: string }> {
+export function getVideoConsumers(): Map<string, { consumer: types.Consumer; element: HTMLVideoElement; peerId: string; stream: MediaStream | null }> {
   return videoConsumers;
 }
 
 export function getVideoStreamByPeerId(peerId: string): MediaStream | null {
   for (const entry of videoConsumers.values()) {
     if (entry.peerId === peerId) {
-      return new MediaStream([entry.consumer.track]);
+      if (!entry.stream) {
+        entry.stream = new MediaStream([entry.consumer.track]);
+      }
+      return entry.stream;
     }
   }
   return null;
@@ -240,6 +243,7 @@ export function removeVideoConsumerByProducerId(producerId: string): void {
     if (entry.consumer.producerId === producerId) {
       entry.consumer.close();
       entry.element.srcObject = null;
+      entry.stream = null;
       videoConsumers.delete(consumerId);
       break;
     }
@@ -311,6 +315,7 @@ export function cleanup(): void {
   for (const [, entry] of videoConsumers) {
     entry.consumer.close();
     entry.element.srcObject = null;
+    entry.stream = null;
   }
   videoConsumers.clear();
 

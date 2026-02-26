@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 import { useVoiceStore } from '../../stores/useVoiceStore';
 import useAuthStore from '../../stores/useAuthStore';
 import { useMemberStore } from '../../stores/useMemberStore';
@@ -14,12 +14,18 @@ function getGridCols(count: number): string {
 }
 
 export function VideoGrid(): React.ReactNode {
+  const currentChannelId = useVoiceStore((s) => s.currentChannelId);
   const videoParticipants = useVoiceStore((s) => s.videoParticipants);
   const speakingUsers = useVoiceStore((s) => s.speakingUsers);
   const currentUserId = useAuthStore((s) => s.user?.id);
   const members = useMemberStore((s) => s.members);
 
-  if (videoParticipants.size === 0) return null;
+  const memberMap = useMemo(
+    () => new Map(members.map((m) => [m.id, m])),
+    [members],
+  );
+
+  if (!currentChannelId || videoParticipants.size === 0) return null;
 
   const tiles: { userId: string; stream: MediaStream; isLocal: boolean }[] = [];
 
@@ -41,10 +47,9 @@ export function VideoGrid(): React.ReactNode {
   if (tiles.length === 0) return null;
 
   return (
-    <div className={`grid gap-2 p-4 w-full place-items-center ${getGridCols(tiles.length)}`}>
+    <div className={`grid gap-2 p-4 w-full flex-shrink-0 place-items-center ${getGridCols(tiles.length)}`}>
       {tiles.map((tile) => {
-        const member = members.find((m) => m.id === tile.userId);
-        const username = member?.username ?? 'Unknown';
+        const username = memberMap.get(tile.userId)?.username ?? 'Unknown';
         const isSpeaking = speakingUsers.has(tile.userId);
 
         return (

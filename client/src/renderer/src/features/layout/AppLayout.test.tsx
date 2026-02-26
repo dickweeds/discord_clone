@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeAll, beforeEach } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { render, screen, within } from '@testing-library/react';
 import { MemoryRouter, Route, Routes } from 'react-router';
 import { useChannelStore } from '../../stores/useChannelStore';
 import { useMemberStore } from '../../stores/useMemberStore';
@@ -94,6 +94,10 @@ describe('AppLayout', () => {
     const mediaService = await import('../../services/mediaService');
     (mediaService.getLocalVideoStream as ReturnType<typeof vi.fn>).mockReturnValue({ id: 'local-stream' });
 
+    useMemberStore.setState({
+      members: [{ id: 'u1', username: 'testuser', role: 'user' }],
+    });
+
     useVoiceStore.setState({
       currentChannelId: 'voice-1',
       videoParticipants: new Set(['u1']),
@@ -102,7 +106,9 @@ describe('AppLayout', () => {
 
     renderLayout();
 
-    expect(screen.getByText('testuser')).toBeInTheDocument();
+    const main = screen.getByRole('main');
+    expect(main.querySelector('.grid')).not.toBeNull();
+    expect(within(main).getByText('testuser')).toBeInTheDocument();
   });
 
   it('does not render VideoGrid when videoParticipants is empty', () => {

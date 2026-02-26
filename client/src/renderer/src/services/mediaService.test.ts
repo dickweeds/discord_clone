@@ -632,6 +632,7 @@ describe('mediaService', () => {
 
       const entry = getVideoConsumers().values().next().value;
       expect(entry!.peerId).toBe('peer-user-1');
+      expect(entry!.stream).toBeNull();
     });
   });
 
@@ -680,6 +681,48 @@ describe('mediaService', () => {
 
       const stream = getVideoStreamByPeerId('target-user');
       expect(stream).toBeTruthy();
+    });
+
+    it('returns the same cached MediaStream on subsequent calls', async () => {
+      const mockVideoElement = {
+        srcObject: null as unknown,
+        autoplay: false,
+        playsInline: false,
+        muted: false,
+      };
+      vi.spyOn(document, 'createElement').mockReturnValue(mockVideoElement as unknown as HTMLVideoElement);
+
+      const mockMediaStreamInstance = { id: 'cached-stream' };
+      globalThis.MediaStream = function MockMediaStream() {
+        return mockMediaStreamInstance;
+      } as unknown as typeof MediaStream;
+
+      const transport = {
+        ...makeMockTransport('recv-1'),
+        consume: vi.fn().mockResolvedValue({
+          id: 'vc-1',
+          producerId: 'vp-1',
+          track: { kind: 'video' },
+          on: vi.fn(),
+          close: vi.fn(),
+          resume: vi.fn(),
+        }),
+      };
+
+      await consumeVideo(
+        transport as unknown as Parameters<typeof consumeVideo>[0],
+        {
+          consumerId: 'vc-1',
+          producerId: 'vp-1',
+          kind: 'video',
+          rtpParameters: {} as Parameters<typeof consumeVideo>[1]['rtpParameters'],
+        },
+        'cache-user',
+      );
+
+      const stream1 = getVideoStreamByPeerId('cache-user');
+      const stream2 = getVideoStreamByPeerId('cache-user');
+      expect(stream1).toBe(stream2);
     });
 
     it('returns null for non-matching peerId', async () => {

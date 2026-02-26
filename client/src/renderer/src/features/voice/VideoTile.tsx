@@ -8,7 +8,7 @@ interface VideoTileProps {
   isLocal: boolean;
 }
 
-export function VideoTile({ stream, isSpeaking, username, isLocal }: VideoTileProps): React.ReactNode {
+export function VideoTile({ userId, stream, isSpeaking, username, isLocal }: VideoTileProps): React.ReactNode {
   const videoRef = useCallback(
     (video: HTMLVideoElement | null) => {
       if (video && stream) {
@@ -20,6 +20,7 @@ export function VideoTile({ stream, isSpeaking, username, isLocal }: VideoTilePr
 
   return (
     <div
+      data-testid={`video-tile-${userId}`}
       className={[
         'relative overflow-hidden rounded-lg bg-zinc-900 aspect-video',
         isSpeaking && 'ring-2 ring-[#23a55a]',

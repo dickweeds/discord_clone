@@ -1,6 +1,6 @@
 # Story 4.2: Video Grid Display
 
-Status: review
+Status: done
 
 <!-- Note: Validation is optional. Run validate-create-story for quality check before dev-story. -->
 
@@ -353,10 +353,12 @@ Claude Opus 4.6
 - Task 6: 8 VideoGrid unit tests + 3 mediaService tests — empty state, grid columns, add/remove participants, speaking state, peerId lookup
 - Task 7: 3 integration tests in AppLayout — VideoGrid visibility based on videoParticipants state
 - Task 8: Final verification — 385 client tests passing (up from 276), lint clean, client build successful
+- Review fixes: Cached MediaStream in mediaService (lazy init, prevents leak/flicker), fixed AppLayout test (scoped assertion + member store setup), added currentChannelId guard to VideoGrid, added data-testid to VideoTile, conditional VideoGrid mount in AppLayout, useMemo memberMap, flex-shrink-0 grid container, 7 parameterized grid column tests + currentChannelId null test + stream caching test — 394 tests passing
 
 ### Change Log
 
 - 2026-02-25: Implemented story 4-2 — Video Grid Display. Created VideoTile + VideoGrid components, added peerId tracking to mediaService, integrated into AppLayout. 21 new tests added.
+- 2026-02-25: Code review — fixed 9 issues (1 HIGH, 5 MEDIUM, 3 LOW). Cached MediaStream in mediaService to prevent leak/flicker, fixed AppLayout test assertion scoping, added currentChannelId guard to VideoGrid, added data-testid to VideoTile, conditional VideoGrid render in AppLayout, useMemo member lookup, flex-shrink-0 on grid container, 9 new tests (parameterized grid columns + currentChannelId guard + stream caching). 394 client tests passing, lint clean, build successful.
 
 ### File List
 
