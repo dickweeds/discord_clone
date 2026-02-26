@@ -12,11 +12,14 @@ import adminRoutes from './plugins/admin/adminRoutes.js';
 import wsServer from './ws/wsServer.js';
 import { initMediasoup, setLogger, closeMediasoup } from './plugins/voice/mediasoupManager.js';
 import { registerVoiceHandlers } from './plugins/voice/voiceWsHandler.js';
+import { LOG_REDACT_CONFIG } from './config/logRedaction.js';
+import { CORS_ORIGIN } from './config/corsConfig.js';
 
 export async function buildApp(): Promise<FastifyInstance> {
   const app = Fastify({
     logger: {
-      level: process.env.LOG_LEVEL || 'info',
+      level: process.env.LOG_LEVEL || (process.env.NODE_ENV === 'production' ? 'warn' : 'info'),
+      redact: LOG_REDACT_CONFIG,
       transport:
         process.env.NODE_ENV === 'development'
           ? { target: 'pino-pretty', options: { colorize: true } }
@@ -25,7 +28,10 @@ export async function buildApp(): Promise<FastifyInstance> {
   });
 
   // --- Infrastructure Plugins (register BEFORE domain plugins) ---
-  await app.register(cors, { origin: true, credentials: true });
+  await app.register(cors, {
+    origin: CORS_ORIGIN,
+    credentials: true,
+  });
   await app.register(dbPlugin);
 
   // --- mediasoup Worker + Router ---

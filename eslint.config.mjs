@@ -25,6 +25,12 @@ export default [
     },
   },
   {
+    files: ['server/src/**/*.ts'],
+    rules: {
+      'no-console': 'error',
+    },
+  },
+  {
     files: ['**/*.tsx'],
     plugins: {
       'react-hooks': reactHooks,

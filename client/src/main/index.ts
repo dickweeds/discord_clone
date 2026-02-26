@@ -1,7 +1,37 @@
-import { app, shell, BrowserWindow } from 'electron';
+import { app, shell, BrowserWindow, session } from 'electron';
 import { join } from 'path';
 import { electronApp, optimizer, is } from '@electron-toolkit/utils';
 import { registerSafeStorageHandlers } from './safeStorage';
+
+function setupContentSecurityPolicy(): void {
+  const apiUrl = is.dev ? 'http://localhost:3000' : (process.env.API_URL || 'http://localhost:3000');
+  const wsUrl = is.dev ? 'ws://localhost:3000' : (process.env.WS_URL || 'ws://localhost:3000');
+  const wssUrl = wsUrl.replace(/^ws:/, 'wss:');
+
+  // In development, allow the electron-vite dev server for HMR
+  const devSources = is.dev ? ' http://localhost:* ws://localhost:*' : '';
+
+  const csp = [
+    "default-src 'self'",
+    "script-src 'self'",
+    "style-src 'self' 'unsafe-inline'",
+    `connect-src ${apiUrl} ${wsUrl} ${wssUrl}${devSources}`,
+    "media-src 'self' blob: mediastream:",
+    "img-src 'self' data: blob:",
+    "font-src 'self'",
+    "object-src 'none'",
+    "base-uri 'self'",
+  ].join('; ');
+
+  session.defaultSession.webRequest.onHeadersReceived((details, callback) => {
+    callback({
+      responseHeaders: {
+        ...details.responseHeaders,
+        'Content-Security-Policy': [csp],
+      },
+    });
+  });
+}
 
 function createWindow(): void {
   const mainWindow = new BrowserWindow({
@@ -39,6 +69,7 @@ function createWindow(): void {
 app.whenReady().then(() => {
   electronApp.setAppUserModelId('com.discord-clone');
   registerSafeStorageHandlers();
+  setupContentSecurityPolicy();
 
   app.on('browser-window-created', (_, window) => {
     optimizer.watchWindowShortcuts(window);
