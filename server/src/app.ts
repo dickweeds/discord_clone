@@ -16,7 +16,29 @@ import { registerVoiceHandlers } from './plugins/voice/voiceWsHandler.js';
 export async function buildApp(): Promise<FastifyInstance> {
   const app = Fastify({
     logger: {
-      level: process.env.LOG_LEVEL || 'info',
+      level: process.env.LOG_LEVEL || (process.env.NODE_ENV === 'production' ? 'warn' : 'info'),
+      redact: {
+        paths: [
+          'req.headers.authorization',
+          'req.body.password',
+          'req.body.encryptedContent',
+          'req.body.encrypted_content',
+          'req.body.nonce',
+          'encrypted_content',
+          'nonce',
+          'password',
+          'passwordHash',
+          'password_hash',
+          'refreshToken',
+          'refresh_token',
+          'accessToken',
+          'access_token',
+          'groupEncryptionKey',
+          'privateKey',
+          'secret',
+        ],
+        censor: '[REDACTED]',
+      },
       transport:
         process.env.NODE_ENV === 'development'
           ? { target: 'pino-pretty', options: { colorize: true } }
@@ -25,7 +47,10 @@ export async function buildApp(): Promise<FastifyInstance> {
   });
 
   // --- Infrastructure Plugins (register BEFORE domain plugins) ---
-  await app.register(cors, { origin: true, credentials: true });
+  await app.register(cors, {
+    origin: process.env.CLIENT_ORIGIN || 'http://localhost:5173',
+    credentials: true,
+  });
   await app.register(dbPlugin);
 
   // --- mediasoup Worker + Router ---
