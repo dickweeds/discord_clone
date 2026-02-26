@@ -1,5 +1,5 @@
 # Release Process (fully automated):
-# 1. Update version in client/package.json
+# 1. Update version in root package.json (single source of truth)
 # 2. Commit: "Release vX.Y.Z"
 # 3. Tag: git tag vX.Y.Z
 # 4. Push: git push && git push --tags
@@ -30,7 +30,7 @@ jobs:
       - name: Verify tag matches package.json version
         run: |
           TAG="${{ github.ref_name }}"
-          PKG_VERSION="v$(node -p "require('./client/package.json').version")"
+          PKG_VERSION="v$(node -p "require('./package.json').version")"
           if [ "$TAG" != "$PKG_VERSION" ]; then
             echo "ERROR: Git tag ($TAG) does not match client/package.json version ($PKG_VERSION)"
             echo "Update client/package.json version to match your tag, or re-tag."
@@ -65,7 +65,9 @@ jobs:
         run: npm run build -w client
 
       - name: Build and publish Electron app
-        run: cd client && npx electron-builder --publish always
+        run: |
+          VERSION=$(node -p "require('./package.json').version")
+          cd client && npx electron-builder --publish always -c.extraMetadata.version=$VERSION
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
