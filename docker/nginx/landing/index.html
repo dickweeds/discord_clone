@@ -169,9 +169,27 @@
       var releasesEl = document.querySelector('meta[name="releases-url"]');
       var releasesBase = releasesEl ? releasesEl.content : '';
       if (releasesBase) {
-        document.getElementById('dlWindows').href = releasesBase + '/download/discord-clone-setup.exe';
-        document.getElementById('dlMac').href = releasesBase + '/download/discord-clone.dmg';
-        document.getElementById('dlLinux').href = releasesBase + '/download/discord-clone.AppImage';
+        // Fetch latest release assets from GitHub API to get version-specific filenames
+        fetch('https://api.github.com/repos/AidenWoodside/discord_clone/releases/latest')
+          .then(function(r) { return r.json(); })
+          .then(function(release) {
+            var assets = release.assets || [];
+            assets.forEach(function(a) {
+              if (a.name.endsWith('.exe') && a.name.includes('Setup')) {
+                document.getElementById('dlWindows').href = a.browser_download_url;
+              } else if (a.name.endsWith('.dmg') && !a.name.includes('arm64')) {
+                document.getElementById('dlMac').href = a.browser_download_url;
+              } else if (a.name.endsWith('.AppImage')) {
+                document.getElementById('dlLinux').href = a.browser_download_url;
+              }
+            });
+          })
+          .catch(function() {
+            // Fallback to releases page
+            document.getElementById('dlWindows').href = releasesBase;
+            document.getElementById('dlMac').href = releasesBase;
+            document.getElementById('dlLinux').href = releasesBase;
+          });
       }
 
       if (!token) return;

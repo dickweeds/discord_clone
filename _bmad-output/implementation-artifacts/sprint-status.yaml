@@ -81,7 +81,7 @@ development_status:
   # Epic 6: Desktop App Polish & Production Deployment
   epic-6: in-progress
   6-1-connection-resilience-and-error-handling: ready-for-dev
-  6-2-auto-update-system: backlog
+  6-2-auto-update-system: ready-for-dev
   6-3-privacy-enforcement-and-zero-telemetry: done
   6-4-production-deployment-infrastructure: done
   6-5-ci-cd-pipeline-and-cross-platform-distribution: in-progress
