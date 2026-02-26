@@ -1,11 +1,9 @@
-# Release Process:
-# 1. Update version in client/package.json (and optionally root + server)
+# Release Process (fully automated):
+# 1. Update version in client/package.json
 # 2. Commit: "Release vX.Y.Z"
 # 3. Tag: git tag vX.Y.Z
 # 4. Push: git push && git push --tags
-# 5. GitHub Actions builds all platforms and publishes to GitHub Releases
-# 6. electron-updater in running apps detects the new version
-# 7. Server auto-deploys to EC2 (deploy-server job)
+# Everything else happens automatically.
 #
 # Deployment Secrets (required for auto-deploy to EC2):
 #   EC2_SSH_KEY     — Private SSH key for EC2 access (dedicated deploy key recommended)
@@ -54,37 +52,73 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-  deploy-server:
+  publish-release:
     needs: [build-electron]
     if: needs.build-electron.result == 'success'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Publish draft release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          TAG="${{ github.ref_name }}"
+          # Find the draft release for this tag and publish it
+          RELEASE_ID=$(gh api repos/AidenWoodside/discord_clone/releases --jq ".[] | select(.tag_name==\"$TAG\") | .id")
+          if [ -n "$RELEASE_ID" ]; then
+            gh api --method PATCH "repos/AidenWoodside/discord_clone/releases/$RELEASE_ID" -f draft=false
+            echo "Published release $TAG"
+          else
+            echo "No draft release found for $TAG — it may already be published"
+          fi
+
+  deploy-server:
+    needs: [publish-release]
+    if: needs.publish-release.result == 'success'
     runs-on: ubuntu-latest
     timeout-minutes: 30
     permissions:
       contents: read
     steps:
+      - uses: actions/checkout@v4
+
       - name: Download release assets for landing page
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           mkdir -p downloads
           TAG="${{ github.ref_name }}"
-          REPO="AidenWoodside/discord_clone"
-          # Get release assets JSON
-          ASSETS=$(curl -sf -H "Authorization: token $GH_TOKEN" \
-            "https://api.github.com/repos/$REPO/releases/tags/$TAG" | \
-            python3 -c "import sys,json; [print(a['name'],a['url']) for a in json.load(sys.stdin).get('assets',[])]")
-          # Download each installer
-          while read -r NAME URL; do
+
+          # Download assets using gh CLI (handles auth for private repos)
+          gh release download "$TAG" --repo AidenWoodside/discord_clone --dir downloads_raw || {
+            echo "ERROR: Could not download release assets for $TAG"
+            exit 1
+          }
+
+          # Copy installers with stable filenames (strip version numbers)
+          for f in downloads_raw/*; do
+            NAME=$(basename "$f")
             case "$NAME" in
-              *Setup*.exe|*.dmg|*.AppImage)
-                # Strip version from filename for stable download URLs
-                CLEAN_NAME=$(echo "$NAME" | sed -E 's/-[0-9]+\.[0-9]+\.[0-9]+//; s/_[0-9]+\.[0-9]+\.[0-9]+//')
-                echo "Downloading $NAME as $CLEAN_NAME"
-                curl -sfL -H "Authorization: token $GH_TOKEN" -H "Accept: application/octet-stream" \
-                  "$URL" -o "downloads/$CLEAN_NAME"
+              *Setup*.exe)
+                cp "$f" downloads/Discord-Clone-Setup.exe
+                echo "Saved $NAME as Discord-Clone-Setup.exe"
+                ;;
+              *.dmg)
+                if [[ "$NAME" != *arm64* ]]; then
+                  cp "$f" downloads/Discord-Clone.dmg
+                  echo "Saved $NAME as Discord-Clone.dmg"
+                fi
+                ;;
+              *.AppImage)
+                cp "$f" downloads/Discord-Clone.AppImage
+                echo "Saved $NAME as Discord-Clone.AppImage"
                 ;;
             esac
-          done <<< "$ASSETS"
+          done
+
           ls -la downloads/
 
       - name: Upload downloads to EC2
