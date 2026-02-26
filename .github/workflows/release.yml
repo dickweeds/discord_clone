@@ -22,7 +22,24 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  validate-version:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Verify tag matches package.json version
+        run: |
+          TAG="${{ github.ref_name }}"
+          PKG_VERSION="v$(node -p "require('./client/package.json').version")"
+          if [ "$TAG" != "$PKG_VERSION" ]; then
+            echo "ERROR: Git tag ($TAG) does not match client/package.json version ($PKG_VERSION)"
+            echo "Update client/package.json version to match your tag, or re-tag."
+            exit 1
+          fi
+          echo "Version validated: $TAG matches $PKG_VERSION"
+
   build-electron:
+    needs: [validate-version]
     strategy:
       fail-fast: false
       matrix:
@@ -72,7 +89,15 @@ jobs:
             gh api --method PATCH "repos/AidenWoodside/discord_clone/releases/$RELEASE_ID" -f draft=false
             echo "Published release $TAG"
           else
-            echo "No draft release found for $TAG — it may already be published"
+            # Check if a published release already exists
+            PUBLISHED=$(gh api repos/AidenWoodside/discord_clone/releases/tags/$TAG --jq '.id' 2>/dev/null || echo "")
+            if [ -n "$PUBLISHED" ]; then
+              echo "Release $TAG is already published"
+            else
+              echo "ERROR: No draft or published release found for $TAG"
+              echo "electron-builder may have created the release under a different tag."
+              exit 1
+            fi
           fi
 
   deploy-server:
