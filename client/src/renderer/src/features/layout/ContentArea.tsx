@@ -7,6 +7,7 @@ import useMessageStore from '../../stores/useMessageStore';
 import type { DecryptedMessage } from '../../stores/useMessageStore';
 import { fetchMessages, fetchOlderMessages } from '../../services/messageService';
 import { ConnectionBanner } from './ConnectionBanner';
+import { UpdateNotification } from '../../components/UpdateNotification';
 import MessageInput from '../messages/MessageInput';
 import { MessageGroup } from '../messages/MessageGroup';
 import { groupMessages } from '../../utils/groupMessages';
@@ -141,6 +142,7 @@ export function ContentArea(): React.ReactNode {
     return (
       <>
         <ContentHeader channelName={null} isMemberListVisible={isMemberListVisible} onToggleMemberList={toggleMemberList} />
+        <UpdateNotification />
         <ConnectionBanner />
         <div className="flex-1 flex items-center justify-center">
           <p className="text-text-muted text-lg">Select a channel</p>
@@ -152,6 +154,7 @@ export function ContentArea(): React.ReactNode {
   return (
     <>
       <ContentHeader channelName={channel.name} isMemberListVisible={isMemberListVisible} onToggleMemberList={toggleMemberList} />
+      <UpdateNotification />
       <ConnectionBanner />
       <div className="flex-1 flex flex-col min-h-0">
         {isLoadingMessages ? (

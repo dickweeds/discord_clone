@@ -1,6 +1,6 @@
 # Story 6.2: Auto-Update System
 
-Status: ready-for-dev
+Status: done
 
 <!-- Note: Validation is optional. Run validate-create-story for quality check before dev-story. -->
 
@@ -22,37 +22,37 @@ So that I always have the latest features and fixes without manual effort.
 
 ## Tasks / Subtasks
 
-- [ ] Task 1: Create updater module in main process (AC: 3)
-  - [ ] 1.1 Create `client/src/main/updater.ts`: import `autoUpdater` from `electron-updater`. Export an `initAutoUpdater(mainWindow: BrowserWindow)` function. Set `autoUpdater.autoDownload = false` (user must confirm before download). Set `autoUpdater.autoInstallOnAppQuit = true` (if downloaded, install on quit)
-  - [ ] 1.2 In `initAutoUpdater()`: register event listeners on `autoUpdater`:
+- [x] Task 1: Create updater module in main process (AC: 3)
+  - [x] 1.1 Create `client/src/main/updater.ts`: import `autoUpdater` from `electron-updater`. Export an `initAutoUpdater(mainWindow: BrowserWindow)` function. Set `autoUpdater.autoDownload = false` (user must confirm before download). Set `autoUpdater.autoInstallOnAppQuit = true` (if downloaded, install on quit)
+  - [x] 1.2 In `initAutoUpdater()`: register event listeners on `autoUpdater`:
     - `checking-for-update` → send IPC `'updater:checking'` to renderer
     - `update-available` (info: UpdateInfo) → send IPC `'updater:available'` with `{ version: info.version, releaseNotes: info.releaseNotes, releaseDate: info.releaseDate }` to renderer
     - `update-not-available` → send IPC `'updater:not-available'` to renderer
     - `download-progress` (progress: ProgressInfo) → send IPC `'updater:download-progress'` with `{ percent: progress.percent, bytesPerSecond: progress.bytesPerSecond, transferred: progress.transferred, total: progress.total }` to renderer
     - `update-downloaded` → send IPC `'updater:downloaded'` to renderer
     - `error` (err: Error) → send IPC `'updater:error'` with `{ message: err.message }` to renderer. Log the full error with `console.error` (main process — not Pino, this is Electron not Fastify)
-  - [ ] 1.3 In `initAutoUpdater()`: register IPC handlers via `ipcMain.handle()`:
+  - [x] 1.3 In `initAutoUpdater()`: register IPC handlers via `ipcMain.handle()`:
     - `'updater:check'` → calls `autoUpdater.checkForUpdates()`, returns void
     - `'updater:download'` → calls `autoUpdater.downloadUpdate()`, returns void
     - `'updater:install'` → calls `autoUpdater.quitAndInstall()`, returns void (triggers app restart)
-  - [ ] 1.4 Call `autoUpdater.checkForUpdates()` once after a 5-second delay on app startup (give the app time to initialize before hitting the network). Use `setTimeout`, not `setInterval` — subsequent checks only happen on app restart
-  - [ ] 1.5 Skip auto-update initialization entirely when `is.dev` is true (from `@electron-toolkit/utils`). electron-updater should never run in development mode — it would fail without signed builds
+  - [x] 1.4 Call `autoUpdater.checkForUpdates()` once after a 5-second delay on app startup (give the app time to initialize before hitting the network). Use `setTimeout`, not `setInterval` — subsequent checks only happen on app restart
+  - [x] 1.5 Skip auto-update initialization entirely when `is.dev` is true (from `@electron-toolkit/utils`). electron-updater should never run in development mode — it would fail without signed builds
 
-- [ ] Task 2: Expose updater IPC bridge in preload script (AC: 1, 2)
-  - [ ] 2.1 In `client/src/preload/index.ts`: add an `updater` property to the `api` object with three methods:
+- [x] Task 2: Expose updater IPC bridge in preload script (AC: 1, 2)
+  - [x] 2.1 In `client/src/preload/index.ts`: add an `updater` property to the `api` object with three methods:
     - `checkForUpdates: () => ipcRenderer.invoke('updater:check')`
     - `downloadUpdate: () => ipcRenderer.invoke('updater:download')`
     - `quitAndInstall: () => ipcRenderer.invoke('updater:install')`
-  - [ ] 2.2 In `client/src/preload/index.ts`: add four event listener setup methods to the `updater` property:
+  - [x] 2.2 In `client/src/preload/index.ts`: add four event listener setup methods to the `updater` property:
     - `onUpdateAvailable: (callback: (info: { version: string; releaseNotes?: string; releaseDate?: string }) => void) => { ... }` — listens on `'updater:available'`, returns cleanup function
     - `onUpdateDownloaded: (callback: () => void) => { ... }` — listens on `'updater:downloaded'`, returns cleanup function
     - `onDownloadProgress: (callback: (progress: { percent: number; bytesPerSecond: number; transferred: number; total: number }) => void) => { ... }` — listens on `'updater:download-progress'`, returns cleanup function
     - `onUpdateError: (callback: (error: { message: string }) => void) => { ... }` — listens on `'updater:error'`, returns cleanup function
-  - [ ] 2.3 Follow the exact pattern used by `onDeepLink`: create a handler function, call `ipcRenderer.on(channel, handler)`, return a cleanup function that calls `ipcRenderer.removeListener(channel, handler)`
-  - [ ] 2.4 In `client/src/preload/index.d.ts`: extend the `Window.api` interface to include the `updater` property with full type declarations for all methods and callbacks
+  - [x] 2.3 Follow the exact pattern used by `onDeepLink`: create a handler function, call `ipcRenderer.on(channel, handler)`, return a cleanup function that calls `ipcRenderer.removeListener(channel, handler)`
+  - [x] 2.4 In `client/src/preload/index.d.ts`: extend the `Window.api` interface to include the `updater` property with full type declarations for all methods and callbacks
 
-- [ ] Task 3: Create Zustand update store (AC: 1, 2, 3, 4)
-  - [ ] 3.1 Create `client/src/renderer/src/stores/useUpdateStore.ts`:
+- [x] Task 3: Create Zustand update store (AC: 1, 2, 3, 4)
+  - [x] 3.1 Create `client/src/renderer/src/stores/useUpdateStore.ts`:
     ```typescript
     interface UpdateState {
       status: 'idle' | 'checking' | 'available' | 'downloading' | 'downloaded' | 'error';
@@ -63,37 +63,37 @@ So that I always have the latest features and fixes without manual effort.
       dismissed: boolean; // user dismissed the notification for this session
     }
     ```
-  - [ ] 3.2 Add actions:
+  - [x] 3.2 Add actions:
     - `checkForUpdates()` → sets status to 'checking', calls `window.api.updater.checkForUpdates()`
     - `downloadUpdate()` → sets status to 'downloading', calls `window.api.updater.downloadUpdate()`
     - `quitAndInstall()` → calls `window.api.updater.quitAndInstall()`
     - `dismiss()` → sets `dismissed = true` (hide notification until next app restart)
     - `reset()` → resets all state to initial values
-  - [ ] 3.3 Add `initUpdateListeners()` function that registers all four IPC event listeners (`onUpdateAvailable`, `onUpdateDownloaded`, `onDownloadProgress`, `onUpdateError`) and returns a cleanup function that removes all listeners. Call this from the App component on mount
+  - [x] 3.3 Add `initUpdateListeners()` function that registers all four IPC event listeners (`onUpdateAvailable`, `onUpdateDownloaded`, `onDownloadProgress`, `onUpdateError`) and returns a cleanup function that removes all listeners. Call this from the App component on mount
 
-- [ ] Task 4: Create UpdateNotification UI component (AC: 1, 2)
-  - [ ] 4.1 Create `client/src/renderer/src/components/UpdateNotification.tsx`: a banner component that appears at the top of the content area (similar pattern to ConnectionBanner). Uses Zustand `useUpdateStore` for state
-  - [ ] 4.2 Render states:
+- [x] Task 4: Create UpdateNotification UI component (AC: 1, 2)
+  - [x] 4.1 Create `client/src/renderer/src/components/UpdateNotification.tsx`: a banner component that appears at the top of the content area (similar pattern to ConnectionBanner). Uses Zustand `useUpdateStore` for state
+  - [x] 4.2 Render states:
     - `status === 'available' && !dismissed`: Show banner — "A new version (v{version}) is available." with two buttons: "Download" (calls `downloadUpdate()`) and "Later" (calls `dismiss()`)
     - `status === 'downloading'`: Show banner — "Downloading update... {downloadProgress}%" with a simple progress indicator (no complex progress bar needed — percentage text is sufficient)
     - `status === 'downloaded'`: Show banner — "Update ready! It will be installed when you restart." with one button: "Restart Now" (calls `quitAndInstall()`)
     - `status === 'error'`: Show banner — "Update check failed." with one button: "Retry" (calls `checkForUpdates()`). Auto-dismiss after 10 seconds
     - `status === 'idle' || status === 'checking' || dismissed`: Render nothing
-  - [ ] 4.3 Styling: follow the project's earthy color palette.
+  - [x] 4.3 Styling: follow the project's earthy color palette.
     - Available/downloaded: `bg-secondary` background, `text-primary` text, standard border radius (8px)
     - Downloading: same styling, show percentage
     - Error: `text-error` (#f23f43) for the message
     - Buttons: use existing button patterns from the codebase. "Download" and "Restart Now" are primary actions, "Later" and "Retry" are secondary
-  - [ ] 4.4 Position: place above the main content area but below the channel header. Do NOT use a modal — the update notification should be non-blocking (user can continue using the app)
-  - [ ] 4.5 Animation: simple fade-in on appear. Respect `prefers-reduced-motion` — instant appear if reduced motion enabled
+  - [x] 4.4 Position: place above the main content area but below the channel header. Do NOT use a modal — the update notification should be non-blocking (user can continue using the app)
+  - [x] 4.5 Animation: simple fade-in on appear. Respect `prefers-reduced-motion` — instant appear if reduced motion enabled
 
-- [ ] Task 5: Integrate into app lifecycle (AC: 1, 2, 3, 4)
-  - [ ] 5.1 In `client/src/main/index.ts`: import `initAutoUpdater` from `./updater`. Call `initAutoUpdater(mainWindow)` inside `app.whenReady().then(...)` AFTER `createWindow()` returns and mainWindow is set. Wrap in `if (!is.dev)` guard
-  - [ ] 5.2 In `client/src/renderer/src/App.tsx` (or the appropriate root component): call `useUpdateStore.getState().initUpdateListeners()` in a `useEffect` on mount. Store the cleanup function and call it on unmount
-  - [ ] 5.3 In the AppLayout component (wherever ConnectionBanner is rendered): add `<UpdateNotification />` alongside the ConnectionBanner. UpdateNotification renders above ConnectionBanner (updates are less urgent than connection issues)
+- [x] Task 5: Integrate into app lifecycle (AC: 1, 2, 3, 4)
+  - [x] 5.1 In `client/src/main/index.ts`: import `initAutoUpdater` from `./updater`. Call `initAutoUpdater(mainWindow)` inside `app.whenReady().then(...)` AFTER `createWindow()` returns and mainWindow is set. Wrap in `if (!is.dev)` guard
+  - [x] 5.2 In `client/src/renderer/src/App.tsx` (or the appropriate root component): call `useUpdateStore.getState().initUpdateListeners()` in a `useEffect` on mount. Store the cleanup function and call it on unmount
+  - [x] 5.3 In the AppLayout component (wherever ConnectionBanner is rendered): add `<UpdateNotification />` alongside the ConnectionBanner. UpdateNotification renders above ConnectionBanner (updates are less urgent than connection issues)
 
-- [ ] Task 6: Create dev-app-update.yml for development testing (AC: 3)
-  - [ ] 6.1 Create `client/dev-app-update.yml`:
+- [x] Task 6: Create dev-app-update.yml for development testing (AC: 3)
+  - [x] 6.1 Create `client/dev-app-update.yml`:
     ```yaml
     provider: github
     owner: AidenWoodside
@@ -101,8 +101,8 @@ So that I always have the latest features and fixes without manual effort.
     ```
     This file is already in .gitignore (electron-builder.yml excludes it). It allows testing the update flow against real GitHub Releases during development by setting `autoUpdater.forceDevUpdateConfig = true` (only enable manually for testing, do NOT leave enabled)
 
-- [ ] Task 7: Write tests (AC: 1-4)
-  - [ ] 7.1 Create `client/src/renderer/src/stores/useUpdateStore.test.ts`:
+- [x] Task 7: Write tests (AC: 1-4)
+  - [x] 7.1 Create `client/src/renderer/src/stores/useUpdateStore.test.ts`:
     - Test: initial state has status 'idle', null version, null error, dismissed false
     - Test: checkForUpdates sets status to 'checking'
     - Test: onUpdateAvailable sets status to 'available' with version info
@@ -112,7 +112,7 @@ So that I always have the latest features and fixes without manual effort.
     - Test: onUpdateError sets status to 'error' with message
     - Test: dismiss sets dismissed to true
     - Test: reset clears all state
-  - [ ] 7.2 Create `client/src/renderer/src/components/UpdateNotification.test.tsx`:
+  - [x] 7.2 Create `client/src/renderer/src/components/UpdateNotification.test.tsx`:
     - Test: renders nothing when status is 'idle'
     - Test: renders nothing when status is 'checking'
     - Test: renders nothing when dismissed is true
@@ -125,12 +125,12 @@ So that I always have the latest features and fixes without manual effort.
     - Test: renders error banner with "Retry" button when status is 'error'
     - Test: clicking "Retry" calls checkForUpdates
 
-- [ ] Task 8: Final verification (AC: 1-4)
-  - [ ] 8.1 Run `npm test -w client` — all existing + new tests pass
-  - [ ] 8.2 Run `npm run lint` — no lint errors
-  - [ ] 8.3 Verify no existing tests broken by preload changes
-  - [ ] 8.4 Run `npm run build -w client` — TypeScript compilation succeeds (important: main process types must compile)
-  - [ ] 8.5 Verify the electron-builder config still works: `publish.provider` is `github`, which electron-updater reads at runtime to know where to check for updates
+- [x] Task 8: Final verification (AC: 1-4)
+  - [x] 8.1 Run `npm test -w client` — all existing + new tests pass
+  - [x] 8.2 Run `npm run lint` — no lint errors
+  - [x] 8.3 Verify no existing tests broken by preload changes
+  - [x] 8.4 Run `npm run build -w client` — TypeScript compilation succeeds (important: main process types must compile)
+  - [x] 8.5 Verify the electron-builder config still works: `publish.provider` is `github`, which electron-updater reads at runtime to know where to check for updates
 
 ## Dev Notes
 
@@ -294,12 +294,57 @@ export const useUpdateStore = create<UpdateState & UpdateActions>()((set) => ({
 
 ### Agent Model Used
 
-{{agent_model_name_version}}
+Claude Opus 4.6
 
 ### Debug Log References
 
+- App.test.tsx needed `window.api.updater` mock added — the new `initUpdateListeners()` useEffect in App.tsx calls `window.api.updater.*` on mount
+
 ### Completion Notes List
 
-Ultimate context engine analysis completed — comprehensive developer guide created
+- Task 1: Created `client/src/main/updater.ts` — electron-updater initialization with autoDownload=false, autoInstallOnAppQuit=true, all event listeners forwarding to renderer via IPC, 3 IPC handlers (check/download/install), 5-second delayed startup check, is.dev guard
+- Task 2: Extended preload bridge with `updater` property — 3 invoke methods + 4 event listeners following onDeepLink pattern with cleanup functions. Updated index.d.ts with UpdaterAPI, UpdateInfo, DownloadProgress interfaces
+- Task 3: Created Zustand `useUpdateStore` — 6-state status machine (idle/checking/available/downloading/downloaded/error), actions for check/download/install/dismiss/reset, `initUpdateListeners()` returns cleanup function
+- Task 4: Created `UpdateNotification.tsx` — non-blocking banner component with 5 render states, earthy color palette (bg-secondary, accent-primary), auto-dismiss error after 10s, fade-in animation respecting prefers-reduced-motion
+- Task 5: Integrated into app lifecycle — updater init in main/index.ts with is.dev guard, listener init in App.tsx useEffect, UpdateNotification placed above ConnectionBanner in ContentArea
+- Task 6: Created dev-app-update.yml pointing to GitHub repo
+- Task 7: 10 store tests + 12 component tests — all passing. Covers every state, button action, dismiss, auto-dismiss timer
+- Task 8: All 465 tests pass, zero lint errors, build succeeds
+
+### Change Log
+
+- 2026-02-26: Implemented auto-update system (Story 6-2). Added electron-updater integration in main process, IPC bridge in preload, Zustand store, and UpdateNotification banner component. 10 new store tests + 12 new component tests.
+- 2026-02-26: Code review — 7 issues found (1 HIGH, 4 MEDIUM, 2 LOW), all fixed:
+  1. [HIGH] Added destroyed-window guard (sendToRenderer helper) in updater.ts — prevents crash on macOS window close
+  2. [MEDIUM] Added @keyframes fadeIn to globals.css — animation was silently broken
+  3. [MEDIUM] Added onUpdateNotAvailable listener to preload, types, and store — prevents status stuck at 'checking' after retry
+  4. [MEDIUM] Changed error auto-dismiss from dismiss() to reset() — prevents permanently hiding future notifications
+  5. [MEDIUM] Made IPC handlers async with try/catch — prevents unhandled promise rejections in main process
+  6. [LOW] Removed unused releaseNotes from store interface and state
+  7. [LOW] Added connection state check to UpdateNotification — suppresses banner when disconnected/reconnecting
 
 ### File List
+
+New files:
+- client/src/main/updater.ts
+- client/src/renderer/src/stores/useUpdateStore.ts
+- client/src/renderer/src/stores/useUpdateStore.test.ts
+- client/src/renderer/src/components/UpdateNotification.tsx
+- client/src/renderer/src/components/UpdateNotification.test.tsx
+- client/dev-app-update.yml
+
+Modified files:
+- client/src/main/index.ts
+- client/src/main/updater.ts (review: destroyed-window guard, async IPC handlers)
+- client/src/preload/index.ts (review: added onUpdateNotAvailable)
+- client/src/preload/index.d.ts (review: added onUpdateNotAvailable type)
+- client/src/renderer/src/App.tsx
+- client/src/renderer/src/App.test.tsx (review: added onUpdateNotAvailable mock)
+- client/src/renderer/src/stores/useUpdateStore.ts (review: removed releaseNotes, added not-available listener)
+- client/src/renderer/src/stores/useUpdateStore.test.ts (review: updated for releaseNotes removal, added not-available test)
+- client/src/renderer/src/components/UpdateNotification.tsx (review: reset() for auto-dismiss, connection state check)
+- client/src/renderer/src/components/UpdateNotification.test.tsx (review: updated auto-dismiss test, added connection state tests)
+- client/src/renderer/src/globals.css (review: added @keyframes fadeIn)
+- client/src/renderer/src/features/layout/ContentArea.tsx
+- _bmad-output/implementation-artifacts/sprint-status.yaml
+- _bmad-output/implementation-artifacts/6-2-auto-update-system.md

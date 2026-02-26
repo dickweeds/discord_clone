@@ -2,6 +2,7 @@ import { app, shell, BrowserWindow, session } from 'electron';
 import { join } from 'path';
 import { electronApp, optimizer, is } from '@electron-toolkit/utils';
 import { registerSafeStorageHandlers } from './safeStorage';
+import { initAutoUpdater } from './updater';
 
 const PROTOCOL = 'discord-clone';
 
@@ -136,6 +137,10 @@ app.whenReady().then(() => {
   });
 
   createWindow();
+
+  if (!is.dev && mainWindow) {
+    initAutoUpdater(mainWindow);
+  }
 
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow();

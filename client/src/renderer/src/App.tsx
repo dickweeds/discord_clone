@@ -9,6 +9,7 @@ import { AppLayout } from './features/layout/AppLayout';
 import { ContentArea } from './features/layout/ContentArea';
 import { ChannelRedirect } from './features/layout/ChannelRedirect';
 import useAuthStore from './stores/useAuthStore';
+import { useUpdateStore } from './stores/useUpdateStore';
 import { KickedNotification } from './features/admin/KickedNotification';
 import { BannedNotification } from './features/admin/BannedNotification';
 import { useDeepLink } from './hooks/useDeepLink';
@@ -24,6 +25,11 @@ function App(): React.ReactNode {
   useEffect(() => {
     restoreSession();
   }, [restoreSession]);
+
+  useEffect(() => {
+    const cleanup = useUpdateStore.getState().initUpdateListeners();
+    return cleanup;
+  }, []);
 
   return (
     <RadixTooltip.Provider>
