@@ -2,6 +2,12 @@
   "name": "discord-clone-client",
   "version": "0.0.1",
   "private": true,
+  "description": "Discord Clone desktop client",
+  "author": {
+    "name": "Aiden Woodside",
+    "email": "woodside.a99@gmail.com"
+  },
+  "homepage": "https://github.com/AidenWoodside/discord_clone",
   "main": "./out/main/index.js",
   "scripts": {
     "dev": "electron-vite dev",
