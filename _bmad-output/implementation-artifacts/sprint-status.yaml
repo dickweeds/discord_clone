@@ -83,6 +83,6 @@ development_status:
   6-1-connection-resilience-and-error-handling: ready-for-dev
   6-2-auto-update-system: backlog
   6-3-privacy-enforcement-and-zero-telemetry: ready-for-dev
-  6-4-production-deployment-infrastructure: ready-for-dev
+  6-4-production-deployment-infrastructure: review
   6-5-ci-cd-pipeline-and-cross-platform-distribution: backlog
   epic-6-retrospective: optional

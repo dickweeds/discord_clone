@@ -10,6 +10,9 @@ const api = {
     delete: (key: string): Promise<void> =>
       ipcRenderer.invoke('secure-storage:delete', key),
   },
+  onDeepLink: (callback: (url: string) => void): void => {
+    ipcRenderer.on('deep-link', (_event, url: string) => callback(url));
+  },
 };
 
 if (process.contextIsolated) {

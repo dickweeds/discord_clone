@@ -1,0 +1,149 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+echo "========================================"
+echo "  Discord Clone — Production Setup"
+echo "========================================"
+echo ""
+
+# 1. Check prerequisites
+echo "Checking prerequisites..."
+
+if ! command -v docker &> /dev/null; then
+  echo "ERROR: Docker is not installed. Install Docker first: https://docs.docker.com/engine/install/"
+  exit 1
+fi
+
+if ! docker compose version &> /dev/null; then
+  echo "ERROR: Docker Compose is not available. Install Docker Compose: https://docs.docker.com/compose/install/"
+  exit 1
+fi
+
+echo "  Docker: $(docker --version)"
+echo "  Docker Compose: $(docker compose version --short)"
+echo ""
+
+# 2. Idempotency — check if .env already exists
+if [ -f .env ]; then
+  echo "WARNING: .env file already exists."
+  read -rp "Overwrite? (y/N): " OVERWRITE
+  if [[ ! "$OVERWRITE" =~ ^[Yy]$ ]]; then
+    echo "Keeping existing .env. Exiting."
+    exit 0
+  fi
+fi
+
+# 3. Prompt for configuration values
+read -rp "Domain name (e.g., chat.example.com): " DOMAIN
+read -rp "Email for Let's Encrypt certificates: " CERTBOT_EMAIL
+read -rp "Server name (displayed to users): " SERVER_NAME
+read -rp "GitHub Releases URL (for download links, or leave blank): " GITHUB_RELEASES_URL
+
+# 4. Auto-detect public IP
+echo ""
+echo "Detecting public IP..."
+PUBLIC_IP=$(curl -s http://checkip.amazonaws.com || echo "")
+if [ -z "$PUBLIC_IP" ]; then
+  echo "Could not auto-detect public IP."
+  read -rp "Enter the server's public IP: " PUBLIC_IP
+else
+  echo "  Detected: $PUBLIC_IP"
+  read -rp "Use this IP? (Y/n): " CONFIRM_IP
+  if [[ "$CONFIRM_IP" =~ ^[Nn]$ ]]; then
+    read -rp "Enter the server's public IP: " PUBLIC_IP
+  fi
+fi
+
+# Detect private IP (for EC2 NAT traversal)
+PRIVATE_IP=$(hostname -I 2>/dev/null | awk '{print $1}' || echo "$PUBLIC_IP")
+
+# 5. Generate secrets
+echo ""
+echo "Generating secrets..."
+JWT_ACCESS_SECRET=$(openssl rand -hex 32)
+JWT_REFRESH_SECRET=$(openssl rand -hex 32)
+TURN_SECRET=$(openssl rand -hex 32)
+
+# 6. Create .env from .env.example
+cp .env.example .env
+
+# 7. Populate .env with production values
+sed -i.bak \
+  -e "s|^NODE_ENV=.*|NODE_ENV=production|" \
+  -e "s|^JWT_ACCESS_SECRET=.*|JWT_ACCESS_SECRET=${JWT_ACCESS_SECRET}|" \
+  -e "s|^JWT_REFRESH_SECRET=.*|JWT_REFRESH_SECRET=${JWT_REFRESH_SECRET}|" \
+  -e "s|^SERVER_NAME=.*|SERVER_NAME=${SERVER_NAME}|" \
+  -e "s|^MEDIASOUP_ANNOUNCED_IP=.*|MEDIASOUP_ANNOUNCED_IP=${PUBLIC_IP}|" \
+  -e "s|^TURN_HOST=.*|TURN_HOST=${PUBLIC_IP}|" \
+  -e "s|^TURN_SECRET=.*|TURN_SECRET=${TURN_SECRET}|" \
+  -e "s|^DOMAIN=.*|DOMAIN=${DOMAIN}|" \
+  -e "s|^CERTBOT_EMAIL=.*|CERTBOT_EMAIL=${CERTBOT_EMAIL}|" \
+  -e "s|^GITHUB_RELEASES_URL=.*|GITHUB_RELEASES_URL=${GITHUB_RELEASES_URL}|" \
+  .env
+rm -f .env.bak
+
+echo "  .env configured"
+
+# 8. Update coturn production config
+COTURN_CONF="docker/coturn/turnserver.prod.conf"
+if [ -f "$COTURN_CONF" ]; then
+  sed -i.bak \
+    -e "s|^realm=.*|realm=${DOMAIN}|" \
+    -e "s|^static-auth-secret=.*|static-auth-secret=${TURN_SECRET}|" \
+    -e "s|^# external-ip=.*|external-ip=${PUBLIC_IP}/${PRIVATE_IP}|" \
+    "$COTURN_CONF"
+  rm -f "${COTURN_CONF}.bak"
+  echo "  coturn config updated"
+fi
+
+# 9. Update nginx.conf with domain
+NGINX_CONF="docker/nginx/nginx.conf"
+if [ -f "$NGINX_CONF" ]; then
+  sed -i.bak \
+    -e "s|DOMAIN|${DOMAIN}|g" \
+    "$NGINX_CONF"
+  rm -f "${NGINX_CONF}.bak"
+  echo "  nginx config updated"
+fi
+
+# 10. Create data directories
+mkdir -p data/sqlite data/certs data/certbot-webroot
+echo "  data directories created"
+
+# 11. Initial certificate generation
+echo ""
+echo "Generating initial TLS certificate..."
+echo "Starting nginx temporarily for ACME challenge..."
+
+# Start nginx with a self-signed cert first for certbot to validate
+docker compose up -d nginx || true
+
+docker compose run --rm certbot certonly \
+  --webroot \
+  -w /var/www/certbot \
+  -d "$DOMAIN" \
+  --agree-tos \
+  --email "$CERTBOT_EMAIL" \
+  --non-interactive || {
+    echo ""
+    echo "WARNING: Certificate generation failed."
+    echo "Make sure DNS for $DOMAIN points to this server."
+    echo "You can retry later: docker compose run --rm certbot certonly --webroot -w /var/www/certbot -d $DOMAIN --agree-tos --email $CERTBOT_EMAIL --non-interactive"
+  }
+
+docker compose down || true
+
+echo ""
+echo "========================================"
+echo "  Setup Complete!"
+echo "========================================"
+echo ""
+echo "Start the server:"
+echo "  docker compose up -d"
+echo ""
+echo "View logs:"
+echo "  docker compose logs -f"
+echo ""
+echo "Your server will be available at:"
+echo "  https://${DOMAIN}"
+echo ""

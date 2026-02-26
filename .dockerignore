@@ -1,0 +1,17 @@
+client/
+.git/
+node_modules/
+*.md
+.env
+.env.*
+!.env.example
+_bmad*/
+_bmad-output/
+.claude/
+.vscode/
+.idea/
+*.log
+data/
+dist/
+coverage/
+.DS_Store

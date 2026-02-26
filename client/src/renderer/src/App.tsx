@@ -11,6 +11,12 @@ import { ChannelRedirect } from './features/layout/ChannelRedirect';
 import useAuthStore from './stores/useAuthStore';
 import { KickedNotification } from './features/admin/KickedNotification';
 import { BannedNotification } from './features/admin/BannedNotification';
+import { useDeepLink } from './hooks/useDeepLink';
+
+function DeepLinkHandler(): null {
+  useDeepLink();
+  return null;
+}
 
 function App(): React.ReactNode {
   const restoreSession = useAuthStore((s) => s.restoreSession);
@@ -24,6 +30,7 @@ function App(): React.ReactNode {
       <KickedNotification />
       <BannedNotification />
       <HashRouter>
+        <DeepLinkHandler />
         <Routes>
           <Route path="/login" element={<LoginPage />} />
           <Route path="/setup" element={<SetupPage />} />

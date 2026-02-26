@@ -1,0 +1,210 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Discord Clone — Invite</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: #1a1412;
+      color: #e8e0d8;
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .card {
+      background: #2a2220;
+      border-radius: 12px;
+      padding: 48px 40px;
+      max-width: 480px;
+      width: 90%;
+      text-align: center;
+      box-shadow: 0 8px 32px rgba(0,0,0,0.4);
+    }
+    .server-name {
+      font-size: 28px;
+      font-weight: 700;
+      color: #f0e6dc;
+      margin-bottom: 8px;
+    }
+    .invite-msg {
+      font-size: 18px;
+      color: #b0a898;
+      margin-bottom: 32px;
+    }
+    .downloads {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+      margin-bottom: 24px;
+    }
+    .btn {
+      display: inline-block;
+      padding: 14px 24px;
+      border-radius: 8px;
+      font-size: 16px;
+      font-weight: 600;
+      text-decoration: none;
+      transition: background 0.2s;
+      cursor: pointer;
+      border: none;
+      color: #fff;
+    }
+    .btn-primary { background: #8b6f52; }
+    .btn-primary:hover { background: #a0805f; }
+    .btn-secondary { background: #3a3230; color: #e8e0d8; }
+    .btn-secondary:hover { background: #4a4240; }
+    .open-link {
+      color: #8b6f52;
+      text-decoration: underline;
+      cursor: pointer;
+      font-size: 14px;
+      background: none;
+      border: none;
+      margin-bottom: 24px;
+      display: none;
+    }
+    .manual-section {
+      margin-top: 24px;
+      padding-top: 24px;
+      border-top: 1px solid #3a3230;
+      display: none;
+    }
+    .manual-section p {
+      font-size: 14px;
+      color: #b0a898;
+      margin-bottom: 8px;
+    }
+    .copy-field {
+      display: flex;
+      gap: 8px;
+      align-items: center;
+    }
+    .copy-field input {
+      flex: 1;
+      padding: 10px 12px;
+      background: #1a1412;
+      border: 1px solid #3a3230;
+      border-radius: 6px;
+      color: #e8e0d8;
+      font-family: monospace;
+      font-size: 13px;
+    }
+    .copy-field button {
+      padding: 10px 16px;
+      background: #3a3230;
+      border: none;
+      border-radius: 6px;
+      color: #e8e0d8;
+      cursor: pointer;
+      font-size: 13px;
+    }
+    .copy-field button:hover { background: #4a4240; }
+    .mobile-msg {
+      display: none;
+      font-size: 16px;
+      color: #b0a898;
+      line-height: 1.6;
+    }
+    .hidden { display: none; }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <div class="server-name" id="serverName">Loading...</div>
+    <div class="invite-msg">You've been invited to join!</div>
+
+    <div id="desktopContent">
+      <div class="downloads" id="downloads">
+        <a class="btn btn-primary" id="dlWindows" href="#">Download for Windows</a>
+        <a class="btn btn-secondary" id="dlMac" href="#">Download for macOS</a>
+        <a class="btn btn-secondary" id="dlLinux" href="#">Download for Linux</a>
+      </div>
+      <button class="open-link" id="openLink">Already have the app? Click here to open</button>
+      <div class="manual-section" id="manualSection">
+        <p>If the link didn't open automatically, copy this invite link:</p>
+        <div class="copy-field">
+          <input type="text" id="protocolUrl" readonly>
+          <button id="copyBtn">Copy</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="mobile-msg" id="mobileMsg">
+      This app is only available for desktop (Windows, macOS, Linux).
+    </div>
+  </div>
+
+  <script>
+    (function() {
+      var path = window.location.pathname;
+      var match = path.match(/^\/invite\/(.+)$/);
+      var token = match ? match[1] : null;
+      var protocolUrl = token ? 'discord-clone://invite/' + token : null;
+
+      // Fetch server name from API
+      fetch('/api/server/status')
+        .then(function(r) { return r.json(); })
+        .then(function(d) {
+          var name = (d.data && d.data.serverName) || 'Discord Clone';
+          document.getElementById('serverName').textContent = name;
+        })
+        .catch(function() {
+          document.getElementById('serverName').textContent = 'Discord Clone';
+        });
+
+      // Detect mobile
+      var isMobile = /Android|iPhone|iPad|iPod|webOS|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+      if (isMobile) {
+        document.getElementById('desktopContent').style.display = 'none';
+        document.getElementById('mobileMsg').style.display = 'block';
+        return;
+      }
+
+      // Set download links to GitHub Releases
+      var releasesEl = document.querySelector('meta[name="releases-url"]');
+      var releasesBase = releasesEl ? releasesEl.content : '';
+      if (releasesBase) {
+        document.getElementById('dlWindows').href = releasesBase + '/download/discord-clone-setup.exe';
+        document.getElementById('dlMac').href = releasesBase + '/download/discord-clone.dmg';
+        document.getElementById('dlLinux').href = releasesBase + '/download/discord-clone.AppImage';
+      }
+
+      if (!token) return;
+
+      // Set protocol URL in manual section
+      document.getElementById('protocolUrl').value = protocolUrl;
+      document.getElementById('manualSection').style.display = 'block';
+
+      // Attempt to open in installed app
+      window.location.href = protocolUrl;
+
+      // After 2s timeout, show download buttons and open link
+      setTimeout(function() {
+        document.getElementById('downloads').style.display = 'flex';
+        document.getElementById('openLink').style.display = 'inline-block';
+      }, 2000);
+
+      // "Already have the app?" retry
+      document.getElementById('openLink').addEventListener('click', function() {
+        window.location.href = protocolUrl;
+      });
+
+      // Copy button
+      document.getElementById('copyBtn').addEventListener('click', function() {
+        var input = document.getElementById('protocolUrl');
+        input.select();
+        navigator.clipboard.writeText(input.value).then(function() {
+          document.getElementById('copyBtn').textContent = 'Copied!';
+          setTimeout(function() {
+            document.getElementById('copyBtn').textContent = 'Copy';
+          }, 2000);
+        });
+      });
+    })();
+  </script>
+</body>
+</html>

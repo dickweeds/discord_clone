@@ -24,3 +24,7 @@ linux:
     - target: AppImage
       arch:
         - x64
+protocols:
+  - name: "Discord Clone Invite"
+    schemes:
+      - discord-clone
