@@ -36,9 +36,8 @@ RUN addgroup -S appgroup && adduser -S appuser -G appgroup
 WORKDIR /app
 
 # Copy compiled output and production node_modules from builder
+# All deps are hoisted to root node_modules by npm workspaces
 COPY --from=builder /app/node_modules ./node_modules
-COPY --from=builder /app/server/node_modules ./server/node_modules
-COPY --from=builder /app/shared/node_modules ./shared/node_modules
 COPY --from=builder /app/server/dist ./server/dist
 COPY --from=builder /app/shared/dist ./shared/dist
 COPY --from=builder /app/server/package.json ./server/
