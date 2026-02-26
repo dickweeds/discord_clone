@@ -54,30 +54,11 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-  build-server-image:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Check for Dockerfile
-        id: check
-        run: |
-          if [ -f server/Dockerfile ]; then
-            echo "exists=true" >> $GITHUB_OUTPUT
-          fi
-
-      - name: Build server Docker image
-        if: steps.check.outputs.exists == 'true'
-        run: docker build -t discord-clone-server:${{ github.ref_name }} -f server/Dockerfile .
-
   deploy-server:
-    needs: [build-electron, build-server-image]
-    if: >-
-      always() &&
-      needs.build-electron.result == 'success' &&
-      needs.build-server-image.result != 'failure'
+    needs: [build-electron]
+    if: needs.build-electron.result == 'success'
     runs-on: ubuntu-latest
-    timeout-minutes: 5
+    timeout-minutes: 30
     permissions: {}
     steps:
       - name: Deploy to EC2
