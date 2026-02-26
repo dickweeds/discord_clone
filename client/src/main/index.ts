@@ -15,6 +15,7 @@ if (!gotTheLock) {
 app.setAsDefaultProtocolClient(PROTOCOL);
 
 let mainWindow: BrowserWindow | null = null;
+let pendingDeepLink: string | null = null;
 
 function sendDeepLink(url: string): void {
   if (mainWindow && !mainWindow.isDestroyed()) {
@@ -58,22 +59,28 @@ function createWindow(): void {
     mainWindow.loadFile(join(__dirname, '../renderer/index.html'));
   }
 
-  // Handle cold start deep link (Windows/Linux — URL passed via process.argv)
-  const coldStartUrl = findProtocolUrl(process.argv);
+  // Handle cold start deep link:
+  // - Windows/Linux: URL passed via process.argv
+  // - macOS: URL queued from open-url event (fires before window exists)
+  const coldStartUrl = findProtocolUrl(process.argv) || pendingDeepLink;
   if (coldStartUrl) {
     mainWindow.webContents.once('did-finish-load', () => {
       sendDeepLink(coldStartUrl);
     });
+    pendingDeepLink = null;
   }
 }
 
 // macOS: open-url fires when protocol URL is clicked (app already running or cold start)
+// On cold start, this fires BEFORE mainWindow exists — queue the URL for later
 app.on('open-url', (event, url) => {
   event.preventDefault();
-  if (mainWindow) {
+  if (mainWindow && !mainWindow.isDestroyed()) {
     sendDeepLink(url);
     if (mainWindow.isMinimized()) mainWindow.restore();
     mainWindow.focus();
+  } else {
+    pendingDeepLink = url;
   }
 });
 

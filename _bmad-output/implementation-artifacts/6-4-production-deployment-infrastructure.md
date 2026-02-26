@@ -342,6 +342,7 @@ None — clean implementation with no blocking issues.
 
 - 2026-02-25: Story 6-4 implemented — production deployment infrastructure (Docker, Nginx, TLS, landing page, protocol handler, setup script)
 - 2026-02-25: Code review fixes — 6 issues resolved: Dockerfile build fix (--omit=dev → prune after build), certbot standalone bootstrap, landing page meta tag for download URLs, idempotent nginx sed replacement, preload onDeepLink unsubscribe, useDeepLink cleanup on unmount
+- 2026-02-25: Code review fixes (round 2) — 7 issues resolved: [H1] macOS cold-start deep link queue (pendingDeepLink variable), [H2] app service network_mode:host for mediasoup UDP ports + nginx upstream to 127.0.0.1, [M1] certbot restart:unless-stopped, [M2] idempotent coturn external-ip sed pattern, [M3] empty meta placeholder for releases URL, [M4] HSTS header in nginx config, [L1] chmod 600 .env in setup.sh
 
 ### File List
 
@@ -357,11 +358,15 @@ New files:
 - client/src/renderer/src/hooks/useDeepLink.test.ts
 
 Modified files:
-- client/src/main/index.ts
+- client/src/main/index.ts (+ review fix: macOS cold-start deep link queue)
 - client/src/preload/index.ts
 - client/src/preload/index.d.ts
 - client/electron-builder.yml
 - client/src/renderer/src/App.tsx
 - .env.example
+- docker-compose.yml (+ review fix: app network_mode:host, certbot restart policy)
+- docker/nginx/nginx.conf (+ review fix: upstream 127.0.0.1, HSTS header)
+- docker/nginx/landing/index.html (+ review fix: empty meta placeholder)
+- scripts/setup.sh (+ review fix: idempotent external-ip sed, chmod 600 .env)
 - _bmad-output/implementation-artifacts/sprint-status.yaml
 - _bmad-output/implementation-artifacts/6-4-production-deployment-infrastructure.md

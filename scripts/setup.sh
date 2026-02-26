@@ -66,6 +66,7 @@ TURN_SECRET=$(openssl rand -hex 32)
 
 # 6. Create .env from .env.example
 cp .env.example .env
+chmod 600 .env
 
 # 7. Populate .env with production values
 sed -i.bak \
@@ -90,7 +91,7 @@ if [ -f "$COTURN_CONF" ]; then
   sed -i.bak \
     -e "s|^realm=.*|realm=${DOMAIN}|" \
     -e "s|^static-auth-secret=.*|static-auth-secret=${TURN_SECRET}|" \
-    -e "s|^# external-ip=.*|external-ip=${PUBLIC_IP}/${PRIVATE_IP}|" \
+    -e "s|^#\{0,1\} *external-ip=.*|external-ip=${PUBLIC_IP}/${PRIVATE_IP}|" \
     "$COTURN_CONF"
   rm -f "${COTURN_CONF}.bak"
   echo "  coturn config updated"
