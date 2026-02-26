@@ -165,32 +165,10 @@
         return;
       }
 
-      // Set download links to GitHub Releases
-      var releasesEl = document.querySelector('meta[name="releases-url"]');
-      var releasesBase = releasesEl ? releasesEl.content : '';
-      if (releasesBase) {
-        // Fetch latest release assets from GitHub API to get version-specific filenames
-        fetch('https://api.github.com/repos/AidenWoodside/discord_clone/releases/latest')
-          .then(function(r) { return r.json(); })
-          .then(function(release) {
-            var assets = release.assets || [];
-            assets.forEach(function(a) {
-              if (a.name.endsWith('.exe') && a.name.includes('Setup')) {
-                document.getElementById('dlWindows').href = a.browser_download_url;
-              } else if (a.name.endsWith('.dmg') && !a.name.includes('arm64')) {
-                document.getElementById('dlMac').href = a.browser_download_url;
-              } else if (a.name.endsWith('.AppImage')) {
-                document.getElementById('dlLinux').href = a.browser_download_url;
-              }
-            });
-          })
-          .catch(function() {
-            // Fallback to releases page
-            document.getElementById('dlWindows').href = releasesBase;
-            document.getElementById('dlMac').href = releasesBase;
-            document.getElementById('dlLinux').href = releasesBase;
-          });
-      }
+      // Download links — update filenames when releasing a new version
+      document.getElementById('dlWindows').href = '/downloads/Discord-Clone-Setup.exe';
+      document.getElementById('dlMac').href = '/downloads/Discord-Clone.dmg';
+      document.getElementById('dlLinux').href = '/downloads/Discord-Clone.AppImage';
 
       if (!token) return;
 

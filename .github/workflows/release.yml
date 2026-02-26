@@ -59,8 +59,44 @@ jobs:
     if: needs.build-electron.result == 'success'
     runs-on: ubuntu-latest
     timeout-minutes: 30
-    permissions: {}
+    permissions:
+      contents: read
     steps:
+      - name: Download release assets for landing page
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          mkdir -p downloads
+          TAG="${{ github.ref_name }}"
+          REPO="AidenWoodside/discord_clone"
+          # Get release assets JSON
+          ASSETS=$(curl -sf -H "Authorization: token $GH_TOKEN" \
+            "https://api.github.com/repos/$REPO/releases/tags/$TAG" | \
+            python3 -c "import sys,json; [print(a['name'],a['url']) for a in json.load(sys.stdin).get('assets',[])]")
+          # Download each installer
+          while read -r NAME URL; do
+            case "$NAME" in
+              *Setup*.exe|*.dmg|*.AppImage)
+                # Strip version from filename for stable download URLs
+                CLEAN_NAME=$(echo "$NAME" | sed -E 's/-[0-9]+\.[0-9]+\.[0-9]+//; s/_[0-9]+\.[0-9]+\.[0-9]+//')
+                echo "Downloading $NAME as $CLEAN_NAME"
+                curl -sfL -H "Authorization: token $GH_TOKEN" -H "Accept: application/octet-stream" \
+                  "$URL" -o "downloads/$CLEAN_NAME"
+                ;;
+            esac
+          done <<< "$ASSETS"
+          ls -la downloads/
+
+      - name: Upload downloads to EC2
+        uses: appleboy/scp-action@v0.1.7
+        with:
+          host: ${{ secrets.EC2_HOST }}
+          username: ${{ secrets.EC2_USER }}
+          key: ${{ secrets.EC2_SSH_KEY }}
+          source: "downloads/*"
+          target: "${{ secrets.EC2_DEPLOY_PATH }}/data/"
+          strip_components: 0
+
       - name: Deploy to EC2
         uses: appleboy/ssh-action@v1
         with:
@@ -85,7 +121,7 @@ jobs:
               git checkout "$PREV_COMMIT"
               exit 1
             }
-            sudo docker compose up -d app
+            sudo docker compose up -d app nginx
 
             # Health check: 30 attempts, 2s apart = 60s timeout
             echo "Waiting for health check..."
