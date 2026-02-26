@@ -161,12 +161,16 @@ class WsClient {
       );
 
       if (payload.kind === 'video') {
-        const consumer = await mediaService.consumeVideo(recvTransport, {
-          consumerId: consumeResponse.consumerId,
-          producerId: consumeResponse.producerId,
-          kind: 'video',
-          rtpParameters: consumeResponse.rtpParameters as Parameters<typeof mediaService.consumeVideo>[1]['rtpParameters'],
-        });
+        const consumer = await mediaService.consumeVideo(
+          recvTransport,
+          {
+            consumerId: consumeResponse.consumerId,
+            producerId: consumeResponse.producerId,
+            kind: 'video',
+            rtpParameters: consumeResponse.rtpParameters as Parameters<typeof mediaService.consumeVideo>[1]['rtpParameters'],
+          },
+          payload.peerId,
+        );
 
         import('../stores/useVoiceStore').then(({ useVoiceStore }) => {
           useVoiceStore.getState().addVideoParticipant(payload.peerId);
