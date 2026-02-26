@@ -1,6 +1,7 @@
 import { describe, it, expect, beforeEach, vi, afterEach } from 'vitest';
 import { render, screen, fireEvent, act } from '@testing-library/react';
 import { useUpdateStore } from '../stores/useUpdateStore';
+import { usePresenceStore } from '../stores/usePresenceStore';
 import { UpdateNotification } from './UpdateNotification';
 
 const mockUpdater = {
@@ -8,6 +9,7 @@ const mockUpdater = {
   downloadUpdate: vi.fn(),
   quitAndInstall: vi.fn(),
   onUpdateAvailable: vi.fn(() => vi.fn()),
+  onUpdateNotAvailable: vi.fn(() => vi.fn()),
   onUpdateDownloaded: vi.fn(() => vi.fn()),
   onDownloadProgress: vi.fn(() => vi.fn()),
   onUpdateError: vi.fn(() => vi.fn()),
@@ -17,11 +19,11 @@ beforeEach(() => {
   useUpdateStore.setState({
     status: 'idle',
     version: null,
-    releaseNotes: null,
     downloadProgress: 0,
     error: null,
     dismissed: false,
   });
+  usePresenceStore.setState({ connectionState: 'connected' });
   vi.clearAllMocks();
   vi.useFakeTimers();
   // @ts-expect-error mock window.api.updater
@@ -108,7 +110,7 @@ describe('UpdateNotification', () => {
     expect(mockUpdater.checkForUpdates).toHaveBeenCalled();
   });
 
-  it('should auto-dismiss error after 10 seconds', () => {
+  it('should auto-dismiss error after 10 seconds by resetting to idle', () => {
     useUpdateStore.setState({ status: 'error', error: 'fail' });
     render(<UpdateNotification />);
     expect(screen.getByText('Update check failed.')).toBeInTheDocument();
@@ -117,6 +119,23 @@ describe('UpdateNotification', () => {
       vi.advanceTimersByTime(10000);
     });
 
-    expect(useUpdateStore.getState().dismissed).toBe(true);
+    const state = useUpdateStore.getState();
+    expect(state.status).toBe('idle');
+    expect(state.dismissed).toBe(false);
+    expect(state.error).toBeNull();
+  });
+
+  it('should render nothing when disconnected', () => {
+    useUpdateStore.setState({ status: 'available', version: '2.0.0' });
+    usePresenceStore.setState({ connectionState: 'disconnected' });
+    const { container } = render(<UpdateNotification />);
+    expect(container.innerHTML).toBe('');
+  });
+
+  it('should render nothing when reconnecting', () => {
+    useUpdateStore.setState({ status: 'available', version: '2.0.0' });
+    usePresenceStore.setState({ connectionState: 'reconnecting' });
+    const { container } = render(<UpdateNotification />);
+    expect(container.innerHTML).toBe('');
   });
 });

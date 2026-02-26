@@ -1,5 +1,6 @@
 import React, { useEffect } from 'react';
 import { useUpdateStore } from '../stores/useUpdateStore';
+import { usePresenceStore } from '../stores/usePresenceStore';
 
 export function UpdateNotification(): React.ReactNode {
   const status = useUpdateStore((s) => s.status);
@@ -10,17 +11,22 @@ export function UpdateNotification(): React.ReactNode {
   const dismissAction = useUpdateStore((s) => s.dismiss);
   const quitAndInstall = useUpdateStore((s) => s.quitAndInstall);
   const checkForUpdates = useUpdateStore((s) => s.checkForUpdates);
+  const connectionState = usePresenceStore((s) => s.connectionState);
 
-  // Auto-dismiss error after 10 seconds
+  // Auto-dismiss error after 10 seconds by resetting to idle
   useEffect(() => {
     if (status !== 'error') return;
     const timer = setTimeout(() => {
-      useUpdateStore.getState().dismiss();
+      useUpdateStore.getState().reset();
     }, 10000);
     return () => clearTimeout(timer);
   }, [status]);
 
   if (status === 'idle' || status === 'checking' || dismissed) {
+    return null;
+  }
+
+  if (connectionState === 'disconnected' || connectionState === 'reconnecting') {
     return null;
   }
 

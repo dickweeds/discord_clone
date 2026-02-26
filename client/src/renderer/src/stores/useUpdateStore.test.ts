@@ -6,6 +6,7 @@ const mockUpdater = {
   downloadUpdate: vi.fn(),
   quitAndInstall: vi.fn(),
   onUpdateAvailable: vi.fn(() => vi.fn()),
+  onUpdateNotAvailable: vi.fn(() => vi.fn()),
   onUpdateDownloaded: vi.fn(() => vi.fn()),
   onDownloadProgress: vi.fn(() => vi.fn()),
   onUpdateError: vi.fn(() => vi.fn()),
@@ -15,7 +16,6 @@ beforeEach(() => {
   useUpdateStore.setState({
     status: 'idle',
     version: null,
-    releaseNotes: null,
     downloadProgress: 0,
     error: null,
     dismissed: false,
@@ -30,7 +30,6 @@ describe('useUpdateStore', () => {
     const state = useUpdateStore.getState();
     expect(state.status).toBe('idle');
     expect(state.version).toBeNull();
-    expect(state.releaseNotes).toBeNull();
     expect(state.downloadProgress).toBe(0);
     expect(state.error).toBeNull();
     expect(state.dismissed).toBe(false);
@@ -50,7 +49,17 @@ describe('useUpdateStore', () => {
 
     expect(useUpdateStore.getState().status).toBe('available');
     expect(useUpdateStore.getState().version).toBe('2.0.0');
-    expect(useUpdateStore.getState().releaseNotes).toBe('New stuff');
+    cleanup();
+  });
+
+  it('should set status to idle via onUpdateNotAvailable', () => {
+    useUpdateStore.setState({ status: 'checking' });
+    const cleanup = useUpdateStore.getState().initUpdateListeners();
+    const onNotAvailableCallback = mockUpdater.onUpdateNotAvailable.mock.calls[0][0];
+
+    onNotAvailableCallback();
+
+    expect(useUpdateStore.getState().status).toBe('idle');
     cleanup();
   });
 
@@ -101,7 +110,6 @@ describe('useUpdateStore', () => {
     useUpdateStore.setState({
       status: 'error',
       version: '1.0.0',
-      releaseNotes: 'notes',
       downloadProgress: 50,
       error: 'fail',
       dismissed: true,
@@ -112,7 +120,6 @@ describe('useUpdateStore', () => {
     const state = useUpdateStore.getState();
     expect(state.status).toBe('idle');
     expect(state.version).toBeNull();
-    expect(state.releaseNotes).toBeNull();
     expect(state.downloadProgress).toBe(0);
     expect(state.error).toBeNull();
     expect(state.dismissed).toBe(false);
@@ -120,10 +127,12 @@ describe('useUpdateStore', () => {
 
   it('should return cleanup function from initUpdateListeners', () => {
     const cleanupAvailable = vi.fn();
+    const cleanupNotAvailable = vi.fn();
     const cleanupDownloaded = vi.fn();
     const cleanupProgress = vi.fn();
     const cleanupError = vi.fn();
     mockUpdater.onUpdateAvailable.mockReturnValue(cleanupAvailable);
+    mockUpdater.onUpdateNotAvailable.mockReturnValue(cleanupNotAvailable);
     mockUpdater.onUpdateDownloaded.mockReturnValue(cleanupDownloaded);
     mockUpdater.onDownloadProgress.mockReturnValue(cleanupProgress);
     mockUpdater.onUpdateError.mockReturnValue(cleanupError);
@@ -132,6 +141,7 @@ describe('useUpdateStore', () => {
     cleanup();
 
     expect(cleanupAvailable).toHaveBeenCalled();
+    expect(cleanupNotAvailable).toHaveBeenCalled();
     expect(cleanupDownloaded).toHaveBeenCalled();
     expect(cleanupProgress).toHaveBeenCalled();
     expect(cleanupError).toHaveBeenCalled();

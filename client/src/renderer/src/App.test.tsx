@@ -16,6 +16,7 @@ beforeAll(() => {
       downloadUpdate: vi.fn(),
       quitAndInstall: vi.fn(),
       onUpdateAvailable: vi.fn(() => vi.fn()),
+      onUpdateNotAvailable: vi.fn(() => vi.fn()),
       onUpdateDownloaded: vi.fn(() => vi.fn()),
       onDownloadProgress: vi.fn(() => vi.fn()),
       onUpdateError: vi.fn(() => vi.fn()),

@@ -1,6 +1,6 @@
 # Story 6.2: Auto-Update System
 
-Status: review
+Status: done
 
 <!-- Note: Validation is optional. Run validate-create-story for quality check before dev-story. -->
 
@@ -314,6 +314,14 @@ Claude Opus 4.6
 ### Change Log
 
 - 2026-02-26: Implemented auto-update system (Story 6-2). Added electron-updater integration in main process, IPC bridge in preload, Zustand store, and UpdateNotification banner component. 10 new store tests + 12 new component tests.
+- 2026-02-26: Code review — 7 issues found (1 HIGH, 4 MEDIUM, 2 LOW), all fixed:
+  1. [HIGH] Added destroyed-window guard (sendToRenderer helper) in updater.ts — prevents crash on macOS window close
+  2. [MEDIUM] Added @keyframes fadeIn to globals.css — animation was silently broken
+  3. [MEDIUM] Added onUpdateNotAvailable listener to preload, types, and store — prevents status stuck at 'checking' after retry
+  4. [MEDIUM] Changed error auto-dismiss from dismiss() to reset() — prevents permanently hiding future notifications
+  5. [MEDIUM] Made IPC handlers async with try/catch — prevents unhandled promise rejections in main process
+  6. [LOW] Removed unused releaseNotes from store interface and state
+  7. [LOW] Added connection state check to UpdateNotification — suppresses banner when disconnected/reconnecting
 
 ### File List
 
@@ -327,10 +335,16 @@ New files:
 
 Modified files:
 - client/src/main/index.ts
-- client/src/preload/index.ts
-- client/src/preload/index.d.ts
+- client/src/main/updater.ts (review: destroyed-window guard, async IPC handlers)
+- client/src/preload/index.ts (review: added onUpdateNotAvailable)
+- client/src/preload/index.d.ts (review: added onUpdateNotAvailable type)
 - client/src/renderer/src/App.tsx
-- client/src/renderer/src/App.test.tsx
+- client/src/renderer/src/App.test.tsx (review: added onUpdateNotAvailable mock)
+- client/src/renderer/src/stores/useUpdateStore.ts (review: removed releaseNotes, added not-available listener)
+- client/src/renderer/src/stores/useUpdateStore.test.ts (review: updated for releaseNotes removal, added not-available test)
+- client/src/renderer/src/components/UpdateNotification.tsx (review: reset() for auto-dismiss, connection state check)
+- client/src/renderer/src/components/UpdateNotification.test.tsx (review: updated auto-dismiss test, added connection state tests)
+- client/src/renderer/src/globals.css (review: added @keyframes fadeIn)
 - client/src/renderer/src/features/layout/ContentArea.tsx
 - _bmad-output/implementation-artifacts/sprint-status.yaml
 - _bmad-output/implementation-artifacts/6-2-auto-update-system.md

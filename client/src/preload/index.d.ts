@@ -24,6 +24,7 @@ interface UpdaterAPI {
   downloadUpdate(): Promise<void>;
   quitAndInstall(): Promise<void>;
   onUpdateAvailable(callback: (info: UpdateInfo) => void): () => void;
+  onUpdateNotAvailable(callback: () => void): () => void;
   onUpdateDownloaded(callback: () => void): () => void;
   onDownloadProgress(callback: (progress: DownloadProgress) => void): () => void;
   onUpdateError(callback: (error: { message: string }) => void): () => void;

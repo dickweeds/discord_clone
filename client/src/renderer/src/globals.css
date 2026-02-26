@@ -64,6 +64,11 @@
   50% { box-shadow: 0 0 0 3px rgba(35, 165, 90, 0.1); }
 }
 
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
 @media (prefers-reduced-motion: reduce) {
   .animate-slideUp {
     animation: none;

@@ -3,7 +3,6 @@ import { create } from 'zustand';
 interface UpdateState {
   status: 'idle' | 'checking' | 'available' | 'downloading' | 'downloaded' | 'error';
   version: string | null;
-  releaseNotes: string | null;
   downloadProgress: number;
   error: string | null;
   dismissed: boolean;
@@ -21,7 +20,6 @@ interface UpdateActions {
 const initialState: UpdateState = {
   status: 'idle',
   version: null,
-  releaseNotes: null,
   downloadProgress: 0,
   error: null,
   dismissed: false,
@@ -57,8 +55,11 @@ export const useUpdateStore = create<UpdateState & UpdateActions>()((set) => ({
       set({
         status: 'available',
         version: info.version,
-        releaseNotes: info.releaseNotes ?? null,
       });
+    });
+
+    const cleanupNotAvailable = window.api.updater.onUpdateNotAvailable(() => {
+      set({ status: 'idle' });
     });
 
     const cleanupDownloaded = window.api.updater.onUpdateDownloaded(() => {
@@ -75,6 +76,7 @@ export const useUpdateStore = create<UpdateState & UpdateActions>()((set) => ({
 
     return () => {
       cleanupAvailable();
+      cleanupNotAvailable();
       cleanupDownloaded();
       cleanupProgress();
       cleanupError();
