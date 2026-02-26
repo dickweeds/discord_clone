@@ -28,8 +28,8 @@ function findProtocolUrl(args: string[]): string | undefined {
 }
 
 function setupContentSecurityPolicy(): void {
-  const apiUrl = is.dev ? 'http://localhost:3000' : (process.env.API_URL || 'http://localhost:3000');
-  const wsUrl = is.dev ? 'ws://localhost:3000' : (process.env.WS_URL || 'ws://localhost:3000');
+  const apiUrl = is.dev ? 'http://localhost:3000' : (process.env.API_URL || 'https://discweeds.com');
+  const wsUrl = is.dev ? 'ws://localhost:3000' : (process.env.WS_URL || 'wss://discweeds.com');
   const wssUrl = wsUrl.replace(/^ws:/, 'wss:');
 
   // In development, allow the electron-vite dev server for HMR
