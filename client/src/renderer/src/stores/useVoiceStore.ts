@@ -3,9 +3,6 @@ import * as voiceService from '../services/voiceService';
 import * as mediaService from '../services/mediaService';
 import * as vadService from '../services/vadService';
 import { playConnectSound, playDisconnectSound, playMuteSound, playUnmuteSound } from '../utils/soundPlayer';
-import { wsClient } from '../services/wsClient';
-import { WS_TYPES } from 'discord-clone-shared';
-import type { VoiceStatePayload } from 'discord-clone-shared';
 
 type ConnectionState = 'disconnected' | 'connecting' | 'connected';
 
@@ -245,20 +242,13 @@ export const useVoiceStore = create<VoiceState>((set, get) => ({
     // Broadcast voice:state to peers
     const afterState = get();
     if (afterState.currentChannelId && afterState.currentUserId) {
-      try {
-        wsClient.send({
-          type: WS_TYPES.VOICE_STATE,
-          payload: {
-            userId: afterState.currentUserId,
-            channelId: afterState.currentChannelId,
-            muted: afterState.isMuted,
-            deafened: afterState.isDeafened,
-            speaking: false,
-          } satisfies VoiceStatePayload,
-        });
-      } catch {
-        // WS may not be connected — non-critical
-      }
+      voiceService.broadcastVoiceState({
+        userId: afterState.currentUserId,
+        channelId: afterState.currentChannelId,
+        muted: afterState.isMuted,
+        deafened: afterState.isDeafened,
+        speaking: false,
+      });
     }
   },
 
@@ -292,20 +282,13 @@ export const useVoiceStore = create<VoiceState>((set, get) => ({
     // Broadcast voice:state to peers
     const afterState = get();
     if (afterState.currentChannelId && afterState.currentUserId) {
-      try {
-        wsClient.send({
-          type: WS_TYPES.VOICE_STATE,
-          payload: {
-            userId: afterState.currentUserId,
-            channelId: afterState.currentChannelId,
-            muted: afterState.isMuted,
-            deafened: afterState.isDeafened,
-            speaking: false,
-          } satisfies VoiceStatePayload,
-        });
-      } catch {
-        // WS may not be connected — non-critical
-      }
+      voiceService.broadcastVoiceState({
+        userId: afterState.currentUserId,
+        channelId: afterState.currentChannelId,
+        muted: afterState.isMuted,
+        deafened: afterState.isDeafened,
+        speaking: false,
+      });
     }
   },
 
@@ -367,7 +350,11 @@ export const useVoiceStore = create<VoiceState>((set, get) => ({
     set({ selectedAudioInputId: deviceId });
     // If currently in voice, hot-swap the input device
     if (get().currentChannelId) {
-      mediaService.switchAudioInput(deviceId).catch((err) => {
+      const userId = get().currentUserId;
+      const vadCallback = userId
+        ? (speaking: boolean) => { useVoiceStore.getState().setSpeaking(userId, speaking); }
+        : undefined;
+      mediaService.switchAudioInput(deviceId, vadCallback).catch((err) => {
         console.warn('[useVoiceStore] Failed to switch audio input:', err);
       });
     }

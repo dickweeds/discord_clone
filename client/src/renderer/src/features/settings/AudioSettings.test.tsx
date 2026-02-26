@@ -22,6 +22,7 @@ vi.mock('../../services/voiceService', () => ({
   cleanupMedia: vi.fn(),
   startVideo: vi.fn(),
   stopVideo: vi.fn(),
+  broadcastVoiceState: vi.fn(),
 }));
 
 vi.mock('../../services/mediaService', () => ({
@@ -49,10 +50,6 @@ vi.mock('../../utils/soundPlayer', () => ({
 
 vi.mock('../../services/wsClient', () => ({
   wsClient: { send: vi.fn() },
-}));
-
-vi.mock('discord-clone-shared', () => ({
-  WS_TYPES: { VOICE_STATE: 'voice:state' },
 }));
 
 beforeEach(() => {

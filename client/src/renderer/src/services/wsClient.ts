@@ -307,13 +307,17 @@ class WsClient {
       const payload = message.payload as VoicePeerJoinedPayload;
       import('../stores/useVoiceStore').then(({ useVoiceStore }) => {
         useVoiceStore.getState().addPeer(payload.channelId, payload.userId);
-      }).catch(() => {});
+      }).catch((err) => {
+        console.warn('[wsClient] Failed to add voice peer:', err);
+      });
     } else if (message.type === WS_TYPES.VOICE_PEER_LEFT) {
       const payload = message.payload as VoicePeerLeftPayload;
       import('../stores/useVoiceStore').then(({ useVoiceStore }) => {
         useVoiceStore.getState().removePeer(payload.channelId, payload.userId);
         useVoiceStore.getState().removeVideoParticipant(payload.userId);
-      }).catch(() => {});
+      }).catch((err) => {
+        console.warn('[wsClient] Failed to remove voice peer:', err);
+      });
     } else if (message.type === WS_TYPES.VOICE_NEW_PRODUCER) {
       const payload = message.payload as VoiceNewProducerPayload;
       this.handleNewProducer(payload);
@@ -336,12 +340,16 @@ class WsClient {
       const payload = message.payload as VoiceChannelPresencePayload;
       import('../stores/useVoiceStore').then(({ useVoiceStore }) => {
         useVoiceStore.getState().syncParticipants(payload.participants);
-      }).catch(() => {});
+      }).catch((err) => {
+        console.warn('[wsClient] Failed to sync voice presence:', err);
+      });
     } else if (message.type === WS_TYPES.VOICE_STATE) {
       const payload = message.payload as VoiceStatePayload;
       import('../stores/useVoiceStore').then(({ useVoiceStore }) => {
         useVoiceStore.getState().setRemoteMuteState(payload.userId, payload.muted, payload.deafened);
-      }).catch(() => {});
+      }).catch((err) => {
+        console.warn('[wsClient] Failed to set remote mute state:', err);
+      });
     }
 
     // Dispatch to registered handlers

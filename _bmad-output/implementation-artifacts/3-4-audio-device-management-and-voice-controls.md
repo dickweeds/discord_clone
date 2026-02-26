@@ -1,6 +1,6 @@
 # Story 3.4: Audio Device Management & Voice Controls
 
-Status: review
+Status: done
 
 ## Story
 
@@ -503,6 +503,7 @@ None — clean implementation with no blocking issues.
 ### Change Log
 
 - 2026-02-25: Implemented story 3-4 — audio device management, mute sound cues, voice state broadcasting, remote mute/deafen icons, settings page with audio device selection.
+- 2026-02-25: Code review — fixed 7 issues (3 HIGH, 2 MEDIUM, 2 LOW): H1 VAD callback missing in setAudioInputDevice, H2 selectedAudioInputId not passed on voice join, H3 useVoiceStore importing wsClient (moved to voiceService.broadcastVoiceState), M1 member list visible during settings, M2 story File List missing 4 files, L1 ARIA label mute/deafen priority, L2 empty catch blocks in wsClient.ts.
 
 ### File List
 
@@ -516,16 +517,23 @@ None — clean implementation with no blocking issues.
 **Modified files:**
 - `client/src/renderer/src/services/mediaService.ts` — added `switchAudioInput`, `switchAudioOutput`, `currentOutputDeviceId`, updated `produceAudio`/`consumeAudio`
 - `client/src/renderer/src/services/mediaService.test.ts` — added tests for switchAudioInput, switchAudioOutput
-- `client/src/renderer/src/stores/useVoiceStore.ts` — added device selection state, remoteMuteState, voice:state sending, mute sounds
+- `client/src/renderer/src/services/voiceService.ts` — added `broadcastVoiceState`, pass selected device to `produceAudio`
+- `client/src/renderer/src/stores/useVoiceStore.ts` — added device selection state, remoteMuteState, mute sounds, voice:state via voiceService
 - `client/src/renderer/src/stores/useVoiceStore.test.ts` — added tests for new state/actions
 - `client/src/renderer/src/stores/useUIStore.ts` — added `isSettingsOpen`/`setSettingsOpen`
 - `client/src/renderer/src/features/voice/VoiceParticipant.tsx` — added remote mute/deafen icon display
 - `client/src/renderer/src/features/voice/VoiceParticipant.test.tsx` — added tests for remote mute/deafen icons
 - `client/src/renderer/src/features/layout/UserPanel.tsx` — wired settings gear onClick
-- `client/src/renderer/src/features/layout/AppLayout.tsx` — added settings page toggle
+- `client/src/renderer/src/features/layout/AppLayout.tsx` — added settings page toggle, hide member list in settings
 - `client/src/renderer/src/utils/soundPlayer.ts` — added playMuteSound, playUnmuteSound
-- `client/src/renderer/src/services/wsClient.ts` — added VOICE_STATE handler
+- `client/src/renderer/src/services/wsClient.ts` — added VOICE_STATE handler, improved catch block logging
+- `shared/src/ws-messages.ts` — VoiceStatePayload interface, WS_TYPES.VOICE_STATE constant
+- `shared/src/index.ts` — re-export VoiceStatePayload
 - `server/src/plugins/voice/voiceWsHandler.ts` — added voice:state relay handler
 - `server/src/plugins/voice/voiceWsHandler.test.ts` — added VOICE_STATE handler tests
 - `_bmad-output/implementation-artifacts/sprint-status.yaml` — updated story status
 - `_bmad-output/implementation-artifacts/3-4-audio-device-management-and-voice-controls.md` — updated tasks, status, dev record
+
+**Unrelated changes on branch (from commit 5f17e82 — bug fix in invite account creation):**
+- `server/src/plugins/auth/authRoutes.ts`
+- `client/src/renderer/src/stores/useMemberStore.ts`

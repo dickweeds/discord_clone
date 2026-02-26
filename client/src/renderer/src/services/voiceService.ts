@@ -1,11 +1,13 @@
 import { wsClient } from './wsClient';
 import * as mediaService from './mediaService';
 import * as vadService from './vadService';
+import { WS_TYPES } from 'discord-clone-shared';
 import type {
   VoiceJoinPayload,
   VoiceJoinResponse,
   VoiceCreateTransportPayload,
   VoiceCreateTransportResponse,
+  VoiceStatePayload,
 } from 'discord-clone-shared';
 
 export interface JoinVoiceResult {
@@ -42,13 +44,16 @@ export async function joinVoiceChannel(channelId: string): Promise<JoinVoiceResu
     recvTransportResponse.iceServers as RTCIceServer[],
   );
 
-  // 5. Produce audio (capture mic and start sending)
-  await mediaService.produceAudio(sendTransport);
+  // 5. Read selected device from store (if user has a preference)
+  const { useVoiceStore } = await import('../stores/useVoiceStore');
+  const selectedDeviceId = useVoiceStore.getState().selectedAudioInputId;
 
-  // 6. Start local VAD for speaking detection
+  // 6. Produce audio with selected device (or system default if null)
+  await mediaService.produceAudio(sendTransport, selectedDeviceId);
+
+  // 7. Start local VAD for speaking detection
   const localStream = mediaService.getLocalStream();
   if (localStream) {
-    const { useVoiceStore } = await import('../stores/useVoiceStore');
     const userId = useVoiceStore.getState().currentUserId;
     if (userId) {
       vadService.startLocalVAD(localStream, (speaking) => {
@@ -74,6 +79,17 @@ export async function startVideo(): Promise<void> {
 
 export function stopVideo(): void {
   mediaService.stopVideo();
+}
+
+export function broadcastVoiceState(payload: VoiceStatePayload): void {
+  try {
+    wsClient.send({
+      type: WS_TYPES.VOICE_STATE,
+      payload,
+    });
+  } catch {
+    // WS may not be connected — non-critical for fire-and-forget broadcast
+  }
 }
 
 export function cleanupMedia(): void {

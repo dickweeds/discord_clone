@@ -34,8 +34,8 @@ export function VoiceParticipant({ userId }: VoiceParticipantProps): React.React
   // Build ARIA label
   let ariaLabel = username;
   if (isSpeaking) ariaLabel += ' (speaking)';
-  if (isLocalUser && isMuted) ariaLabel += ' (muted)';
   if (isLocalUser && isDeafened) ariaLabel += ' (deafened)';
+  else if (isLocalUser && isMuted) ariaLabel += ' (muted)';
   if (!isLocalUser && remoteMuteState?.deafened) ariaLabel += ' (deafened)';
   else if (!isLocalUser && remoteMuteState?.muted) ariaLabel += ' (muted)';
 

@@ -6,6 +6,7 @@ vi.mock('../services/voiceService', () => ({
   cleanupMedia: vi.fn(),
   startVideo: vi.fn().mockResolvedValue(undefined),
   stopVideo: vi.fn(),
+  broadcastVoiceState: vi.fn(),
 }));
 
 vi.mock('../services/mediaService', () => ({
@@ -38,16 +39,11 @@ vi.mock('../services/wsClient', () => ({
   },
 }));
 
-vi.mock('discord-clone-shared', () => ({
-  WS_TYPES: { VOICE_STATE: 'voice:state' },
-}));
-
 import { useVoiceStore } from './useVoiceStore';
 import * as voiceService from '../services/voiceService';
 import * as mediaService from '../services/mediaService';
 import * as vadService from '../services/vadService';
 import { playConnectSound, playDisconnectSound, playMuteSound, playUnmuteSound } from '../utils/soundPlayer';
-import { wsClient } from '../services/wsClient';
 
 const mockJoin = vi.mocked(voiceService.joinVoiceChannel);
 const mockLeave = vi.mocked(voiceService.leaveVoiceChannel);
@@ -650,10 +646,10 @@ describe('useVoiceStore', () => {
       expect(useVoiceStore.getState().selectedAudioInputId).toBe('mic-1');
     });
 
-    it('calls mediaService.switchAudioInput when in voice', () => {
+    it('calls mediaService.switchAudioInput with VAD callback when in voice', () => {
       useVoiceStore.setState({ currentChannelId: 'ch-1', currentUserId: 'user-1' });
       useVoiceStore.getState().setAudioInputDevice('mic-1');
-      expect(mediaService.switchAudioInput).toHaveBeenCalledWith('mic-1');
+      expect(mediaService.switchAudioInput).toHaveBeenCalledWith('mic-1', expect.any(Function));
     });
 
     it('does NOT call mediaService when not in voice', () => {
@@ -744,12 +740,12 @@ describe('useVoiceStore', () => {
   });
 
   describe('toggleMute sends voice:state', () => {
-    it('sends voice:state WS message when muting', () => {
+    it('broadcasts voice:state when muting', () => {
       useVoiceStore.setState({ currentChannelId: 'ch-1', currentUserId: 'user-1' });
       useVoiceStore.getState().toggleMute();
-      expect(wsClient.send).toHaveBeenCalledWith(expect.objectContaining({
-        type: 'voice:state',
-        payload: expect.objectContaining({ userId: 'user-1', muted: true }),
+      expect(voiceService.broadcastVoiceState).toHaveBeenCalledWith(expect.objectContaining({
+        userId: 'user-1',
+        muted: true,
       }));
     });
 
@@ -766,12 +762,12 @@ describe('useVoiceStore', () => {
   });
 
   describe('toggleDeafen sends voice:state', () => {
-    it('sends voice:state WS message when deafening', () => {
+    it('broadcasts voice:state when deafening', () => {
       useVoiceStore.setState({ currentChannelId: 'ch-1', currentUserId: 'user-1' });
       useVoiceStore.getState().toggleDeafen();
-      expect(wsClient.send).toHaveBeenCalledWith(expect.objectContaining({
-        type: 'voice:state',
-        payload: expect.objectContaining({ userId: 'user-1', deafened: true }),
+      expect(voiceService.broadcastVoiceState).toHaveBeenCalledWith(expect.objectContaining({
+        userId: 'user-1',
+        deafened: true,
       }));
     });
 

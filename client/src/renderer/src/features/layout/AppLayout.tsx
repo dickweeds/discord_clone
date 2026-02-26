@@ -109,7 +109,7 @@ export function AppLayout(): React.ReactNode {
           <Outlet />
         )}
       </main>
-      {isMemberListVisible && (
+      {isMemberListVisible && !isSettingsOpen && (
         <aside aria-label="Member list" className="w-[240px] flex-shrink-0 bg-bg-secondary">
           <MemberList />
         </aside>
