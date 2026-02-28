@@ -122,9 +122,9 @@ Implement the full deployment architecture review across 6 phased stories — fr
 - **Registry:** GHCR (free, native GitHub Actions integration via `GITHUB_TOKEN`, zero additional config)
 - **Image tagging:** Triple-tag every build: git SHA (immutable traceability), semver (human-readable rollback), `latest` (convenience, never pinned in production)
 - **Networking:** Custom `backend` bridge network for app/nginx/certbot. Host mode only for coturn (UDP relay needs raw port access). Mediasoup port range reduced from 40000-49999 to 40000-40099 (100 ports via `.env`). **Capacity analysis:** Each mediasoup WebRtcTransport consumes 1 UDP port for ICE. Each peer in a voice channel needs ~2 ports (send + receive transport). With blue-green split (50 ports per slot), each slot supports ~25 concurrent voice users. This is acceptable for the project's expected scale. If concurrent voice users exceed 20, widen the range (e.g., 40000-40499 per slot), update the security group, and redeploy
-- **Deployment method:** AWS SSM + OIDC — short-lived credentials, no SSH keys, no port 22, full CloudTrail audit. IAM role trust policy scoped to `repo:AidenWoodside/discord_clone:ref:refs/tags/v*`
-- **Zero-downtime:** Blue-green with `app-blue` (port 3001, UDP 40000-40049) and `app-green` (port 3002, UDP 40050-40099). Deploy script determines active slot by inspecting running containers (no ephemeral state file). Nginx upstream switched via template (`nginx.conf.template` with `{{UPSTREAM}}` placeholder) + `nginx -t` validation + `nginx -s reload`, with full rollback on failure. Green uses Docker Compose `profiles: [deploy]` — only started during deploys. Both slots use `restart: unless-stopped` for crash recovery
-- **Graceful shutdown:** Add SIGTERM handler to `server/src/index.ts` calling `app.close()` (Phase 1, Task 1.9 — container lifecycle hygiene, not deferred to Phase 5). `stop_grace_period: 30s` on both app containers. The `onClose` hook drains the Supabase connection pool (via `close()` from `createDatabase()`) and shuts down mediasoup workers
+- **Deployment method:** AWS SSM + OIDC — short-lived credentials, no SSH keys, no port 22, full CloudTrail audit. IAM role trust policy scoped to `repo:AidenWoodside/discord_clone:environment:production` (environment claim, not tag ref — requires both GitHub environment approval and matching OIDC token)
+- **Zero-downtime:** Blue-green with `app-blue` (port 3001, UDP 40000-40049) and `app-green` (port 3002, UDP 40050-40099). Deploy script determines active slot by inspecting running containers (no ephemeral state file). Nginx upstream switched via template (`nginx.conf.template` with `{{UPSTREAM}}` placeholder) + `nginx -t` validation + `nginx -s reload`, with full rollback on failure. Green uses Docker Compose `profiles: [deploy]` — only started during deploys. Both slots use `restart: unless-stopped` for crash recovery. **Connection pool budget:** During the brief switchover window both slots hold Supabase connection pools simultaneously. The postgres.js pool size per slot should be set so that `blue_pool + green_pool` does not exceed Supabase's connection limit (Free tier: 60 direct connections via Supavisor session mode on port 5432). Recommended: `max: 20` per slot (40 total during switchover, leaving 20 connections for migrations, health checks, and Supabase dashboard). Configure this in the `postgres()` driver options in `connection.ts`
+- **Graceful shutdown:** Add SIGTERM handler to `server/src/index.ts` calling `app.close()` (Phase 1, Task 1.10 — container lifecycle hygiene, not deferred to Phase 5). `stop_grace_period: 30s` on both app containers. The `onClose` hook drains the Supabase connection pool (via `close()` from `createDatabase()`) and shuts down mediasoup workers
 - **Secrets:** AWS SSM Parameter Store with `SecureString` type (KMS encryption). Fetched at deploy time, passed as env vars — no `.env` file on disk. Secrets: `JWT_ACCESS_SECRET`, `JWT_REFRESH_SECRET`, `TURN_SECRET`, `GROUP_ENCRYPTION_KEY`, `DATABASE_URL` (Supabase connection string containing password — must be treated as a secret)
 - **Logging:** Phase 1 uses `json-file` driver with `max-size: 10m`, `max-file: 5`. Phase 6 switches to `awslogs` driver shipping to CloudWatch log groups `/discord-clone/production/{service}`
 - **IaC:** Terraform for EC2 instance, security group (443, 80, 3478 UDP, 49152-49252 UDP, 40000-40099 UDP), IAM role + instance profile (SSM + CloudWatch), OIDC provider. State stored in S3 + DynamoDB lock
@@ -177,7 +177,7 @@ Each phase is a separate implementation story. Phases are ordered by dependency 
 - [ ] Task 1.4: Pin third-party image versions
   - File: `docker-compose.yml`
   - Action: Change `nginx:alpine` to `nginx:1.27-alpine`. Change `coturn/coturn:latest` to `coturn/coturn:4.6.3`. Change `certbot/certbot` to `certbot/certbot:v3.1.0`
-  - Notes: Prevents surprise breaking changes from upstream. Update deliberately after testing. Certbot manages TLS certificates — a broken upstream image causes cert renewal failure and total site unavailability, so it must be pinned like every other image
+  - Notes: Prevents surprise breaking changes from upstream. Update deliberately after testing. Certbot manages TLS certificates — a broken upstream image causes cert renewal failure and total site unavailability, so it must be pinned like every other image. **Update cadence:** Certbot releases frequently for ACME protocol changes. Review pinned versions quarterly (or set up Dependabot/Renovate to automate version bump PRs for Docker image tags). When updating, test cert renewal in a non-production context first
 
 - [ ] Task 1.5: Add `depends_on` health condition
   - File: `docker-compose.yml`
@@ -213,19 +213,28 @@ Each phase is a separate implementation story. Phases are ordered by dependency 
     tmpfs:
       - /tmp
     ```
-  - Notes: `no-new-privileges` prevents privilege escalation. `cap_drop: ALL` removes all Linux capabilities. Nginx needs `NET_BIND_SERVICE` for ports 80/443. The app container can be `read_only: true` because there is no local database — all data is stored in Supabase. Nginx still needs writable `/var/cache/nginx` so do NOT add `read_only` to nginx
+  - Notes: `no-new-privileges` prevents privilege escalation. `cap_drop: ALL` removes all Linux capabilities. Nginx needs `NET_BIND_SERVICE` for ports 80/443. The app container can be `read_only: true` because there is no local database — all data is stored in Supabase. Nginx still needs writable `/var/cache/nginx` so do NOT add `read_only` to nginx. **Verification:** Confirm that `postgres.js` (the Supabase driver) does not write temporary files to disk for connection pooling or TLS cert caching — it should not, but verify during Phase 1 testing by checking for write errors in container logs after enabling `read_only`
 
 - [ ] Task 1.7: Verify SQLite volume is removed from Docker Compose
   - File: `docker-compose.yml`
   - Action: Confirm that the `./data/sqlite:/app/data` volume mount has been removed from the `app` service (done by the Supabase migration). The app container should have no data volumes — it connects to Supabase via `DATABASE_URL`. Keep nginx/coturn/certbot bind mounts (config files need host filesystem access). Remove the `./data/sqlite` directory from EC2 after verifying Supabase migration is complete. No `volumes:` section needed for database storage.
   - Notes: The Supabase migration eliminates local database storage entirely. If the old `./data/sqlite` directory still exists on EC2, it can be archived and deleted. The app container is now stateless (all state in Supabase)
 
-- [ ] Task 1.8: Add GitHub environment protection rules
+- [ ] Task 1.8: Add Docker Compose validation to CI pipeline
+  - File: `.github/workflows/ci.yml`
+  - Action: Add a step to the CI workflow that validates the Docker Compose file after any changes:
+    ```yaml
+    - name: Validate Docker Compose config
+      run: docker compose config --quiet
+    ```
+  - Notes: This catches YAML syntax errors, invalid service references, bad profile configs, and malformed resource limits before they reach production. Add this after the build steps. Since Phase 1 makes heavy modifications to the compose file, catching errors in CI is essential
+
+- [ ] Task 1.9: Add GitHub environment protection rules
   - File: N/A (GitHub Settings)
   - Action: In GitHub Settings > Environments, create a `production` environment. Add required reviewers (owner). Set branch restriction to tags matching `v*`. Add `environment: production` to the `deploy-server` job in `release.yml`
   - Notes: This is a manual GitHub Settings change plus a one-line addition to `release.yml`
 
-- [ ] Task 1.9: Add SIGTERM handler to server entry point
+- [ ] Task 1.10: Add SIGTERM handler to server entry point
   - File: `server/src/index.ts`
   - Action: After `await app.listen(...)`, add:
     ```typescript
@@ -247,8 +256,9 @@ Each phase is a separate implementation story. Phases are ordered by dependency 
 - [ ] AC 1.4: Given `nginx:1.27-alpine` and `coturn/coturn:4.6.3` are pinned, when `docker compose pull` is run, then it pulls those exact versions (not latest)
 - [ ] AC 1.5: Given the app container is running, when `docker inspect` is run on it, then `NoNewPrivileges` is `true` and `CapDrop` includes `ALL`
 - [ ] AC 1.6: Given the app container has no local database volume (Supabase is external), when `docker compose down` and `docker compose up -d` are run, then the app reconnects to Supabase and all data is intact (no local storage dependency)
-- [ ] AC 1.7: Given `deploy-server` job has `environment: production`, when a tag is pushed, then GitHub requires manual approval before the deploy job runs
-- [ ] AC 1.8: Given SIGTERM is sent to the app container, when `docker stop` is called, then `app.close()` executes, the Supabase connection pool is drained, the health check timer is cleared, mediasoup workers are shut down, and in-flight requests complete before exit
+- [ ] AC 1.7: Given a PR modifies `docker-compose.yml`, when CI runs, then `docker compose config --quiet` validates without errors
+- [ ] AC 1.8: Given `deploy-server` job has `environment: production`, when a tag is pushed, then GitHub requires manual approval before the deploy job runs
+- [ ] AC 1.9: Given SIGTERM is sent to the app container, when `docker stop` is called, then `app.close()` executes, the Supabase connection pool is drained, the health check timer is cleared, mediasoup workers are shut down, and in-flight requests complete before exit
 
 ---
 
@@ -260,14 +270,19 @@ Each phase is a separate implementation story. Phases are ordered by dependency 
 
 #### Tasks
 
+- [ ] Task 2.0: Add top-level permissions restriction to release workflow
+  - File: `.github/workflows/release.yml`
+  - Action: Add a top-level `permissions: {}` block at the workflow root to deny all permissions by default. Each job must then explicitly declare its own `permissions:` block (e.g., `contents: read, packages: write` for `build-server-image`). This prevents token leakage if a dependency or third-party action is compromised — the `GITHUB_TOKEN` only has the permissions each job explicitly requests
+  - Notes: This is a GitHub Actions security hardening best practice. Existing jobs (`validate-version`, `build-electron`, `publish-release`, `deploy-server`) must be audited for their required permissions and updated with explicit per-job `permissions:` blocks
+
 - [ ] Task 2.1: Add `build-server-image` job to release workflow
   - File: `.github/workflows/release.yml`
   - Action: Add a new job `build-server-image` after `validate-version`:
     - `needs: [validate-version]`
     - `runs-on: ubuntu-latest`
     - `permissions: contents: read, packages: write`
-    - Steps: checkout, `docker/setup-buildx-action@v3`, `docker/login-action@v3` (registry: `ghcr.io`, username: `${{ github.actor }}`, password: `${{ secrets.GITHUB_TOKEN }}`), `docker/build-push-action@v5` (context: `.`, file: `server/Dockerfile`, push: true, tags: `ghcr.io/aidenwoodside/discord-clone-server:${{ github.sha }}`, `ghcr.io/aidenwoodside/discord-clone-server:${{ github.ref_name }}`, `ghcr.io/aidenwoodside/discord-clone-server:latest`, cache-from: `type=gha`, cache-to: `type=gha,mode=max`)
-  - Notes: Uses GitHub Actions cache for Docker layer caching. `GITHUB_TOKEN` has automatic GHCR write access
+    - Steps: checkout, `docker/setup-buildx-action@v3.9.0`, `docker/login-action@v3.4.0` (registry: `ghcr.io`, username: `${{ github.actor }}`, password: `${{ secrets.GITHUB_TOKEN }}`), `docker/build-push-action@v6.14.0` (context: `.`, file: `server/Dockerfile`, push: true, tags: `ghcr.io/aidenwoodside/discord-clone-server:${{ github.sha }}`, `ghcr.io/aidenwoodside/discord-clone-server:${{ github.ref_name }}`, `ghcr.io/aidenwoodside/discord-clone-server:latest`, cache-from: `type=gha`, cache-to: `type=gha,mode=max`)
+  - Notes: Uses GitHub Actions cache for Docker layer caching. `GITHUB_TOKEN` has automatic GHCR write access. All third-party actions pinned to exact version tags (not just major version) for supply-chain security — major version tags like `@v3` can be force-updated upstream. Check for updates quarterly or use Dependabot/Renovate to automate version bumps
 
 - [ ] Task 2.2: Add Trivy vulnerability scanning step
   - File: `.github/workflows/release.yml`
@@ -322,12 +337,16 @@ Each phase is a separate implementation story. Phases are ordered by dependency 
 
 - [ ] Task 2.5: Authenticate EC2 with GHCR for image pulls
   - File: Deploy script (within SSH action in `release.yml`)
-  - Action: Before `docker compose pull`, add GHCR login:
-    ```bash
-    echo "$GHCR_TOKEN" | docker login ghcr.io -u aidenwoodside --password-stdin
-    ```
-    Add `GHCR_TOKEN` as a GitHub secret containing a Personal Access Token with `read:packages` scope (or use a fine-grained token)
-  - Notes: If the repo is public, GHCR images are publicly pullable and this step can be skipped. If private, a PAT with `read:packages` is required on the EC2 instance
+  - Action: **Decision required — depends on repo visibility:**
+    - **If repo is public:** GHCR images are publicly pullable. Skip GHCR auth entirely — no PAT needed, no secret to rotate. Document this in the deploy script with a comment explaining why auth is not needed
+    - **If repo is private:** Before `docker compose pull`, add GHCR login. **Prefer a GitHub App installation token** over a Personal Access Token — GitHub Apps have narrower scope (`read:packages` only), are not tied to a personal account, and tokens auto-rotate. Create a GitHub App with `read:packages` permission, install it on the repo, and store the App ID + private key in SSM Parameter Store. The deploy script fetches a short-lived installation token at deploy time:
+      ```bash
+      # Fetch GitHub App installation token from SSM (rotated automatically)
+      GHCR_TOKEN=$(fetch-github-app-token)  # Implementation depends on GitHub App setup
+      echo "$GHCR_TOKEN" | docker login ghcr.io -u x-access-token --password-stdin
+      ```
+      If a GitHub App is too complex for the current scale, a fine-grained PAT with `read:packages` scope scoped to this repository is acceptable — store it in SSM Parameter Store (not as a GitHub secret on EC2)
+  - Notes: PATs tied to personal accounts are a security anti-pattern for production infrastructure — if the account is compromised or deactivated, deploys break. GitHub Apps or fine-grained PATs scoped to the repo are preferred
 
 - [ ] Task 2.6: Update .env.example with IMAGE_TAG variable
   - File: `.env.example`
@@ -457,17 +476,15 @@ Each phase is a separate implementation story. Phases are ordered by dependency 
         "Action": "sts:AssumeRoleWithWebIdentity",
         "Condition": {
           "StringEquals": {
-            "token.actions.githubusercontent.com:aud": "sts.amazonaws.com"
-          },
-          "StringLike": {
-            "token.actions.githubusercontent.com:sub": "repo:AidenWoodside/discord_clone:ref:refs/tags/v*"
+            "token.actions.githubusercontent.com:aud": "sts.amazonaws.com",
+            "token.actions.githubusercontent.com:sub": "repo:AidenWoodside/discord_clone:environment:production"
           }
         }
       }]
     }
     ```
     Attach inline policy granting: `ssm:SendCommand`, `ssm:GetCommandInvocation` on the EC2 instance, and `ssm:ListCommandInvocations`
-  - Notes: The `sub` condition scopes access to only tag pushes from this specific repo
+  - Notes: The `sub` condition uses the `environment` claim instead of a tag ref pattern. Since the `deploy-server` job already specifies `environment: production` (Task 1.8), the OIDC token's `sub` claim will be `repo:AidenWoodside/discord_clone:environment:production`. This provides a double gate: (1) GitHub environment protection requires manual approval, and (2) the OIDC trust policy only accepts tokens from the `production` environment context. A rogue tag push without environment approval cannot assume the role. This is more secure than `ref:refs/tags/v*` which would match any tag starting with `v`
 
 - [ ] Task 4.3: Install SSM Agent on EC2 and attach instance profile
   - File: N/A (EC2 instance)
@@ -486,6 +503,12 @@ Each phase is a separate implementation story. Phases are ordered by dependency 
     - Remove `appleboy/ssh-action` and `appleboy/scp-action` steps
     - Add `permissions: id-token: write, contents: read`
     - Add `environment: name: production` (for approval gate)
+    - Add job-level concurrency control to prevent racing deploys:
+      ```yaml
+      concurrency:
+        group: deploy-production
+        cancel-in-progress: false
+      ```
     - Add `aws-actions/configure-aws-credentials@v4` step with `role-to-assume: ${{ secrets.AWS_DEPLOY_ROLE_ARN }}`, `aws-region: us-east-1`
     - Add SSM deploy step:
       ```yaml
@@ -560,7 +583,7 @@ Each phase is a separate implementation story. Phases are ordered by dependency 
 
 **Story:** As the server operator, I want zero-downtime deployments via blue-green container switching with application-level connection draining so that users experience minimal disruption during deploys — connected clients receive a reconnect signal and migrate to the new slot within a configurable drain window.
 
-**Prerequisites:** Phase 2 (registry images), Phase 3 (bridge networking), Phase 4 (SSM deploy). SIGTERM handler already added in Phase 1 (Task 1.9).
+**Prerequisites:** Phase 2 (registry images), Phase 3 (bridge networking), Phase 4 (SSM deploy). SIGTERM handler already added in Phase 1 (Task 1.10).
 
 #### Tasks
 
@@ -655,13 +678,8 @@ Each phase is a separate implementation story. Phases are ordered by dependency 
 
     # 5. Run database migrations on new slot against Supabase (old slot still serves traffic)
     # Both slots can safely connect to Supabase concurrently — Postgres handles concurrent access.
-    # The migration uses a separate connection without statement_timeout to avoid DDL hitting the 30s limit.
-    if ! docker compose exec -T "app-$NEW" node -e "
-      import('./dist/db/connection.js').then(m => m.createDatabase()).then(async ({migrate, close}) => {
-        await migrate('./drizzle');
-        await close();
-      }).catch(e => { console.error(e); process.exit(1); })
-    " 2>&1; then
+    # Uses dedicated migrate script (Task 5.3a) — not an inline one-liner — for maintainability.
+    if ! docker compose exec -T "app-$NEW" node dist/scripts/migrate.js 2>&1; then
       echo "FATAL: database migration failed on app-$NEW (Supabase)"
       docker compose stop "app-$NEW"
       exit 1
@@ -681,7 +699,7 @@ Each phase is a separate implementation story. Phases are ordered by dependency 
           break
         fi
         CONNS=$(curl -sf "http://127.0.0.1:$ACTIVE_PORT/api/drain" 2>/dev/null \
-          | grep -o '"connections":[0-9]*' | grep -o '[0-9]*' || echo "unknown")
+          | python3 -c "import sys,json; print(json.load(sys.stdin).get('connections','unknown'))" 2>/dev/null || echo "unknown")
         if [ "$CONNS" = "0" ]; then
           echo "All connections drained"
           break
@@ -725,11 +743,39 @@ Each phase is a separate implementation story. Phases are ordered by dependency 
       docker compose stop "app-$ACTIVE"
     fi
 
-    # 12. Cleanup
+    # 12. Prune old Docker images (keep last 7 days)
+    docker image prune -af --filter "until=168h" 2>/dev/null || true
+
+    # 13. Cleanup
     rm -f "$NGINX_CONF.bak"
     echo "Deploy complete: app-$NEW ($IMAGE_TAG)"
     ```
-  - Notes: Active slot is determined by inspecting which container is actually running (survives reboots, no stale file). Only the target slot's image is pulled (not both). The drain step signals the old slot's connected WebSocket clients to reconnect, then polls until connections reach zero or the `DRAIN_TIMEOUT` (default 30s) expires. Migrations run against Supabase on the new slot before nginx switches — the old slot still serves traffic during this window. Both slots can safely connect to Supabase concurrently (Postgres handles concurrent access natively). Nginx config uses a template file with `{{UPSTREAM}}` placeholder — never raw sed on the live config. `nginx -t` validates before reload, with full rollback on failure at every step. Post-switchover verification uses Docker DNS from inside the nginx container to confirm the upstream switch worked. Requires Docker Compose V2 >= 2.20
+  - Notes: Active slot is determined by inspecting which container is actually running (survives reboots, no stale file). Only the target slot's image is pulled (not both). The drain step signals the old slot's connected WebSocket clients to reconnect, then polls until connections reach zero or the `DRAIN_TIMEOUT` (default 30s) expires. Drain connection polling uses `python3 -c` for JSON parsing (available in the node:20-alpine image) instead of fragile `grep` patterns. Migrations run against Supabase on the new slot via the dedicated `dist/scripts/migrate.js` entry point (Task 5.3a) before nginx switches — the old slot still serves traffic during this window. Both slots can safely connect to Supabase concurrently (Postgres handles concurrent access natively). Nginx config uses a template file with `{{UPSTREAM}}` placeholder — never raw sed on the live config. `nginx -t` validates before reload, with full rollback on failure at every step. Post-switchover verification uses Docker DNS from inside the nginx container to confirm the upstream switch worked. Old Docker images are pruned after each deploy (keeps last 7 days) to prevent disk bloat. Requires Docker Compose V2 >= 2.20
+
+- [ ] Task 5.3a: Create dedicated migration entry point script
+  - File: `server/src/scripts/migrate.ts` (new file, compiles to `dist/scripts/migrate.js`)
+  - Action: Create a standalone migration script that:
+    ```typescript
+    import { createDatabase } from '../db/connection.js';
+
+    async function runMigrations() {
+      console.log('Running database migrations against Supabase...');
+      const { migrate, close } = await createDatabase();
+      try {
+        await migrate('./drizzle');
+        console.log('Migrations completed successfully');
+      } finally {
+        await close();
+      }
+    }
+
+    runMigrations().catch((err) => {
+      console.error('Migration failed:', err);
+      process.exit(1);
+    });
+    ```
+    Ensure `server/tsconfig.json` includes `src/scripts/` in compilation so it appears in `dist/scripts/migrate.js`. The `createDatabase()` call here should use a separate connection without `statement_timeout` (per the Supabase migration spec) to avoid DDL operations hitting the 30-second query limit.
+  - Notes: This replaces the fragile inline `node -e "import(...)"` one-liner in the deploy script. A dedicated file is testable, has proper error handling, and won't break if internal module paths change. The deploy script (Task 5.3) calls `node dist/scripts/migrate.js` inside the container
 
 - [ ] Task 5.4: Create nginx config template for blue-green
   - File: `docker/nginx/nginx.conf.template` (new file)
@@ -872,10 +918,12 @@ Each phase is a separate implementation story. Phases are ordered by dependency 
         awslogs-group: /discord-clone/production/app
         awslogs-stream-prefix: app-blue  # or app-green for the green slot
         awslogs-create-group: "true"
+        mode: "non-blocking"
+        max-buffer-size: "4m"
     ```
     (Similar for nginx with group `/discord-clone/production/nginx`)
     Keep `json-file` on coturn and certbot (lower priority, less useful in CloudWatch)
-  - Notes: Both `app-blue` and `app-green` ship to the same log group (`/discord-clone/production/app`) but with different stream prefixes to distinguish them. EC2 instance profile needs `logs:CreateLogGroup`, `logs:CreateLogStream`, `logs:PutLogEvents` permissions. Cost: ~$0.50/GB ingested + $0.03/GB stored. This task modifies the blue-green `docker-compose.yml` from Phase 5, which is why Phase 6 depends on Phase 5
+  - Notes: Both `app-blue` and `app-green` ship to the same log group (`/discord-clone/production/app`) but with different stream prefixes to distinguish them. EC2 instance profile needs `logs:CreateLogGroup`, `logs:CreateLogStream`, `logs:PutLogEvents` permissions. Cost: ~$0.50/GB ingested + $0.03/GB stored. This task modifies the blue-green `docker-compose.yml` from Phase 5, which is why Phase 6 depends on Phase 5. **Important:** The `mode: "non-blocking"` option prevents the awslogs driver from blocking container startup and operation if CloudWatch is unreachable (e.g., IAM permission loss, AWS API outage). Without this, a CloudWatch outage would prevent containers from starting entirely. The `max-buffer-size: "4m"` caps the in-memory log buffer during outages
 
 - [ ] Task 6.5: Add deploy failure notification
   - File: `.github/workflows/release.yml`
@@ -956,11 +1004,30 @@ Each phase is a separate implementation story. Phases are ordered by dependency 
   - File: N/A (EC2 crontab) or `scripts/setup.sh`
   - Action: Add to EC2 crontab:
     ```bash
-    0 3 * * * docker compose -f /home/ubuntu/discord_clone/docker-compose.yml exec -T nginx nginx -s reload 2>/dev/null
+    0 3 * * * docker compose -f /home/ubuntu/discord_clone/docker-compose.yml exec -T nginx nginx -s reload 2>/dev/null || true
     ```
-  - Notes: Runs daily at 3am. After certbot renews the cert, nginx picks it up on reload. Currently nginx serves the old cert until manually restarted
+  - Notes: Runs daily at 3am. After certbot renews the cert, nginx picks it up on reload. Currently nginx serves the old cert until manually restarted. The `|| true` prevents cron error emails if the nginx container isn't running (e.g., during a deploy window)
 
-- [ ] Task 6.10: Update .gitignore for Terraform
+- [ ] Task 6.10: Add Terraform validation to CI pipeline
+  - File: `.github/workflows/ci.yml`
+  - Action: Add a job that validates Terraform config on PRs that modify `infrastructure/`:
+    ```yaml
+    terraform-validate:
+      runs-on: ubuntu-latest
+      if: contains(github.event.pull_request.changed_files, 'infrastructure/')
+      steps:
+        - uses: actions/checkout@v4
+        - uses: hashicorp/setup-terraform@v3
+        - name: Terraform Init (no backend)
+          run: cd infrastructure && terraform init -backend=false
+        - name: Terraform Validate
+          run: cd infrastructure && terraform validate
+        - name: Terraform Format Check
+          run: cd infrastructure && terraform fmt -check -recursive
+    ```
+  - Notes: Uses `-backend=false` so validation doesn't require AWS credentials. `terraform validate` catches syntax errors and invalid resource references. `terraform fmt -check` enforces consistent formatting. A full `terraform plan` requires credentials and is better run as a manual step or in a separate workflow with OIDC auth
+
+- [ ] Task 6.11: Update .gitignore for Terraform
   - File: `.gitignore`
   - Action: Add:
     ```
@@ -1046,9 +1113,18 @@ echo "Restarting services with rolled-back config..."
 docker compose down
 docker compose up -d
 
-echo "Verifying health..."
+# Detect active health check port (blue-green or single app)
+if docker compose ps app-blue --status running -q 2>/dev/null | grep -q .; then
+  HEALTH_PORT=3001
+elif docker compose ps app-green --status running -q 2>/dev/null | grep -q .; then
+  HEALTH_PORT=3002
+else
+  HEALTH_PORT=3000  # Pre-Phase 5 single app service
+fi
+
+echo "Verifying health on port $HEALTH_PORT..."
 for i in $(seq 1 15); do
-  if curl -sf "http://127.0.0.1:3000/api/health" > /dev/null 2>&1; then
+  if curl -sf "http://127.0.0.1:$HEALTH_PORT/api/health" > /dev/null 2>&1; then
     echo "Health check passed"
     exit 0
   fi
