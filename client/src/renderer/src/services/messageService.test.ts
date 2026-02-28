@@ -1,9 +1,9 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
-import type { TextReceivePayload } from 'discord-clone-shared';
+import type { TextReceivePayload, ApiPaginatedList } from 'discord-clone-shared';
 
-const { mockSend, mockApiRequest } = vi.hoisted(() => ({
+const { mockSend, mockApiGet } = vi.hoisted(() => ({
   mockSend: vi.fn(),
-  mockApiRequest: vi.fn(),
+  mockApiGet: vi.fn(),
 }));
 
 // Mock encryptionService
@@ -22,9 +22,10 @@ vi.mock('./wsClient', () => ({
   wsClient: { send: mockSend },
 }));
 
-// Mock apiClient
+// Mock apiClient — mock apiGet (used by fetchAndDecryptMessages) and apiRequest (unused but keep for module resolution)
 vi.mock('./apiClient', () => ({
-  apiRequest: (...args: unknown[]) => mockApiRequest(...args),
+  apiGet: (...args: unknown[]) => mockApiGet(...args),
+  apiRequest: vi.fn(),
 }));
 
 // Mock useAuthStore
@@ -43,10 +44,30 @@ vi.stubGlobal('crypto', { randomUUID: () => 'mock-uuid-1234' });
 import useMessageStore from '../stores/useMessageStore';
 import { sendMessage, fetchMessages, fetchOlderMessages } from './messageService';
 
+function makePaginatedResponse(
+  messages: TextReceivePayload[],
+  cursor: string | null = null,
+): ApiPaginatedList<TextReceivePayload> {
+  return { data: messages, cursor, count: messages.length };
+}
+
+function makeMessage(overrides: Partial<TextReceivePayload> = {}): TextReceivePayload {
+  return {
+    messageId: 'msg-1',
+    channelId: 'ch-1',
+    authorId: 'user-1',
+    content: 'encrypted:Hello',
+    nonce: 'n1',
+    createdAt: '2024-01-01T00:00:00.000Z',
+    ...overrides,
+  };
+}
+
 beforeEach(() => {
   useMessageStore.setState({
     messages: new Map(),
     hasMoreMessages: new Map(),
+    cursors: new Map(),
     isLoadingMore: false,
     currentChannelId: null,
     isLoading: false,
@@ -105,25 +126,11 @@ describe('messageService', () => {
   });
 
   describe('fetchMessages', () => {
-    it('fetches, decrypts, and stores messages', async () => {
-      mockApiRequest.mockResolvedValue([
-        {
-          messageId: 'msg-1',
-          channelId: 'ch-1',
-          authorId: 'user-1',
-          content: 'encrypted:Hello',
-          nonce: 'n1',
-          createdAt: '2024-01-01T00:00:00.000Z',
-        },
-        {
-          messageId: 'msg-2',
-          channelId: 'ch-1',
-          authorId: 'user-2',
-          content: 'encrypted:World',
-          nonce: 'n2',
-          createdAt: '2024-01-01T00:01:00.000Z',
-        },
-      ]);
+    it('fetches, decrypts, and stores messages from paginated response', async () => {
+      mockApiGet.mockResolvedValue(makePaginatedResponse([
+        makeMessage({ messageId: 'msg-1', content: 'encrypted:Hello', createdAt: '2024-01-01T00:00:00.000Z' }),
+        makeMessage({ messageId: 'msg-2', authorId: 'user-2', content: 'encrypted:World', createdAt: '2024-01-01T00:01:00.000Z' }),
+      ], 'next-cursor-abc'));
 
       await fetchMessages('ch-1');
 
@@ -135,8 +142,37 @@ describe('messageService', () => {
       expect(useMessageStore.getState().isLoading).toBe(false);
     });
 
+    it('stores cursor from server response', async () => {
+      mockApiGet.mockResolvedValue(makePaginatedResponse(
+        [makeMessage()],
+        'opaque-cursor-123',
+      ));
+
+      await fetchMessages('ch-1');
+
+      expect(useMessageStore.getState().cursors.get('ch-1')).toBe('opaque-cursor-123');
+    });
+
+    it('sets hasMoreMessages based on cursor (not count heuristic)', async () => {
+      // Server returns cursor !== null → hasMore = true
+      mockApiGet.mockResolvedValue(makePaginatedResponse(
+        [makeMessage()],
+        'has-more-cursor',
+      ));
+      await fetchMessages('ch-1');
+      expect(useMessageStore.getState().hasMoreMessages.get('ch-1')).toBe(true);
+
+      // Server returns cursor === null → hasMore = false (even with exactly PAGE_LIMIT messages)
+      const fiftyMessages = Array.from({ length: 50 }, (_, i) =>
+        makeMessage({ messageId: `msg-${i}`, content: `encrypted:msg${i}`, nonce: `n${i}` }),
+      );
+      mockApiGet.mockResolvedValue(makePaginatedResponse(fiftyMessages, null));
+      await fetchMessages('ch-2');
+      expect(useMessageStore.getState().hasMoreMessages.get('ch-2')).toBe(false);
+    });
+
     it('sets error on fetch failure', async () => {
-      mockApiRequest.mockRejectedValue(new Error('Network error'));
+      mockApiGet.mockRejectedValue(new Error('Network error'));
 
       await fetchMessages('ch-1');
 
@@ -145,105 +181,104 @@ describe('messageService', () => {
     });
 
     it('sets loading state during fetch', async () => {
-      let resolvePromise: (value: TextReceivePayload[]) => void;
-      mockApiRequest.mockReturnValue(new Promise<TextReceivePayload[]>((resolve) => {
+      let resolvePromise: (value: ApiPaginatedList<TextReceivePayload>) => void;
+      mockApiGet.mockReturnValue(new Promise<ApiPaginatedList<TextReceivePayload>>((resolve) => {
         resolvePromise = resolve;
       }));
 
       const fetchPromise = fetchMessages('ch-1');
       expect(useMessageStore.getState().isLoading).toBe(true);
 
-      resolvePromise!([]);
+      resolvePromise!(makePaginatedResponse([]));
       await fetchPromise;
       expect(useMessageStore.getState().isLoading).toBe(false);
     });
 
-    it('fetches without cursor when no before option provided', async () => {
-      mockApiRequest.mockResolvedValue([]);
+    it('calls apiGet with correct URL and returnFullBody=true', async () => {
+      mockApiGet.mockResolvedValue(makePaginatedResponse([]));
       await fetchMessages('ch-1');
 
-      expect(mockApiRequest).toHaveBeenCalledWith('/api/channels/ch-1/messages?limit=50');
-    });
-
-    it('appends before query param when cursor provided', async () => {
-      mockApiRequest.mockResolvedValue([]);
-      await fetchMessages('ch-1', { before: 'msg-abc' });
-
-      expect(mockApiRequest).toHaveBeenCalledWith('/api/channels/ch-1/messages?limit=50&before=msg-abc');
-    });
-
-    it('sets hasMoreMessages true when 50 messages returned', async () => {
-      const fiftyMessages = Array.from({ length: 50 }, (_, i) => ({
-        messageId: `msg-${i}`,
-        channelId: 'ch-1',
-        authorId: 'user-1',
-        content: `encrypted:msg${i}`,
-        nonce: `n${i}`,
-        createdAt: '2024-01-01T00:00:00.000Z',
-      }));
-      mockApiRequest.mockResolvedValue(fiftyMessages);
-      await fetchMessages('ch-1');
-
-      expect(useMessageStore.getState().hasMoreMessages.get('ch-1')).toBe(true);
-    });
-
-    it('sets hasMoreMessages false when fewer than 50 messages returned', async () => {
-      mockApiRequest.mockResolvedValue([
-        {
-          messageId: 'msg-1',
-          channelId: 'ch-1',
-          authorId: 'user-1',
-          content: 'encrypted:Hello',
-          nonce: 'n1',
-          createdAt: '2024-01-01T00:00:00.000Z',
-        },
-      ]);
-      await fetchMessages('ch-1');
-
-      expect(useMessageStore.getState().hasMoreMessages.get('ch-1')).toBe(false);
+      expect(mockApiGet).toHaveBeenCalledWith('/api/channels/ch-1/messages?limit=50', true);
     });
   });
 
   describe('fetchOlderMessages', () => {
-    it('gets oldest message ID from store and calls fetchMessages with cursor', async () => {
-      // Set up store with existing messages
-      useMessageStore.getState().setMessages('ch-1', [
-        { id: 'oldest-msg', channelId: 'ch-1', authorId: 'user-1', content: 'First', createdAt: '2024-01-01T00:00:00Z', status: 'sent' },
-        { id: 'newest-msg', channelId: 'ch-1', authorId: 'user-1', content: 'Last', createdAt: '2024-01-01T01:00:00Z', status: 'sent' },
-      ]);
-      mockApiRequest.mockResolvedValue([]);
+    it('uses cursor from store (not message ID) to fetch next page', async () => {
+      // Set initial messages with a cursor
+      useMessageStore.getState().setMessages(
+        'ch-1',
+        [
+          { id: 'oldest-msg', channelId: 'ch-1', authorId: 'user-1', content: 'First', createdAt: '2024-01-01T00:00:00Z', status: 'sent' },
+          { id: 'newest-msg', channelId: 'ch-1', authorId: 'user-1', content: 'Last', createdAt: '2024-01-01T01:00:00Z', status: 'sent' },
+        ],
+        true,
+        'opaque-cursor-xyz',
+      );
+      mockApiGet.mockResolvedValue(makePaginatedResponse([], null));
 
       await fetchOlderMessages('ch-1');
 
-      expect(mockApiRequest).toHaveBeenCalledWith('/api/channels/ch-1/messages?limit=50&before=oldest-msg');
+      // Should pass cursor as query param, NOT message ID
+      expect(mockApiGet).toHaveBeenCalledWith(
+        '/api/channels/ch-1/messages?limit=50&cursor=opaque-cursor-xyz',
+        true,
+      );
+    });
+
+    it('returns without fetching when cursor is null (no more pages)', async () => {
+      // Set messages with null cursor (no more pages)
+      useMessageStore.getState().setMessages(
+        'ch-1',
+        [{ id: 'msg-1', channelId: 'ch-1', authorId: 'user-1', content: 'Hello', createdAt: '2024-01-01T00:00:00Z', status: 'sent' }],
+        false,
+        null,
+      );
+
+      await fetchOlderMessages('ch-1');
+
+      expect(mockApiGet).not.toHaveBeenCalled();
+    });
+
+    it('returns without fetching when no messages exist (no cursor)', async () => {
+      await fetchOlderMessages('ch-1');
+
+      expect(mockApiGet).not.toHaveBeenCalled();
+      expect(useMessageStore.getState().isLoadingMore).toBe(false);
     });
 
     it('sets isLoadingMore during request', async () => {
-      useMessageStore.getState().setMessages('ch-1', [
-        { id: 'msg-1', channelId: 'ch-1', authorId: 'user-1', content: 'Hello', createdAt: '2024-01-01T00:00:00Z', status: 'sent' },
-      ]);
+      useMessageStore.getState().setMessages(
+        'ch-1',
+        [{ id: 'msg-1', channelId: 'ch-1', authorId: 'user-1', content: 'Hello', createdAt: '2024-01-01T00:00:00Z', status: 'sent' }],
+        true,
+        'some-cursor',
+      );
 
-      let resolvePromise: (value: TextReceivePayload[]) => void;
-      mockApiRequest.mockReturnValue(new Promise<TextReceivePayload[]>((resolve) => {
+      let resolvePromise: (value: ApiPaginatedList<TextReceivePayload>) => void;
+      mockApiGet.mockReturnValue(new Promise<ApiPaginatedList<TextReceivePayload>>((resolve) => {
         resolvePromise = resolve;
       }));
 
       const fetchPromise = fetchOlderMessages('ch-1');
       expect(useMessageStore.getState().isLoadingMore).toBe(true);
 
-      resolvePromise!([]);
+      resolvePromise!(makePaginatedResponse([]));
       await fetchPromise;
       expect(useMessageStore.getState().isLoadingMore).toBe(false);
     });
 
-    it('calls prependMessages with decrypted results', async () => {
-      useMessageStore.getState().setMessages('ch-1', [
-        { id: 'existing-msg', channelId: 'ch-1', authorId: 'user-1', content: 'Existing', createdAt: '2024-01-01T01:00:00Z', status: 'sent' },
-      ]);
+    it('prepends decrypted messages to existing messages', async () => {
+      useMessageStore.getState().setMessages(
+        'ch-1',
+        [{ id: 'existing-msg', channelId: 'ch-1', authorId: 'user-1', content: 'Existing', createdAt: '2024-01-01T01:00:00Z', status: 'sent' }],
+        true,
+        'cursor-for-page-2',
+      );
 
-      mockApiRequest.mockResolvedValue([
-        { messageId: 'older-msg', channelId: 'ch-1', authorId: 'user-2', content: 'encrypted:Older', nonce: 'n1', createdAt: '2024-01-01T00:00:00Z' },
-      ]);
+      mockApiGet.mockResolvedValue(makePaginatedResponse(
+        [makeMessage({ messageId: 'older-msg', authorId: 'user-2', content: 'encrypted:Older', nonce: 'n1', createdAt: '2024-01-01T00:00:00Z' })],
+        null,
+      ));
 
       await fetchOlderMessages('ch-1');
 
@@ -252,20 +287,18 @@ describe('messageService', () => {
       // Prepended older message should be first
       expect(messages![0].content).toBe('Older');
       expect(messages![1].content).toBe('Existing');
-    });
-
-    it('returns without fetching when no messages exist (no oldest ID)', async () => {
-      await fetchOlderMessages('ch-1');
-
-      expect(mockApiRequest).not.toHaveBeenCalled();
-      expect(useMessageStore.getState().isLoadingMore).toBe(false);
+      // No more pages
+      expect(useMessageStore.getState().hasMoreMessages.get('ch-1')).toBe(false);
     });
 
     it('resets isLoadingMore on error', async () => {
-      useMessageStore.getState().setMessages('ch-1', [
-        { id: 'msg-1', channelId: 'ch-1', authorId: 'user-1', content: 'Hello', createdAt: '2024-01-01T00:00:00Z', status: 'sent' },
-      ]);
-      mockApiRequest.mockRejectedValue(new Error('Network error'));
+      useMessageStore.getState().setMessages(
+        'ch-1',
+        [{ id: 'msg-1', channelId: 'ch-1', authorId: 'user-1', content: 'Hello', createdAt: '2024-01-01T00:00:00Z', status: 'sent' }],
+        true,
+        'some-cursor',
+      );
+      mockApiGet.mockRejectedValue(new Error('Network error'));
 
       await fetchOlderMessages('ch-1');
 

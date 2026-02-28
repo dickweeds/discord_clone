@@ -7,6 +7,7 @@ vi.hoisted(() => {
   process.env.JWT_REFRESH_SECRET = 'test-refresh-secret-key-for-testing';
 });
 
+import { sql } from 'drizzle-orm';
 import { createDatabase, type AppDatabase } from '../../db/connection.js';
 import { users, sessions } from '../../db/schema.js';
 import { hashToken } from './authService.js';
@@ -45,8 +46,7 @@ afterAll(async () => {
 });
 
 beforeEach(async () => {
-  await db.delete(sessions);
-  await db.delete(users);
+  await db.execute(sql`TRUNCATE TABLE messages, sessions, bans, invites, channels, users CASCADE`);
 });
 
 describe('sessionService', () => {

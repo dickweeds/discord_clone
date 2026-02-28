@@ -24,11 +24,14 @@ function encodeCursor(msg: { created_at: Date; id: string }): string {
   })).toString('base64url');
 }
 
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
 function decodeCursor(cursor: string): Cursor {
   try {
     const parsed = JSON.parse(Buffer.from(cursor, 'base64url').toString());
-    if (!parsed.t || !parsed.id) throw new Error('missing fields');
+    if (typeof parsed.t !== 'string' || typeof parsed.id !== 'string') throw new Error('invalid types');
     if (isNaN(new Date(parsed.t).getTime())) throw new Error('invalid timestamp');
+    if (!UUID_RE.test(parsed.id)) throw new Error('invalid id format');
     return parsed;
   } catch {
     throw new InvalidCursorError('Invalid pagination cursor');
@@ -72,12 +75,12 @@ export async function getMessagesByChannel(
   if (cursor) {
     const { t, id } = decodeCursor(cursor);
     const ts = new Date(t);
-    conditions.push(
-      or(
-        lt(messages.created_at, ts),
-        and(eq(messages.created_at, ts), lt(messages.id, id))
-      )!
+    const cursorCondition = or(
+      lt(messages.created_at, ts),
+      and(eq(messages.created_at, ts), lt(messages.id, id))
     );
+    if (!cursorCondition) throw new InvalidCursorError('Failed to build cursor condition');
+    conditions.push(cursorCondition);
   }
 
   const rows = await db.select().from(messages)

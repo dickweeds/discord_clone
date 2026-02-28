@@ -154,6 +154,13 @@ describe('GET /api/channels/:channelId/messages', () => {
     // Verify no duplicate messages across pages
     const allIds = [...body1.data.map((m: { messageId: string }) => m.messageId), ...body2.data.map((m: { messageId: string }) => m.messageId)];
     expect(new Set(allIds).size).toBe(5);
+
+    // Verify descending chronological order within and across pages
+    const allMessages = [...body1.data, ...body2.data] as { createdAt: string }[];
+    for (let i = 1; i < allMessages.length; i++) {
+      expect(new Date(allMessages[i].createdAt).getTime())
+        .toBeLessThanOrEqual(new Date(allMessages[i - 1].createdAt).getTime());
+    }
   });
 
   it('returns 400 for invalid cursor', async () => {

@@ -14,7 +14,7 @@ export const users = pgTable('users', {
   public_key: text('public_key'),
   encrypted_group_key: text('encrypted_group_key'),
   created_at: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
-});
+}).enableRLS();
 
 // --- Sessions ---
 export const sessions = pgTable('sessions', {
@@ -26,7 +26,7 @@ export const sessions = pgTable('sessions', {
 }, (table) => [
   index('idx_sessions_user_id').on(table.user_id),
   index('idx_sessions_token_hash').on(table.refresh_token_hash),
-]);
+]).enableRLS();
 
 // --- Invites ---
 export const invites = pgTable('invites', {
@@ -35,7 +35,7 @@ export const invites = pgTable('invites', {
   created_by: uuid('created_by').notNull().references(() => users.id, { onDelete: 'cascade' }),
   revoked: boolean('revoked').notNull().default(false),
   created_at: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
-});
+}).enableRLS();
 
 // --- Bans ---
 export const bans = pgTable('bans', {
@@ -45,7 +45,7 @@ export const bans = pgTable('bans', {
   created_at: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
 }, (table) => [
   index('idx_bans_user_id').on(table.user_id),
-]);
+]).enableRLS();
 
 // --- Channels ---
 export const channels = pgTable('channels', {
@@ -55,7 +55,7 @@ export const channels = pgTable('channels', {
   created_at: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
 }, (table) => [
   index('idx_channels_type').on(table.type),
-]);
+]).enableRLS();
 
 // --- Messages ---
 export const messages = pgTable('messages', {
@@ -68,7 +68,7 @@ export const messages = pgTable('messages', {
 }, (table) => [
   // Composite index covers channel_id prefix queries — no standalone indexes needed
   index('messages_channel_created_idx').on(table.channel_id, table.created_at, table.id),
-]);
+]).enableRLS();
 
 // --- Inferred Types ---
 export type User = InferSelectModel<typeof users>;

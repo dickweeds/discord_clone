@@ -12,10 +12,11 @@ export async function withDbRetry<T>(
     try {
       return await fn();
     } catch (err: unknown) {
-      const pgErr = err as { code?: string };
-      const isTransient = pgErr.code === '08006' || // connection_failure
-                          pgErr.code === '08001' || // sqlclient_unable_to_establish
-                          pgErr.code === '57P01';    // admin_shutdown (Supabase maintenance)
+      const pgErr = err as { code?: string; cause?: { code?: string } };
+      const code = pgErr.code ?? pgErr.cause?.code;
+      const isTransient = code === '08006' || // connection_failure
+                          code === '08001' || // sqlclient_unable_to_establish
+                          code === '57P01';    // admin_shutdown (Supabase maintenance)
       if (!isTransient || attempt === maxRetries) throw err;
       await new Promise(r => setTimeout(r, delayMs * (attempt + 1)));
     }

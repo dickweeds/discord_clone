@@ -70,7 +70,7 @@ function isValidWsMessage(data: unknown): data is WsMessage {
   if (typeof data !== 'object' || data === null) return false;
   const obj = data as Record<string, unknown>;
   if (typeof obj.type !== 'string') return false;
-  if (!('payload' in obj)) return false;
+  if (!('payload' in obj) || typeof obj.payload !== 'object' || obj.payload === null) return false;
   if ('id' in obj && typeof obj.id !== 'string') return false;
   return true;
 }

@@ -36,8 +36,10 @@ export default fp(async (fastify: FastifyInstance) => {
               'Database unreachable after %d consecutive checks — exiting',
               MAX_HEALTH_FAILURES,
             );
-            // Graceful shutdown: drain pool before exit to release Supabase connections
-            await fastify.close();
+            // Bound shutdown — if pool can't drain (already dead), exit anyway after 5s
+            const shutdownTimeout = setTimeout(() => process.exit(1), 5000);
+            shutdownTimeout.unref();
+            try { await fastify.close(); } catch { /* ignore — exiting anyway */ }
             process.exit(1);
           }
         }

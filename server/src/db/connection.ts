@@ -38,26 +38,37 @@ function validateConnectionUrl(url: string): void {
   }
 }
 
+function envInt(key: string, fallback: number): number {
+  const val = process.env[key];
+  if (!val) return fallback;
+  const parsed = parseInt(val, 10);
+  return Number.isNaN(parsed) ? fallback : parsed;
+}
+
 export function createDatabase(connectionString?: string): DatabaseConnection {
   const connectionUrl = connectionString ?? process.env.DATABASE_URL;
 
   if (connectionUrl) {
     validateConnectionUrl(connectionUrl);
 
+    // Auto-detect Supavisor transaction mode (port 6543) — requires prepare: false
+    const parsedUrl = new URL(connectionUrl);
+    const isTransactionMode = parsedUrl.port === '6543';
+
     const client = postgres(connectionUrl, {
-      max: parseInt(process.env.DB_POOL_MAX || '10', 10),
-      idle_timeout: parseInt(process.env.DB_IDLE_TIMEOUT || '20', 10),
-      connect_timeout: parseInt(process.env.DB_CONNECT_TIMEOUT || '10', 10),
+      max: envInt('DB_POOL_MAX', 10),
+      idle_timeout: envInt('DB_IDLE_TIMEOUT', 20),
+      connect_timeout: envInt('DB_CONNECT_TIMEOUT', 10),
       max_lifetime: 60 * 30, // 30 min — rotate connections to handle Supabase infra updates
+      prepare: !isTransactionMode, // Supavisor transaction mode doesn't support prepared statements
       onnotice: (notice) => {
         // Suppress Supabase's automatic RLS reminder notices
         if (notice.message?.includes('row-level security') || notice.message?.includes('RLS')) return;
         // Log all other Postgres notices — they may indicate real issues
         process.stderr.write(`[postgres notice] ${notice.message}\n`);
       },
-      connection: {
-        statement_timeout: 30000, // 30 seconds — prevent slow queries from holding pool connections
-      },
+      // statement_timeout not applicable in transaction mode (per-query connection reuse)
+      ...(isTransactionMode ? {} : { connection: { statement_timeout: 30000 } }),
     });
 
     const db = drizzlePostgres(client, { schema }) as unknown as AppDatabase;

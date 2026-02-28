@@ -23,7 +23,6 @@ interface MessageState {
   addOptimisticMessage: (channelId: string, message: DecryptedMessage) => void;
   setMessages: (channelId: string, messages: DecryptedMessage[], hasMore?: boolean, cursor?: string | null) => void;
   prependMessages: (channelId: string, messages: DecryptedMessage[], hasMore: boolean, cursor?: string | null) => void;
-  getOldestMessageId: (channelId: string) => string | undefined;
   getCursor: (channelId: string) => string | null;
   setCursor: (channelId: string, cursor: string | null) => void;
   addReceivedMessage: (message: DecryptedMessage) => void;
@@ -74,12 +73,6 @@ const useMessageStore = create<MessageState>((set, get) => ({
     const newCursors = new Map(get().cursors);
     newCursors.set(channelId, cursor ?? null);
     set({ messages: newMessages, hasMoreMessages: newHasMore, cursors: newCursors });
-  },
-
-  getOldestMessageId: (channelId: string): string | undefined => {
-    const msgs = get().messages.get(channelId);
-    if (!msgs || msgs.length === 0) return undefined;
-    return msgs[0].id;
   },
 
   getCursor: (channelId: string): string | null => {

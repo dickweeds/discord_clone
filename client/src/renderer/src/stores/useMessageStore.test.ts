@@ -7,6 +7,7 @@ beforeEach(() => {
   useMessageStore.setState({
     messages: new Map(),
     hasMoreMessages: new Map(),
+    cursors: new Map(),
     isLoadingMore: false,
     currentChannelId: null,
     isLoading: false,
@@ -280,23 +281,24 @@ describe('useMessageStore', () => {
     });
   });
 
-  describe('getOldestMessageId', () => {
-    it('returns first message ID', () => {
-      useMessageStore.getState().setMessages('ch-1', [
-        { id: 'oldest', channelId: 'ch-1', authorId: 'user-1', content: 'First', createdAt: '2024-01-01T00:00:00Z', status: 'sent' },
-        { id: 'newest', channelId: 'ch-1', authorId: 'user-1', content: 'Last', createdAt: '2024-01-01T01:00:00Z', status: 'sent' },
-      ]);
-
-      expect(useMessageStore.getState().getOldestMessageId('ch-1')).toBe('oldest');
+  describe('cursor state', () => {
+    it('getCursor returns null for unknown channel', () => {
+      expect(useMessageStore.getState().getCursor('ch-1')).toBeNull();
     });
 
-    it('returns undefined for empty channel', () => {
-      expect(useMessageStore.getState().getOldestMessageId('ch-1')).toBeUndefined();
+    it('setCursor and getCursor round-trip', () => {
+      useMessageStore.getState().setCursor('ch-1', 'opaque-cursor');
+      expect(useMessageStore.getState().getCursor('ch-1')).toBe('opaque-cursor');
     });
 
-    it('returns undefined for channel with no messages', () => {
-      useMessageStore.getState().setMessages('ch-1', []);
-      expect(useMessageStore.getState().getOldestMessageId('ch-1')).toBeUndefined();
+    it('setMessages stores cursor', () => {
+      useMessageStore.getState().setMessages('ch-1', [], true, 'from-set-messages');
+      expect(useMessageStore.getState().getCursor('ch-1')).toBe('from-set-messages');
+    });
+
+    it('prependMessages stores cursor', () => {
+      useMessageStore.getState().prependMessages('ch-1', [], false, 'from-prepend');
+      expect(useMessageStore.getState().getCursor('ch-1')).toBe('from-prepend');
     });
   });
 

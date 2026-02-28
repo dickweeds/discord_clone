@@ -1,7 +1,6 @@
 import type { WebSocket } from 'ws';
 import type { FastifyBaseLogger } from 'fastify';
 import type { WsMessage } from 'discord-clone-shared';
-import type { Producer, Consumer } from 'mediasoup/types';
 import { WS_TYPES } from 'discord-clone-shared';
 import type { AppDatabase } from '../../db/connection.js';
 import { registerHandler, respond, respondError } from '../../ws/wsRouter.js';
@@ -114,7 +113,7 @@ function handleVoiceLeave(ws: WebSocket, message: WsMessage, userId: string): vo
   }
 }
 
-function handleCreateTransport(ws: WebSocket, message: WsMessage, userId: string): void {
+async function handleCreateTransport(ws: WebSocket, message: WsMessage, userId: string): Promise<void> {
   const { direction } = message.payload as { direction: 'send' | 'recv' };
   const requestId = message.id;
 
@@ -135,28 +134,27 @@ function handleCreateTransport(ws: WebSocket, message: WsMessage, userId: string
     return;
   }
 
-  createWebRtcTransport(userId)
-    .then(({ transport, transportParams, iceServers }) => {
-      setPeerTransport(userId, direction, transport);
+  try {
+    const { transport, transportParams, iceServers } = await createWebRtcTransport(userId);
+    setPeerTransport(userId, direction, transport);
 
-      transport.on('dtlsstatechange', (dtlsState: string) => {
-        log.info({ userId, transportId: transport.id, dtlsState }, 'Transport DTLS state change');
-      });
-      transport.on('icestatechange', (iceState: string) => {
-        log.info({ userId, transportId: transport.id, iceState }, 'Transport ICE state change');
-      });
-
-      if (requestId) {
-        respond(ws, requestId, { transportParams, iceServers });
-      }
-    })
-    .catch((err: Error) => {
-      log.error({ userId, err: err.message }, 'Failed to create WebRTC transport');
-      if (requestId) respondError(ws, requestId, 'Failed to create transport');
+    transport.on('dtlsstatechange', (dtlsState: string) => {
+      log.info({ userId, transportId: transport.id, dtlsState }, 'Transport DTLS state change');
     });
+    transport.on('icestatechange', (iceState: string) => {
+      log.info({ userId, transportId: transport.id, iceState }, 'Transport ICE state change');
+    });
+
+    if (requestId) {
+      respond(ws, requestId, { transportParams, iceServers });
+    }
+  } catch (err) {
+    log.error({ userId, err: (err as Error).message }, 'Failed to create WebRTC transport');
+    if (requestId) respondError(ws, requestId, 'Failed to create transport');
+  }
 }
 
-function handleConnectTransport(ws: WebSocket, message: WsMessage, userId: string): void {
+async function handleConnectTransport(ws: WebSocket, message: WsMessage, userId: string): Promise<void> {
   const { transportId, dtlsParameters } = message.payload as {
     transportId: string;
     dtlsParameters: unknown;
@@ -182,18 +180,16 @@ function handleConnectTransport(ws: WebSocket, message: WsMessage, userId: strin
     return;
   }
 
-  transport
-    .connect({ dtlsParameters: dtlsParameters as Parameters<typeof transport.connect>[0]['dtlsParameters'] })
-    .then(() => {
-      if (requestId) respond(ws, requestId, {});
-    })
-    .catch((err: Error) => {
-      log.error({ userId, transportId, err: err.message }, 'Failed to connect transport');
-      if (requestId) respondError(ws, requestId, 'Failed to connect transport');
-    });
+  try {
+    await transport.connect({ dtlsParameters: dtlsParameters as Parameters<typeof transport.connect>[0]['dtlsParameters'] });
+    if (requestId) respond(ws, requestId, {});
+  } catch (err) {
+    log.error({ userId, transportId, err: (err as Error).message }, 'Failed to connect transport');
+    if (requestId) respondError(ws, requestId, 'Failed to connect transport');
+  }
 }
 
-function handleProduce(ws: WebSocket, message: WsMessage, userId: string): void {
+async function handleProduce(ws: WebSocket, message: WsMessage, userId: string): Promise<void> {
   const { transportId, kind, rtpParameters } = message.payload as {
     transportId: string;
     kind: 'audio' | 'video';
@@ -224,40 +220,39 @@ function handleProduce(ws: WebSocket, message: WsMessage, userId: string): void 
     return;
   }
 
-  peer.sendTransport
-    .produce({
+  try {
+    const producer = await peer.sendTransport.produce({
       kind,
       rtpParameters: rtpParameters as Parameters<typeof peer.sendTransport.produce>[0]['rtpParameters'],
-    })
-    .then((producer: Producer) => {
-      if (kind === 'video') {
-        setPeerVideoProducer(userId, producer);
-      } else {
-        setPeerProducer(userId, producer);
-      }
-
-      producer.on('transportclose', () => {
-        log.info({ userId, producerId: producer.id }, 'Producer transport closed');
-      });
-
-      if (requestId) {
-        respond(ws, requestId, { producerId: producer.id });
-      }
-
-      // Notify other peers in channel about new producer
-      broadcastToChannel(peer.channelId, userId, WS_TYPES.VOICE_NEW_PRODUCER, {
-        producerId: producer.id,
-        peerId: userId,
-        kind,
-      });
-    })
-    .catch((err: Error) => {
-      log.error({ userId, err: err.message }, 'Failed to produce');
-      if (requestId) respondError(ws, requestId, 'Failed to produce');
     });
+
+    if (kind === 'video') {
+      setPeerVideoProducer(userId, producer);
+    } else {
+      setPeerProducer(userId, producer);
+    }
+
+    producer.on('transportclose', () => {
+      log.info({ userId, producerId: producer.id }, 'Producer transport closed');
+    });
+
+    if (requestId) {
+      respond(ws, requestId, { producerId: producer.id });
+    }
+
+    // Notify other peers in channel about new producer
+    broadcastToChannel(peer.channelId, userId, WS_TYPES.VOICE_NEW_PRODUCER, {
+      producerId: producer.id,
+      peerId: userId,
+      kind,
+    });
+  } catch (err) {
+    log.error({ userId, err: (err as Error).message }, 'Failed to produce');
+    if (requestId) respondError(ws, requestId, 'Failed to produce');
+  }
 }
 
-function handleConsume(ws: WebSocket, message: WsMessage, userId: string): void {
+async function handleConsume(ws: WebSocket, message: WsMessage, userId: string): Promise<void> {
   const { producerId } = message.payload as { producerId: string };
   const requestId = message.id;
 
@@ -273,53 +268,52 @@ function handleConsume(ws: WebSocket, message: WsMessage, userId: string): void 
     return;
   }
 
-  peer.recvTransport
-    .consume({
+  try {
+    const consumer = await peer.recvTransport.consume({
       producerId,
       rtpCapabilities: peer.rtpCapabilities as Parameters<typeof peer.recvTransport.consume>[0]['rtpCapabilities'],
       paused: true,
-    })
-    .then((consumer: Consumer) => {
-      addPeerConsumer(userId, consumer);
-      const producerPeerId = findProducerOwner(producerId);
-
-      consumer.on('transportclose', () => {
-        log.info({ userId, consumerId: consumer.id }, 'Consumer transport closed');
-      });
-      consumer.on('producerclose', () => {
-        log.info({ userId, consumerId: consumer.id }, 'Consumer producer closed');
-        peer.consumers.delete(consumer.id);
-
-        // Notify the consuming client that this producer is gone
-        const clientWs = getClients().get(userId);
-        if (clientWs && clientWs.readyState === clientWs.OPEN) {
-          try {
-            clientWs.send(JSON.stringify({
-              type: WS_TYPES.VOICE_PRODUCER_CLOSED,
-              payload: { producerId, peerId: producerPeerId, kind: consumer.kind },
-            }));
-          } catch {
-            log.debug({ userId }, 'Failed to send producer-closed notification');
-          }
-        }
-      });
-
-      if (requestId) {
-        respond(ws, requestId, {
-          consumerId: consumer.id,
-          producerId,
-          kind: consumer.kind,
-          rtpParameters: consumer.rtpParameters,
-        });
-      }
-    })
-    .catch((err: Error) => {
-      log.error({ userId, producerId, err: err.message }, 'Failed to consume');
-      if (requestId) respondError(ws, requestId, 'Failed to consume');
     });
+
+    addPeerConsumer(userId, consumer);
+    const producerPeerId = findProducerOwner(producerId);
+
+    consumer.on('transportclose', () => {
+      log.info({ userId, consumerId: consumer.id }, 'Consumer transport closed');
+    });
+    consumer.on('producerclose', () => {
+      log.info({ userId, consumerId: consumer.id }, 'Consumer producer closed');
+      peer.consumers.delete(consumer.id);
+
+      // Notify the consuming client that this producer is gone
+      const clientWs = getClients().get(userId);
+      if (clientWs && clientWs.readyState === clientWs.OPEN) {
+        try {
+          clientWs.send(JSON.stringify({
+            type: WS_TYPES.VOICE_PRODUCER_CLOSED,
+            payload: { producerId, peerId: producerPeerId, kind: consumer.kind },
+          }));
+        } catch {
+          log.debug({ userId }, 'Failed to send producer-closed notification');
+        }
+      }
+    });
+
+    if (requestId) {
+      respond(ws, requestId, {
+        consumerId: consumer.id,
+        producerId,
+        kind: consumer.kind,
+        rtpParameters: consumer.rtpParameters,
+      });
+    }
+  } catch (err) {
+    log.error({ userId, producerId, err: (err as Error).message }, 'Failed to consume');
+    if (requestId) respondError(ws, requestId, 'Failed to consume');
+  }
 }
 
-function handleConsumerResume(ws: WebSocket, message: WsMessage, userId: string): void {
+async function handleConsumerResume(ws: WebSocket, message: WsMessage, userId: string): Promise<void> {
   const { consumerId } = message.payload as { consumerId: string };
   const requestId = message.id;
 
@@ -335,15 +329,13 @@ function handleConsumerResume(ws: WebSocket, message: WsMessage, userId: string)
     return;
   }
 
-  consumer
-    .resume()
-    .then(() => {
-      if (requestId) respond(ws, requestId, {});
-    })
-    .catch((err: Error) => {
-      log.error({ userId, consumerId, err: err.message }, 'Failed to resume consumer');
-      if (requestId) respondError(ws, requestId, 'Failed to resume consumer');
-    });
+  try {
+    await consumer.resume();
+    if (requestId) respond(ws, requestId, {});
+  } catch (err) {
+    log.error({ userId, consumerId, err: (err as Error).message }, 'Failed to resume consumer');
+    if (requestId) respondError(ws, requestId, 'Failed to resume consumer');
+  }
 }
 
 function handleVoiceState(_ws: WebSocket, message: WsMessage, userId: string): void {

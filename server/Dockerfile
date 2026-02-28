@@ -1,4 +1,4 @@
-# Stage 1: Build — compile native deps (mediasoup, better-sqlite3) + TypeScript
+# Stage 1: Build — compile native deps (mediasoup) + TypeScript
 FROM node:20-alpine AS builder
 RUN apk add --no-cache python3 py3-pip make g++ linux-headers
 
@@ -46,9 +46,6 @@ COPY --from=builder /app/package.json ./
 
 # Copy drizzle migrations (needed at runtime for auto-migrate on startup)
 COPY server/drizzle/ ./server/drizzle/
-
-# Data directory will be mounted as a volume
-RUN mkdir -p /app/data && chown appuser:appgroup /app/data
 
 USER appuser
 EXPOSE 3000

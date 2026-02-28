@@ -3,6 +3,7 @@
 services:
   postgres:
     image: postgres:15-alpine
+    restart: unless-stopped
     environment:
       POSTGRES_USER: discord_clone
       POSTGRES_PASSWORD: dev_password
