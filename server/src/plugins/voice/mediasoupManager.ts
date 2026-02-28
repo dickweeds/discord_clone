@@ -43,6 +43,7 @@ async function createWorkerAndRouter(): Promise<void> {
   worker = await mediasoup.createWorker({
     logLevel: 'warn',
     logTags: ['ice', 'dtls', 'rtp', 'srtp', 'rtcp'],
+    disableLiburing: true,
   });
 
   worker.on('died', () => {
