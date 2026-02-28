@@ -6,16 +6,20 @@ export async function runSeed(db: AppDatabase, logger?: { info: (msg: string) =>
   const log = logger ?? { info: () => {}, warn: () => {} };
 
   // Seed default channels if none exist (fallback for existing DBs)
-  const [channelCount] = await db.select({ value: count() }).from(channels);
-  if (Number(channelCount.value) > 0) {
-    log.info('Seeding skipped — channels already exist');
-    return;
+  try {
+    const [channelCount] = await db.select({ value: count() }).from(channels);
+    if (Number(channelCount.value) > 0) {
+      log.info('Seeding skipped — channels already exist');
+      return;
+    }
+
+    await db.insert(channels).values([
+      { name: 'general', type: 'text' },
+      { name: 'Gaming', type: 'voice' },
+    ]);
+
+    log.info('Default channels seeded');
+  } catch {
+    log.warn('Seeding skipped — tables do not exist yet (run migrations first)');
   }
-
-  await db.insert(channels).values([
-    { name: 'general', type: 'text' },
-    { name: 'Gaming', type: 'voice' },
-  ]);
-
-  log.info('Default channels seeded');
 }

@@ -60,6 +60,19 @@ docker compose pull "app-$NEW"
 # 3. Start new slot (no traffic routed yet — nginx still points at old slot)
 docker compose --profile deploy up -d "app-$NEW"
 
+# 3a. On cold start, run migrations before health check (tables may not exist yet)
+if [ "$ACTIVE" = "none" ]; then
+  echo "Cold start — waiting for container to accept connections..."
+  sleep 5
+  echo "Running migrations before health check..."
+  if ! docker compose exec -T "app-$NEW" node dist/scripts/migrate.js 2>&1; then
+    echo "FATAL: cold-start migration failed on app-$NEW"
+    docker compose stop "app-$NEW"
+    exit 1
+  fi
+  echo "Cold-start migrations complete"
+fi
+
 # 4. Health check new slot
 for i in $(seq 1 30); do
   if curl -sf "http://127.0.0.1:$NEW_PORT/api/health" > /dev/null 2>&1; then
