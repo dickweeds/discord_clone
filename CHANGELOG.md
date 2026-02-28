@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.99.125](https://github.com/AidenWoodside/discord_clone/compare/v0.99.124...v0.99.125) (2026-02-28)
+
+
+### Bug Fixes
+
+* remove dotenv runtime import for production ([02afd81](https://github.com/AidenWoodside/discord_clone/commit/02afd8193dc0fc453a07d51b32258b75c6d73877))
+* remove dotenv runtime import from server entry point ([f5b9322](https://github.com/AidenWoodside/discord_clone/commit/f5b93223c8a4b150ca2d505057237d5c86ca974d))
+
 ## [0.99.124](https://github.com/AidenWoodside/discord_clone/compare/v0.99.123...v0.99.124) (2026-02-28)
 
 
