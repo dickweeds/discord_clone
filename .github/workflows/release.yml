@@ -215,7 +215,7 @@ jobs:
             --instance-ids "${{ secrets.EC2_INSTANCE_ID }}" \
             --document-name "AWS-RunShellScript" \
             --timeout-seconds 60 \
-            --parameters 'commands=["git config --global --add safe.directory /home/ubuntu/discord_clone && cd /home/ubuntu/discord_clone && git fetch origin main && git checkout origin/main -- docker-compose.yml docker/ scripts/ landing/ && aws s3 sync s3://discord-clone-assets-966917019849/ data/downloads/"]' \
+            --parameters 'commands=["export HOME=/root && git config --global --add safe.directory /home/ubuntu/discord_clone && cd /home/ubuntu/discord_clone && git fetch origin main && git checkout origin/main -- docker-compose.yml docker/ scripts/ landing/ && aws s3 sync s3://discord-clone-assets-966917019849/ data/downloads/"]' \
             --query "Command.CommandId" --output text)
 
           for i in $(seq 1 15); do
