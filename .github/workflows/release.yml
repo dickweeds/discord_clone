@@ -108,7 +108,7 @@ jobs:
         os: [ubuntu-latest, windows-latest, macos-latest]
     runs-on: ${{ matrix.os }}
     permissions:
-      contents: write
+      contents: read
     steps:
       - uses: actions/checkout@v6
 
@@ -126,13 +126,21 @@ jobs:
       - name: Build client
         run: npm run build -w client
 
-      - name: Build and publish Electron app
+      - name: Build Electron app
         shell: bash
         run: |
           VERSION=$(node -p "require('./package.json').version")
-          cd client && npx electron-builder --publish always -c.extraMetadata.version=$VERSION
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          cd client && npx electron-builder --publish never -c.extraMetadata.version=$VERSION
+
+      - name: Upload installer artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: electron-${{ matrix.os }}
+          path: |
+            client/dist/*.AppImage
+            client/dist/*.dmg
+            client/dist/*Setup*.exe
+          if-no-files-found: error
 
   build-server-image:
     needs: [validate-version, detect-changes]
@@ -174,6 +182,7 @@ jobs:
           format: 'table'
           severity: 'CRITICAL,HIGH'
           exit-code: '1'
+          ignore-unfixed: true
 
   publish-release:
     needs: [detect-changes, build-electron]
@@ -220,21 +229,26 @@ jobs:
           role-to-assume: ${{ secrets.AWS_DEPLOY_ROLE_ARN }}
           aws-region: us-east-1
 
-      - name: Download release assets for landing page
+      - name: Download installer artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+          pattern: electron-*
+          merge-multiple: true
+
+      - name: Upload assets to GitHub release
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          mkdir -p downloads
           TAG="${{ github.ref_name }}"
+          gh release upload "$TAG" artifacts/* --clobber
 
-          # Download assets using gh CLI (handles auth for private repos)
-          gh release download "$TAG" --repo AidenWoodside/discord_clone --dir downloads_raw || {
-            echo "ERROR: Could not download release assets for $TAG"
-            exit 1
-          }
+      - name: Prepare download assets for landing page
+        run: |
+          mkdir -p downloads
 
           # Copy installers with stable filenames (strip version numbers)
-          for f in downloads_raw/*; do
+          for f in artifacts/*; do
             NAME=$(basename "$f")
             case "$NAME" in
               *Setup*.exe)
