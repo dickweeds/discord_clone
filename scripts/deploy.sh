@@ -24,6 +24,10 @@ JWT_REFRESH_SECRET=$(aws ssm get-parameter --name "/discord-clone/prod/JWT_REFRE
 TURN_SECRET=$(aws ssm get-parameter --name "/discord-clone/prod/TURN_SECRET" --with-decryption --query "Parameter.Value" --output text)
 GROUP_ENCRYPTION_KEY=$(aws ssm get-parameter --name "/discord-clone/prod/GROUP_ENCRYPTION_KEY" --with-decryption --query "Parameter.Value" --output text)
 DATABASE_URL=$(aws ssm get-parameter --name "/discord-clone/prod/DATABASE_URL" --with-decryption --query "Parameter.Value" --output text)
+GHCR_TOKEN=$(aws ssm get-parameter --name "/discord-clone/prod/GHCR_TOKEN" --with-decryption --query "Parameter.Value" --output text)
+
+# Authenticate with GHCR to pull private images
+echo "$GHCR_TOKEN" | docker login ghcr.io -u AidenWoodside --password-stdin
 
 # Pass secrets as environment overrides — Docker stores them in the container config
 # No file on disk, no env_file directive needed
