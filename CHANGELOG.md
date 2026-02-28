@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.99.120](https://github.com/AidenWoodside/discord_clone/compare/v0.99.119...v0.99.120) (2026-02-28)
+
+
+### Bug Fixes
+
+* add AWS CLI v2 path to SSM commands and guard webhook URL ([c002b52](https://github.com/AidenWoodside/discord_clone/commit/c002b52363c114dd7add9fed6165873fedc87211))
+* add AWS CLI v2 path to SSM commands and guard webhook URL ([768558c](https://github.com/AidenWoodside/discord_clone/commit/768558c9459231b1f73bd30c3402a7983e1a7e18))
+
 ## [0.99.119](https://github.com/AidenWoodside/discord_clone/compare/v0.99.118...v0.99.119) (2026-02-28)
 
 
