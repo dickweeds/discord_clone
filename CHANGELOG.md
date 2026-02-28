@@ -1,5 +1,14 @@
 # Changelog
 
+## [0.99.116](https://github.com/AidenWoodside/discord_clone/compare/v0.99.115...v0.99.116) (2026-02-28)
+
+
+### Bug Fixes
+
+* add production environment to publish-release job ([0d6e864](https://github.com/AidenWoodside/discord_clone/commit/0d6e864f3bc421141fb49e0e98057ac52cc87a22))
+* use BuildKit cache mount for npm ci in server Dockerfile ([aee0dc2](https://github.com/AidenWoodside/discord_clone/commit/aee0dc21d061ebffec2dcd02a39e7ec79c806b6d))
+* use BuildKit cache mount for npm ci in server Dockerfile ([43fb9c2](https://github.com/AidenWoodside/discord_clone/commit/43fb9c27579acc49e22100a40c96f29cbd642017))
+
 ## [0.99.115](https://github.com/AidenWoodside/discord_clone/compare/v0.99.114...v0.99.115) (2026-02-28)
 
 
