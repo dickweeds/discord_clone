@@ -1,6 +1,5 @@
-# Stage 1: Build — compile native deps (mediasoup) + TypeScript
-FROM node:25-alpine AS builder
-RUN apk add --no-cache python3 py3-pip make g++ linux-headers
+# Stage 1: Build — download prebuilt mediasoup worker + compile TypeScript
+FROM node:25-slim AS builder
 
 WORKDIR /app
 
@@ -11,8 +10,9 @@ COPY shared/package.json shared/
 
 # Install all deps from lockfile (includes devDeps like typescript for building)
 # Note: npm ci installs the full lockfile (~412 packages incl. client deps).
-# This is intentional — the lockfile pins patched versions of transitive deps,
-# and mediasoup C++ compilation dominates build time regardless of package count.
+# This is intentional — the lockfile pins patched versions of transitive deps.
+# Using node:25-slim (glibc) so mediasoup downloads a prebuilt worker binary
+# instead of compiling C++ from source (~seconds vs ~10 minutes).
 # Cache mount keeps npm's download cache across builds so even when the layer
 # is invalidated (e.g. version bump in package.json), packages are not re-downloaded.
 RUN --mount=type=cache,target=/root/.npm npm ci
@@ -29,15 +29,13 @@ RUN npm run build -w shared && npm run build -w server
 RUN npm prune --omit=dev
 
 # Stage 2: Production — minimal runtime image
-FROM node:25-alpine
+FROM node:25-slim
 
-# mediasoup worker requires python3 at runtime
 # Remove npm (not needed at runtime) to eliminate bundled vulnerable deps
-RUN apk add --no-cache python3 \
- && rm -rf /usr/local/lib/node_modules/npm /usr/local/bin/npm /usr/local/bin/npx
+RUN rm -rf /usr/local/lib/node_modules/npm /usr/local/bin/npm /usr/local/bin/npx
 
 # Non-root user for security
-RUN addgroup -S appgroup && adduser -S appuser -G appgroup
+RUN addgroup --system appgroup && adduser --system --ingroup appgroup appuser
 
 WORKDIR /app
 

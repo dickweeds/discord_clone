@@ -66,6 +66,7 @@ describe('mediasoupManager', () => {
       expect(mediasoup.createWorker).toHaveBeenCalledWith({
         logLevel: 'warn',
         logTags: ['ice', 'dtls', 'rtp', 'srtp', 'rtcp'],
+        disableLiburing: true,
       });
       expect(mockWorker.createRouter).toHaveBeenCalledWith({
         mediaCodecs: [
