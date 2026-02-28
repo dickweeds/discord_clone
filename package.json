@@ -1,6 +1,6 @@
 {
   "name": "discord-clone",
-  "version": "0.99.111",
+  "version": "0.99.112",
   "private": true,
   "workspaces": [
     "client",
