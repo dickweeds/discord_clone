@@ -1,5 +1,14 @@
 # Changelog
 
+## [0.99.119](https://github.com/AidenWoodside/discord_clone/compare/v0.99.118...v0.99.119) (2026-02-28)
+
+
+### Bug Fixes
+
+* resolve trivy scan and electron-builder publish failures ([2b44473](https://github.com/AidenWoodside/discord_clone/commit/2b4447393a540af7d6963df5d9cda05f3a7788b6))
+* skip unfixed CVEs in trivy security scan ([6ae511f](https://github.com/AidenWoodside/discord_clone/commit/6ae511fa64e0d8afd9907871563c4513c6b32b5d))
+* use artifacts pipeline instead of electron-builder publish ([e189717](https://github.com/AidenWoodside/discord_clone/commit/e189717f80f7802f9af54107e73317887c9fdff1))
+
 ## [0.99.118](https://github.com/AidenWoodside/discord_clone/compare/v0.99.117...v0.99.118) (2026-02-28)
 
 
