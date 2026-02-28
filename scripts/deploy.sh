@@ -2,8 +2,11 @@
 set -euo pipefail
 
 # Require Docker Compose V2 >= 2.20
-if ! docker compose version --short 2>/dev/null | grep -qE '^2\.(2[0-9]|[3-9][0-9]|[0-9]{3,})'; then
-  echo "FATAL: Docker Compose V2 >= 2.20 required"
+DC_VERSION=$(docker compose version --short 2>/dev/null || echo "0.0.0")
+DC_MAJOR=$(echo "$DC_VERSION" | cut -d. -f1)
+DC_MINOR=$(echo "$DC_VERSION" | cut -d. -f2)
+if [ "$DC_MAJOR" -lt 2 ] || { [ "$DC_MAJOR" -eq 2 ] && [ "$DC_MINOR" -lt 20 ]; }; then
+  echo "FATAL: Docker Compose V2 >= 2.20 required (found $DC_VERSION)"
   exit 1
 fi
 
