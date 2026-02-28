@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.99.127](https://github.com/AidenWoodside/discord_clone/compare/v0.99.126...v0.99.127) (2026-02-28)
+
+
+### Bug Fixes
+
+* correct migration script path in deploy script ([#52](https://github.com/AidenWoodside/discord_clone/issues/52)) ([cc4e5b6](https://github.com/AidenWoodside/discord_clone/commit/cc4e5b6632c60a1268b1e9d77175226c2cd3bc6d))
+
 ## [0.99.126](https://github.com/AidenWoodside/discord_clone/compare/v0.99.125...v0.99.126) (2026-02-28)
 
 
