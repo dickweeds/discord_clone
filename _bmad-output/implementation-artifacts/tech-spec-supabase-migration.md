@@ -6,8 +6,8 @@ status: 'ready-for-dev'
 stepsCompleted: [1, 2, 3, 4]
 tech_stack: ['postgres (postgres.js)', 'drizzle-orm/pg-core', 'drizzle-orm/postgres-js', 'drizzle-orm/pglite', '@electric-sql/pglite', 'Supabase (managed Postgres)', 'Fastify v5.7.x', 'TypeScript 5.x strict', 'Vitest']
 files_to_modify: ['server/src/db/schema.ts', 'server/src/db/connection.ts', 'server/src/db/migrate.ts', 'server/src/db/seed.ts', 'server/drizzle.config.ts', 'server/src/plugins/db.ts', 'server/src/index.ts', 'server/src/plugins/auth/authRoutes.ts', 'server/src/plugins/auth/sessionService.ts', 'server/src/plugins/channels/channelRoutes.ts', 'server/src/plugins/channels/channelService.ts', 'server/src/plugins/messages/messageRoutes.ts', 'server/src/plugins/messages/messageService.ts', 'server/src/plugins/messages/messageWsHandler.ts', 'server/src/plugins/invites/inviteService.ts', 'server/src/plugins/users/userService.ts', 'server/src/plugins/admin/adminRoutes.ts', 'server/src/plugins/admin/adminService.ts', 'server/src/plugins/voice/voiceWsHandler.ts', 'server/src/ws/wsRouter.ts', 'server/src/test/helpers.ts', 'server/src/plugins/auth/sessionService.test.ts', 'server/src/plugins/channels/channelService.test.ts', 'server/src/plugins/messages/messageRoutes.test.ts', 'server/src/plugins/admin/adminService.test.ts', 'server/package.json', 'docker-compose.yml', 'docker-compose.dev.yml', '.env.example', 'shared/src/ws-messages.ts', 'shared/src/types.ts', 'shared/src/index.ts', 'client/src/renderer/src/services/messageService.ts', 'client/src/renderer/src/services/apiClient.ts', 'client/src/renderer/src/services/wsClient.ts', 'client/src/renderer/src/stores/useMessageStore.ts']
-code_patterns: ['pgTable schema definitions with pgEnum', 'uuid().defaultRandom() replaces text + crypto.randomUUID()', 'timestamp({ withTimezone: true }).defaultNow() replaces integer mode timestamp', 'boolean() replaces integer mode boolean', 'async/await on ALL db.* calls', '[result] = await db.insert().returning() destructure replaces .returning().get()', 'await db.select().from() replaces .all()', '[result] = await db.select().from().where() replaces .get()', 'await db.transaction(async (tx) => { await tx... }) replaces sync transaction', 'PGlite in-memory for tests via drizzle-orm/pglite', 'opaque base64url cursor encoding (created_at + id composite)', 'TEXT_ERROR WS frame for transient DB failures (no ws.close on recoverable errors)', 'withRetry() wrapper for idempotent GET requests on client']
-test_patterns: ['PGlite in-process Postgres for test database', 'Two test tiers: raw DB (sessionService) and full app (others)', 'sessionService.test.ts creates DB directly via createDatabase — no Fastify app', 'channelService/messageRoutes/adminService tests use setupApp() helper', 'authService.test.ts has NO DB — pure function tests — no changes needed', 'vi.stubEnv DATABASE_PATH :memory: pattern needs replacement for PGlite', 'beforeEach creates fresh DB instance per test for isolation', 'afterEach calls teardownApp() or close() for deterministic PGlite cleanup', 'Direct DB assertions in tests use .get() .all() .run() — all need await']
+code_patterns: ['pgTable schema definitions with pgEnum', 'uuid().defaultRandom() replaces text + crypto.randomUUID()', 'timestamp({ withTimezone: true }).defaultNow() replaces integer mode timestamp', 'boolean() replaces integer mode boolean', 'explicit ON DELETE CASCADE on all foreign keys (no nullable FK columns)', 'async/await on ALL db.* calls', '[result] = await db.insert().returning() destructure replaces .returning().get()', 'await db.select().from() replaces .all()', '[result] = await db.select().from().where() replaces .get()', 'await db.transaction(async (tx) => { await tx... }) replaces sync transaction', 'Postgres error code 23505 replaces SQLite UNIQUE constraint failed string match', 'PGlite in-memory for tests via drizzle-orm/pglite', 'opaque base64url cursor encoding (created_at + id composite) with decodeCursor validation', 'TEXT_ERROR WS frame with tempId in payload for transient DB failures (no ws.close on recoverable errors)', 'withRetry() wrapper for idempotent GET requests — only retries 5xx and network errors', 'RetryableError class distinguishes transient from client errors', 'apiRequest returnFullBody parameter for paginated responses', 'statement_timeout 30s and max_lifetime 30min on postgres.js pool (separate migration connection without timeout)', 'periodic SELECT 1 health check with 3-consecutive-failure threshold before exit', 'onnotice filters RLS notices only — logs all other Postgres notices at warn level', 'withDbRetry() for transient Postgres errors on idempotent writes (codes 08006/08001/57P01)', 'RLS enabled with zero policies + REVOKE on anon/authenticated to block PostgREST access']
+test_patterns: ['PGlite in-process Postgres for test database', 'Two test tiers: raw DB (sessionService) and full app (others)', 'sessionService.test.ts creates DB directly via createDatabase — no Fastify app', 'channelService/messageRoutes/adminService tests use setupApp() helper', 'authService.test.ts has NO DB — pure function tests — no changes needed', 'vi.stubEnv DATABASE_PATH :memory: pattern needs replacement for PGlite', 'Single PGlite instance per test FILE (beforeAll) — TRUNCATE CASCADE in beforeEach for isolation', 'afterAll calls teardownApp() or close() for deterministic PGlite cleanup', 'Direct DB assertions in tests use .get() .all() .run() — all need await']
 ---
 
 # Tech-Spec: Supabase Migration — SQLite to PostgreSQL
@@ -34,7 +34,7 @@ Database layer swap — rewrite Drizzle schema from `sqliteTable` to `pgTable`, 
 - WebSocket error handling upgrade (`TEXT_ERROR` frame for transient DB failures instead of connection termination)
 - Test infrastructure swap (PGlite in-memory replaces SQLite `:memory:`, explicit teardown)
 - Dual-mode migration runner (postgres.js migrator for production, PGlite migrator for tests)
-- Supabase-specific configuration (disable RLS, enforce SSL, document connection limits)
+- Supabase-specific configuration (enable RLS with zero policies to block PostgREST, enforce SSL, document connection limits)
 - Deployment config updates (Docker Compose, env vars, Drizzle config)
 - Documentation updates (project-context, data-models, architecture-server, development-guide)
 
@@ -177,19 +177,24 @@ Database layer swap — rewrite Drizzle schema from `sqliteTable` to `pgTable`, 
 
 1. **Driver:** `postgres` (postgres.js) — fastest Node.js Postgres driver, ESM-native, built-in connection pooling, first-class Drizzle support
 2. **Connection mode:** Session mode (port 5432) — long-lived Fastify server, full transaction and prepared statement support
-3. **Schema strategy:** Mechanical translation — `sqliteTable` -> `pgTable`, `text` UUIDs -> `uuid().defaultRandom()`, `integer` timestamps -> `timestamp({ withTimezone: true })`, `integer` booleans -> `boolean()`, text enums -> `pgEnum`
+3. **Schema strategy:** Mechanical translation — `sqliteTable` -> `pgTable`, `text` UUIDs -> `uuid().defaultRandom()`, `integer` timestamps -> `timestamp({ withTimezone: true })`, `integer` booleans -> `boolean()`, text enums -> `pgEnum`. Foreign key `ON DELETE` behaviors are explicitly defined per-relationship (see Task 2) — the SQLite defaults (`NO ACTION` on all FKs) are replaced with `CASCADE` on all foreign keys to prevent orphaned rows in managed Postgres. All referenced columns remain NOT NULL — no nullable FK columns introduced.
 4. **Test database:** PGlite (`@electric-sql/pglite`) via `drizzle-orm/pglite` — in-process Postgres engine, no Docker dependency for tests, compatible with `pgTable` schemas
 5. **Data strategy:** Fresh start — no data migration. Delete old SQLite migrations (backup to `server/drizzle-sqlite-backup/`), regenerate from Postgres schema
-6. **Connection pooling:** Built into `postgres` driver. All pool settings env-var-driven with defaults: `DB_POOL_MAX=10`, `DB_IDLE_TIMEOUT=20`, `DB_CONNECT_TIMEOUT=10`. Documented against Supabase tier connection limits (60 direct connections on Pro).
-7. **Supabase usage:** Managed Postgres only — no Auth, no Realtime, no Storage, no client SDK. RLS disabled on all application tables (app uses custom JWT auth, not Supabase Auth). SSL enforced via `?sslmode=require`.
-8. **Cursor pagination:** Opaque base64url-encoded cursor containing `{ t: ISO-timestamp, id: UUID }`. The `(created_at, id)` composite pair provides deterministic ordering even for same-millisecond messages. Server returns `cursor: string | null` in responses; client passes it back without interpretation. Composite index `(channel_id, created_at, id)` on messages table supports the query.
+6. **Connection pooling:** Built into `postgres` driver. All pool settings env-var-driven with defaults: `DB_POOL_MAX=10`, `DB_IDLE_TIMEOUT=20`, `DB_CONNECT_TIMEOUT=10`. Documented against Supabase tier connection limits (60 direct connections on Pro). Additionally, `max_lifetime: 1800` (30 minutes) is set to rotate connections and handle Supabase infrastructure updates/credential rotations. `statement_timeout: '30000'` (30 seconds) is set via connection options to prevent slow queries from holding pool connections indefinitely. **The migration runner uses a separate connection without `statement_timeout`** to avoid DDL operations hitting the 30-second limit. Supabase NOTICE messages (about RLS) are filtered via `onnotice` — RLS-related notices are suppressed, all other Postgres notices are logged at warn level.
+7. **Supabase usage:** Managed Postgres only — no Auth, no Realtime, no Storage, no client SDK. RLS **enabled with zero policies** on all application tables — this blocks access via Supabase's PostgREST API (anon/authenticated keys) while the `postgres` role (used by our connection string) bypasses RLS via `BYPASSRLS` privilege. Additionally, `REVOKE ALL ON ALL TABLES IN SCHEMA public FROM anon, authenticated` prevents any PostgREST access even if RLS were accidentally disabled. SSL enforced via `?sslmode=require`.
+8. **Cursor pagination:** Opaque base64url-encoded cursor containing `{ t: ISO-timestamp, id: UUID }`. The `(created_at, id)` composite pair provides deterministic ordering even for same-millisecond messages. Server returns `cursor: string | null` in responses; client passes it back without interpretation. Composite index `(channel_id, created_at, id)` on messages table supports the query. **Ordering trade-off:** UUIDv4 values are random, so same-millisecond messages are ordered by UUID bytes — deterministic but not insertion-ordered. This is acceptable for chat UX where sub-millisecond ordering is not user-visible. If insertion order ever becomes critical, a `serial` sequence column can be added as a future enhancement.
 9. **Transaction conversion:** Both existing transactions (`authRoutes.ts` registration, `channelService.ts` deleteChannel) become `await db.transaction(async (tx) => { await tx... })`
 10. **Dual-mode connection:** `createDatabase()` auto-detects mode — if `DATABASE_URL` env var is set, use postgres.js; if not, use PGlite. Returns unified `{ db, close, migrate }` interface. The `migrate` function is driver-matched (uses `drizzle-orm/postgres-js/migrator` or `drizzle-orm/pglite/migrator` respectively). Tests run without setting any env var.
 11. **AppDatabase type:** `PgDatabase<any, typeof schema>` from `drizzle-orm/pg-core`. The `any` for the HKT (Higher-Kinded Type) slot is intentional — `PostgresJsQueryResultHKT` and `PgliteQueryResultHKT` differ at the adapter level but the query-building surface is identical. The HKT difference is encapsulated inside `createDatabase()`.
 12. **WebSocket async handlers:** `WsHandler` type in `wsRouter.ts` updated to `void | Promise<void>`. `routeMessage` checks the handler return and awaits Promises. Handlers that call async DB operations use try/catch with `TEXT_ERROR` frame fallback instead of `ws.close()`.
 13. **Connection validation:** `createDatabase()` validates `DATABASE_URL` format before connecting. Supabase URLs are checked for `sslmode=require`. The db plugin adds an `onReady` hook that executes `SELECT 1` to verify the connection before accepting traffic.
-14. **Client resilience:** Idempotent GET requests (message fetches, channel lists) use a `withRetry()` wrapper with 2 retries and linear backoff (500ms, 1000ms). Mutations (POST/PUT/DELETE) are not retried.
-15. **Test cleanup:** All test suites use explicit `afterEach` hooks to call `teardownApp()` (Fastify tests) or `close()` (raw DB tests) for deterministic PGlite disposal. No reliance on garbage collection.
+14. **Client resilience:** Idempotent GET requests (message fetches, channel lists) use a `withRetry()` wrapper with 2 retries and linear backoff (500ms, 1000ms). Mutations (POST/PUT/DELETE) are not retried. **Only transient failures are retried** — network errors (TypeError from `fetch`) and 5xx server errors. Client errors (4xx) are never retried since they will not succeed on retry. `apiRequest` throws a `RetryableError` subclass for 500+ status codes; `withRetry` checks the error type before retrying.
+15. **Test cleanup and performance:** PGlite instance creation + migration is significantly slower than SQLite `:memory:` (~200-500ms per instance vs <10ms). To avoid slow test suites, use a **single PGlite instance per test file** (created in `beforeAll`, closed in `afterAll`) and **`TRUNCATE ... CASCADE` in `beforeEach`** for per-test isolation instead of recreating the instance. Use raw SQL `TRUNCATE TABLE messages, sessions, bans, invites, channels, users CASCADE` — this is a single instant metadata-only operation that automatically handles FK ordering, unlike sequential `DELETE` statements which are row-by-row and require manual ordering. For Fastify-level tests, `setupApp()` is called in `beforeAll` and `teardownApp()` in `afterAll`, with table truncation in `beforeEach`. No reliance on garbage collection — explicit `close()` calls in `afterAll` hooks.
+16. **Aggregate type handling:** Postgres `count()` returns `bigint`, which `postgres.js` serializes as a JavaScript `string` (not `BigInt` or `number`). All `count()` results are coerced with `Number()` before comparison. This is safe for the count-check patterns in this codebase (comparing against 0 or small values). Document that `count()` returns `string` from postgres.js — if ever used for precise large-number comparisons, use `BigInt()` instead.
+17. **Connection health monitoring:** The db plugin runs a periodic health check (`SELECT 1`) every 60 seconds. Uses a **consecutive failure threshold** (3 failures) before exiting — tolerates brief Supabase maintenance windows (up to ~3 minutes) while still detecting genuine outages. Each failure logs at warn level with the failure count; only the final failure (meeting the threshold) logs at fatal and calls `process.exit(1)`. Successful checks reset the counter. The health timer is cleared in the `onClose` hook. The `onReady` initial check remains fail-fast (single attempt) since startup failures indicate misconfiguration.
+18. **Supabase migration validation (MANDATORY GATE):** Generated Drizzle migrations must be tested against real Supabase (not just PGlite) before any service-layer code changes begin (Tasks 13+). PGlite may accept SQL that Supabase rejects due to extension conflicts, permission restrictions, or managed-Postgres constraints. The migration connection role must be `postgres` (the default Supabase role). `pgEnum` creation and `uuid` generation are verified against both PGlite and Supabase. Pre-installed extensions (`pg_net`, `pgsodium`, `supautils`) and system schemas (`auth`, `storage`, `realtime`) must be inventoried via `SELECT * FROM pg_extension;` to verify no conflicts with generated DDL.
+19. **Server-side transient retry:** A thin `withDbRetry()` wrapper is used for idempotent or safely-retriable server-side database operations (e.g., `createMessage` in the WebSocket handler). Only retries on transient Postgres connection errors (codes `08006` connection_failure, `08001` connection_unable, `57P01` admin_shutdown for Supabase maintenance). Constraint violations and other client errors are never retried. Max 1 retry with 200ms delay. **Not applied to transaction blocks** (they have their own rollback semantics). This prevents a single Supabase maintenance hiccup from dropping user messages.
+20. **Session token hash index:** `sessions.refresh_token_hash` gets a B-tree index (`idx_sessions_token_hash`) since `findSessionByTokenHash` is called on every token refresh — one of the most frequent authenticated operations. Without the index, every refresh lookup is a sequential scan.
 
 ### Critical Migration Patterns
 
@@ -283,7 +288,14 @@ Database layer swap — rewrite Drizzle schema from `sqliteTable` to `pgTable`, 
     - `text('role', { enum: ['owner', 'user'] })` -> `roleEnum('role')`
     - `text('type', { enum: ['text', 'voice'] })` -> `channelTypeEnum('type')`
     - Messages `created_at` with `sql\`(unixepoch())\`` -> `timestamp('created_at', { withTimezone: true }).notNull().defaultNow()`
-    - All `.references()`, `.index()`, `.unique()` calls remain identical
+    - **Update foreign key `ON DELETE` behaviors** (SQLite defaults were all `NO ACTION`, which causes orphaned rows in Postgres). All FKs use `CASCADE` — no nullable FK columns introduced:
+      - `sessions.user_id` → `users.id`: `.references(() => users.id, { onDelete: 'cascade' })` — sessions are useless without the user
+      - `messages.channel_id` → `channels.id`: `.references(() => channels.id, { onDelete: 'cascade' })` — messages belong to a channel; also serves as DB-level safety net for the manual cascade in `channelService.ts`
+      - `messages.user_id` → `users.id`: `.references(() => users.id, { onDelete: 'cascade' })` — messages are deleted when the user is deleted (matches current codebase behavior where no code handles null user_id)
+      - `bans.user_id` → `users.id`: `.references(() => users.id, { onDelete: 'cascade' })` — ban records for deleted users are meaningless
+      - `bans.banned_by` → `users.id`: `.references(() => users.id, { onDelete: 'cascade' })` — ban records are cleaned up when the banning admin is deleted
+      - `invites.created_by` → `users.id`: `.references(() => users.id, { onDelete: 'cascade' })` — invites from deleted users should be cleaned up
+    - All `.index()`, `.unique()` calls remain identical
     - All `InferSelectModel` / `InferInsertModel` type exports remain identical
     - **Add composite index on messages table for cursor pagination:**
       ```typescript
@@ -292,7 +304,15 @@ Database layer swap — rewrite Drizzle schema from `sqliteTable` to `pgTable`, 
           .on(table.channel_id, table.created_at, table.id),
       })
       ```
-  - Notes: See architecture doc section "Detailed Schema Translation" for the complete target schema code. The inferred TypeScript types will change slightly: `created_at` stays `Date`, `id` stays `string`, `revoked` stays `boolean`. Net impact on consuming code: minimal. The composite index supports the opaque cursor pagination query.
+    - **Add index on sessions.refresh_token_hash** for token refresh lookups:
+      ```typescript
+      // In sessions table third argument:
+      (table) => ({
+        userIdIdx: index('idx_sessions_user_id').on(table.user_id),
+        tokenHashIdx: index('idx_sessions_token_hash').on(table.refresh_token_hash),
+      })
+      ```
+  - Notes: See architecture doc section "Detailed Schema Translation" for the complete target schema code. The inferred TypeScript types will change slightly: `created_at` stays `Date`, `id` stays `string`, `revoked` stays `boolean`. Net impact on consuming code: minimal. The composite index supports the opaque cursor pagination query. The `refresh_token_hash` index supports `findSessionByTokenHash` which is called on every token refresh.
 
 - [ ] Task 3: Rewrite database connection layer with dual-mode support
   - File: `server/src/db/connection.ts`
@@ -310,13 +330,35 @@ Database layer swap — rewrite Drizzle schema from `sqliteTable` to `pgTable`, 
         - Call `validateConnectionUrl()` on the resolved URL
         - Use `postgres()` driver with env-var-driven pool config:
           ```typescript
-          const poolConfig = {
+          const client = postgres(connectionUrl, {
             max: parseInt(process.env.DB_POOL_MAX || '10', 10),
             idle_timeout: parseInt(process.env.DB_IDLE_TIMEOUT || '20', 10),
             connect_timeout: parseInt(process.env.DB_CONNECT_TIMEOUT || '10', 10),
-          };
+            max_lifetime: 60 * 30, // 30 min — rotate connections to handle Supabase infra updates
+            onnotice: (notice) => {
+              // Suppress Supabase's automatic RLS reminder notices
+              if (notice.message?.includes('row-level security') || notice.message?.includes('RLS')) return;
+              // Log all other Postgres notices — they may indicate real issues
+              console.warn('[postgres notice]', notice.message);
+            },
+            connection: {
+              statement_timeout: '30000', // 30 seconds — prevent slow queries from holding pool connections
+            },
+          });
           ```
-        - Return `{ db: drizzle(client, { schema }), close: () => client.end(), migrate: (folder) => pgMigrate(db, { migrationsFolder: folder }) }`
+        - **Migration runner uses a separate connection without `statement_timeout`** to avoid DDL hitting the 30s limit:
+          ```typescript
+          migrate: async (folder: string) => {
+            const migrationClient = postgres(connectionUrl, {
+              max: 1,
+              onnotice: () => {},
+            });
+            const migrationDb = drizzle(migrationClient, { schema });
+            await pgMigrate(migrationDb, { migrationsFolder: folder });
+            await migrationClient.end();
+          },
+          ```
+        - Return `{ db: drizzle(client, { schema }), close: () => client.end(), migrate }` (migrate defined above)
       - If neither is set: use `new PGlite()` (in-memory), return `{ db: drizzlePglite(pglite, { schema }), close: () => pglite.close(), migrate: (folder) => pgliteMigrate(db, { migrationsFolder: folder }) }`
     - Remove all SQLite PRAGMAs (WAL, foreign keys) — Postgres handles natively
     - Remove `fs.mkdirSync` for data directory
@@ -338,28 +380,55 @@ Database layer swap — rewrite Drizzle schema from `sqliteTable` to `pgTable`, 
     The `migrationsFolder` path resolution stays the same. Alternatively, accept `{ db, migrate }` and call `migrate(migrationsFolder)` — choose whichever is cleaner for call sites.
   - Notes: This approach ensures PGlite tests use `drizzle-orm/pglite/migrator` and production uses `drizzle-orm/postgres-js/migrator` without the migration runner needing to know which driver is active. The migrator selection is co-located with driver selection in `connection.ts`.
 
-- [ ] Task 6: Backup old migrations, generate fresh Postgres migrations, disable RLS
+- [ ] Task 6: Backup old migrations, generate fresh Postgres migrations, secure RLS
   - Action:
     1. Copy `server/drizzle/` to `server/drizzle-sqlite-backup/` (add to `.gitignore`)
     2. Delete all files in `server/drizzle/` directory
     3. Run `cd server && npx drizzle-kit generate` to create a clean initial Postgres migration
-    4. Append RLS disable statements to the generated migration SQL (or create a second migration):
+    4. Append RLS and access control statements to the generated migration SQL (or create a second migration). **Enable RLS with zero policies** — this blocks all access via Supabase's PostgREST API while the `postgres` role (used by our connection string) bypasses RLS via its `BYPASSRLS` privilege:
        ```sql
-       ALTER TABLE users DISABLE ROW LEVEL SECURITY;
-       ALTER TABLE sessions DISABLE ROW LEVEL SECURITY;
-       ALTER TABLE channels DISABLE ROW LEVEL SECURITY;
-       ALTER TABLE messages DISABLE ROW LEVEL SECURITY;
-       ALTER TABLE invites DISABLE ROW LEVEL SECURITY;
-       ALTER TABLE bans DISABLE ROW LEVEL SECURITY;
+       -- Enable RLS with zero policies — anon/authenticated roles get zero access via PostgREST
+       -- The postgres role (our connection string) has BYPASSRLS and is unaffected
+       ALTER TABLE users ENABLE ROW LEVEL SECURITY;
+       ALTER TABLE sessions ENABLE ROW LEVEL SECURITY;
+       ALTER TABLE channels ENABLE ROW LEVEL SECURITY;
+       ALTER TABLE messages ENABLE ROW LEVEL SECURITY;
+       ALTER TABLE invites ENABLE ROW LEVEL SECURITY;
+       ALTER TABLE bans ENABLE ROW LEVEL SECURITY;
+
+       -- Force RLS even for table owners (defense-in-depth)
+       ALTER TABLE users FORCE ROW LEVEL SECURITY;
+       ALTER TABLE sessions FORCE ROW LEVEL SECURITY;
+       ALTER TABLE channels FORCE ROW LEVEL SECURITY;
+       ALTER TABLE messages FORCE ROW LEVEL SECURITY;
+       ALTER TABLE invites FORCE ROW LEVEL SECURITY;
+       ALTER TABLE bans FORCE ROW LEVEL SECURITY;
+
+       -- Revoke direct table access from Supabase API roles (second layer of protection)
+       REVOKE ALL ON ALL TABLES IN SCHEMA public FROM anon, authenticated;
        ```
-  - Notes: Supabase enables RLS by default on new tables. Since the app uses custom JWT auth (not Supabase Auth), RLS policies based on `auth.uid()` are not applicable. Disabling RLS is the correct approach — if RLS is desired later, it requires a dedicated spec. The SQLite migration backup is kept until the migration is verified in production, then removed.
+  - Notes: Supabase enables RLS by default on new tables but exposes all `public` schema tables via its auto-generated PostgREST API. The `anon` key is public by Supabase's design — without RLS, anyone with the project URL and anon key can bypass our entire auth system and directly query all tables. Enabling RLS with **zero policies** means the anon and authenticated roles get zero access, while our Fastify server (connecting as the `postgres` role with `BYPASSRLS`) is completely unaffected. The `REVOKE` statement provides defense-in-depth. The SQLite migration backup is kept until the migration is verified in production, then removed.
+
+- [ ] Task 6b: Validate generated migration against real Supabase **(MANDATORY GATE — must pass before Tasks 13+)**
+  - Action:
+    1. After `drizzle-kit generate`, review the generated SQL for any `CREATE SCHEMA`, `SET` commands, or extension references that may conflict with Supabase's managed environment
+    2. **Inventory pre-installed extensions** on the Supabase instance: `SELECT extname, extversion FROM pg_extension;` — document any that could interfere with DDL (common: `pg_net`, `pgsodium`, `supautils`, `pgcrypto`, `pgjwt`)
+    3. **Check for existing types in public schema** that could conflict with `pgEnum` creation: `SELECT typname FROM pg_type WHERE typnamespace = 'public'::regnamespace;`
+    4. Apply the migration to the actual Supabase project (or a throwaway Supabase project) as a dry run: `cd server && npx drizzle-kit push` against the Supabase connection string
+    5. Verify `pgEnum` creation works — Supabase allows custom types in `public` schema but the database role must be `postgres` (the default Supabase role)
+    6. Verify `uuid` default generation works (`gen_random_uuid()` is available in Supabase via the `pgcrypto` extension which is pre-installed)
+    7. Verify RLS enable + force statements execute without permission errors
+    8. Verify `REVOKE ALL ON ALL TABLES IN SCHEMA public FROM anon, authenticated;` executes successfully
+    9. Verify the composite index on messages and the `refresh_token_hash` index on sessions are created correctly
+    10. **Verify no Supabase webhooks or pg_cron jobs are triggered** by the migration DDL
+  - Notes: This is a **hard gate** — no service-layer code changes (Tasks 13+) should begin until this validation passes. PGlite may accept SQL that real Supabase rejects due to pre-installed extensions (`pg_net`, `pgsodium`, `supautils`), permission restrictions on the `postgres` role, or managed-Postgres constraints. If the migration fails, fix the generated SQL before proceeding. The Supabase connection role for migrations must be `postgres` (not a restricted role).
 
 - [ ] Task 7: Update seed file to use async DB calls
   - File: `server/src/db/seed.ts`
   - Action: Add `await` to both DB calls and coerce the `count()` result:
     - `db.select({ value: count() }).from(channels).get()` -> `const [channelCount] = await db.select({ value: count() }).from(channels);` then check `Number(channelCount.value) > 0` (PGlite may return `string` or `bigint` for aggregates — `Number()` coercion handles all cases)
     - `db.insert(channels).values([...]).run()` -> `await db.insert(channels).values([...])`
-  - Notes: Function is already declared `async` — just needs actual `await` statements. The `Number()` coercion is defensive against driver-specific aggregate return types.
+  - Notes: Function is already declared `async` — just needs actual `await` statements. Postgres `count()` returns `bigint`, which `postgres.js` serializes as a JavaScript `string`. `Number()` coercion is safe for the small-value comparisons in this codebase (checking `> 0`). If ever used for large-number precision, switch to `BigInt()`.
 
 #### Phase 2: Fastify Infrastructure & Shared Types
 
@@ -370,15 +439,43 @@ Database layer swap — rewrite Drizzle schema from `sqliteTable` to `pgTable`, 
     - Change `const { db, sqlite } = createDatabase()` -> `const { db, close, migrate } = createDatabase()`
     - Decorate both `db` and the `migrate` function on the Fastify instance (or store `migrate` for use in `index.ts`)
     - Change `onClose` hook: `sqlite.close()` -> `await close()` (make the hook `async`)
-    - Add `onReady` health check hook:
+    - Add `onReady` health check hook with periodic monitoring using **consecutive failure threshold**:
       ```typescript
+      let healthTimer: NodeJS.Timeout;
+      const HEALTH_INTERVAL = 60_000; // 1 minute
+      const MAX_HEALTH_FAILURES = 3;
+      let consecutiveFailures = 0;
+
       fastify.addHook('onReady', async () => {
+        // Startup check — fail-fast on misconfiguration (single attempt)
         await fastify.db.execute(sql`SELECT 1`);
         fastify.log.info('Database connection verified');
+
+        // Periodic health check — tolerates brief Supabase maintenance windows
+        healthTimer = setInterval(async () => {
+          try {
+            await fastify.db.execute(sql`SELECT 1`);
+            consecutiveFailures = 0; // reset on success
+          } catch (err) {
+            consecutiveFailures++;
+            fastify.log.warn(
+              { err, consecutiveFailures, maxFailures: MAX_HEALTH_FAILURES },
+              'Database health check failed'
+            );
+            if (consecutiveFailures >= MAX_HEALTH_FAILURES) {
+              fastify.log.fatal(
+                'Database unreachable after %d consecutive checks — exiting',
+                MAX_HEALTH_FAILURES
+              );
+              process.exit(1); // Let container orchestrator restart with fresh credentials
+            }
+          }
+        }, HEALTH_INTERVAL);
       });
       ```
+    - Clear health timer in `onClose` hook: `clearInterval(healthTimer);` (before `await close()`)
     - Update type augmentation: `FastifyInstance.db` stays `AppDatabase` (type is re-exported from connection.ts)
-  - Notes: The `onReady` health check catches misconfigurations at startup instead of on first user request. The `createDatabase()` call with no args will auto-detect mode (PGlite in tests, postgres.js in production when DATABASE_URL is set).
+  - Notes: The `onReady` health check catches misconfigurations at startup instead of on first user request (single attempt, fail-fast). The periodic check uses a **consecutive failure threshold** (3 failures = ~3 minutes at 60s intervals) to tolerate brief Supabase maintenance windows before exiting. Successful checks reset the counter. The `createDatabase()` call with no args will auto-detect mode (PGlite in tests, postgres.js in production when DATABASE_URL is set). The health timer should only be started when `DATABASE_URL` is set (skip for PGlite in tests).
 
 - [ ] Task 9: Make startup sequence fully async with migration error handling
   - File: `server/src/index.ts`
@@ -398,17 +495,18 @@ Database layer swap — rewrite Drizzle schema from `sqliteTable` to `pgTable`, 
 - [ ] Task 10: Update shared WebSocket types for TEXT_ERROR
   - File: `shared/src/ws-messages.ts`
   - Action:
-    - Add `TextErrorPayload` interface:
+    - Add `TextErrorPayload` interface (includes `tempId` so the client can match the failure to the specific optimistic message):
       ```typescript
       export interface TextErrorPayload {
         error: string;
+        tempId: string;
       }
       ```
     - Add `TEXT_ERROR` to `WS_TYPES`:
       ```typescript
       TEXT_ERROR: 'text:error',
       ```
-  - Notes: Place `TextErrorPayload` next to the existing `TextSendPayload` and `TextReceivePayload`. The `TEXT_ERROR` constant goes after `TEXT_RECEIVE` in `WS_TYPES`.
+  - Notes: Place `TextErrorPayload` next to the existing `TextSendPayload` and `TextReceivePayload`. The `TEXT_ERROR` constant goes after `TEXT_RECEIVE` in `WS_TYPES`. The `tempId` is included in the payload (not the envelope `id` field) because the envelope `id` is optional in `WsMessage` and may not be set by all clients. Putting `tempId` in the typed payload ensures the field is always present and type-checked.
 
 - [ ] Task 11: Update shared API types for cursor pagination
   - File: `shared/src/types.ts`
@@ -456,7 +554,15 @@ Database layer swap — rewrite Drizzle schema from `sqliteTable` to `pgTable`, 
     - `POST /login`: `const [user] = await fastify.db.select().from(users).where(...);` and `const [ban] = await fastify.db.select().from(bans).where(...);`
     - `POST /refresh`: `await findSessionByTokenHash(...)`, `await deleteSession(...)`, `await createSession(...)`
     - `POST /logout`: `await findSessionByTokenHash(...)`, `await deleteSession(...)`
-  - Notes: This is the most complex file. The transaction in `POST /register` has 7+ DB calls that all need `await`. The transaction callback must become `async`. The transaction returns a discriminated union (`{ error: string } | { error: null, user }`) — the outer `const result = await db.transaction(...)` must capture the return value.
+    - **Update UNIQUE constraint error handling in `POST /register`:** The existing SQLite-specific error matching must be replaced with Postgres error codes:
+      ```typescript
+      // BEFORE (SQLite):
+      if (err instanceof Error && err.message.includes('UNIQUE constraint failed: users.username'))
+      // AFTER (Postgres):
+      if (err instanceof Error && (err as any).code === '23505')
+      ```
+      Postgres error code `23505` = `unique_violation`. The `postgres.js` library exposes `.code` on error objects. Remove the SQLite string match entirely.
+  - Notes: This is the most complex file. The transaction in `POST /register` has 7+ DB calls that all need `await`. The transaction callback must become `async`. The transaction returns a discriminated union (`{ error: string } | { error: null, user }`) — the outer `const result = await db.transaction(...)` must capture the return value. **The UNIQUE constraint error handler is critical** — without updating the error code matching from SQLite's `UNIQUE constraint failed` string to Postgres's `23505` error code, duplicate username registrations will crash with unhandled 500 errors instead of returning the user-friendly `USERNAME_TAKEN` response.
 
 #### Phase 4: Channel Domain
 
@@ -483,9 +589,13 @@ Database layer swap — rewrite Drizzle schema from `sqliteTable` to `pgTable`, 
   - File: `server/src/plugins/messages/messageService.ts`
   - Action: Full rewrite of pagination logic and timestamp handling:
     - **Delete `toISOTimestamp` function entirely.** Postgres `timestamp with time zone` returns native `Date` objects through Drizzle — no conversion workaround needed. All call sites (in this file and `messageRoutes.ts`) replace `toISOTimestamp(row.created_at)` with `row.created_at.toISOString()`.
-    - **Add cursor encoding/decoding utilities:**
+    - **Add cursor encoding/decoding utilities with validation:**
       ```typescript
       interface Cursor { t: string; id: string; }
+
+      export class InvalidCursorError extends Error {
+        constructor(message: string) { super(message); this.name = 'InvalidCursorError'; }
+      }
 
       function encodeCursor(msg: { created_at: Date; id: string }): string {
         return Buffer.from(JSON.stringify({
@@ -495,7 +605,14 @@ Database layer swap — rewrite Drizzle schema from `sqliteTable` to `pgTable`, 
       }
 
       function decodeCursor(cursor: string): Cursor {
-        return JSON.parse(Buffer.from(cursor, 'base64url').toString());
+        try {
+          const parsed = JSON.parse(Buffer.from(cursor, 'base64url').toString());
+          if (!parsed.t || !parsed.id) throw new Error('missing fields');
+          if (isNaN(new Date(parsed.t).getTime())) throw new Error('invalid timestamp');
+          return parsed;
+        } catch {
+          throw new InvalidCursorError('Invalid pagination cursor');
+        }
       }
       ```
     - **`createMessage`**: Make `async`. `const [message] = await db.insert(messages).values({...}).returning();`. Return value uses `row.created_at.toISOString()` instead of `toISOTimestamp()`.
@@ -563,7 +680,19 @@ Database layer swap — rewrite Drizzle schema from `sqliteTable` to `pgTable`, 
       }}
       ```
     - Return: `reply.send({ data, cursor: nextCursor, count: data.length })`
-  - Notes: This changes the API contract. The `before` query param (message ID) is replaced by `cursor` (opaque string). The response gains a `cursor` field. Client updates in Phase 9 consume this new contract.
+    - **Add invalid cursor error handling:** Import `InvalidCursorError` from `messageService.ts`. Wrap the `getMessagesByChannel` call in a try/catch:
+      ```typescript
+      try {
+        const { rows, nextCursor } = await getMessagesByChannel(fastify.db, channelId, limit, cursor);
+        // ... map rows and send response ...
+      } catch (err) {
+        if (err instanceof InvalidCursorError) {
+          return reply.code(400).send({ error: { code: 'INVALID_CURSOR', message: 'Malformed pagination cursor' } });
+        }
+        throw err;
+      }
+      ```
+  - Notes: This changes the API contract. The `before` query param (message ID) is replaced by `cursor` (opaque string). The response gains a `cursor` field. Client updates in Phase 9 consume this new contract. Invalid or tampered cursors return a 400 instead of crashing with a 500.
 
 - [ ] Task 19: Convert message WebSocket handler to async with TEXT_ERROR
   - File: `server/src/plugins/messages/messageWsHandler.ts`
@@ -587,8 +716,7 @@ Database layer swap — rewrite Drizzle schema from `sqliteTable` to `pgTable`, 
         try {
           ws.send(JSON.stringify({
             type: WS_TYPES.TEXT_ERROR,
-            payload: { error: 'MESSAGE_STORE_FAILED' } satisfies TextErrorPayload,
-            id: message.id,
+            payload: { error: 'MESSAGE_STORE_FAILED', tempId: payload.tempId } satisfies TextErrorPayload,
           }));
         } catch {
           // WS send failed — connection is dead, nothing to do
@@ -597,23 +725,63 @@ Database layer swap — rewrite Drizzle schema from `sqliteTable` to `pgTable`, 
       }
       ```
     - Add import: `import type { TextErrorPayload } from 'discord-clone-shared';`
-    - Add `await` before `createMessage(db, ...)`
-  - Notes: This keeps the WebSocket connection alive when a single message fails to persist — the client can retry or show the user an error. `message.id` carries the `tempId` so the client can match the failure to the specific optimistic message. The `satisfies TextErrorPayload` ensures type safety.
+    - **Wrap `createMessage` in `withDbRetry()`** for transient Postgres error resilience:
+      ```typescript
+      const stored = await withDbRetry(() => createMessage(db, {
+        channelId: payload.channelId,
+        userId,
+        encryptedContent: payload.encryptedContent,
+        nonce: payload.nonce,
+      }));
+      ```
+    - Add `withDbRetry` import from a shared server utility (or define inline — see Technical Decision 19):
+      ```typescript
+      async function withDbRetry<T>(
+        fn: () => Promise<T>,
+        { maxRetries = 1, delayMs = 200 } = {},
+      ): Promise<T> {
+        for (let attempt = 0; attempt <= maxRetries; attempt++) {
+          try {
+            return await fn();
+          } catch (err: unknown) {
+            const pgErr = err as { code?: string };
+            // Only retry on transient connection errors, not constraint violations
+            const isTransient = pgErr.code === '08006' || // connection_failure
+                                pgErr.code === '08001' || // sqlclient_unable_to_establish
+                                pgErr.code === '57P01';    // admin_shutdown (Supabase maintenance)
+            if (!isTransient || attempt === maxRetries) throw err;
+            await new Promise(r => setTimeout(r, delayMs * (attempt + 1)));
+          }
+        }
+        throw new Error('unreachable');
+      }
+      ```
+  - Notes: This keeps the WebSocket connection alive when a single message fails to persist — the client can retry or show the user an error. The `withDbRetry` wrapper gives one retry (200ms delay) for transient Postgres connection errors (e.g., Supabase maintenance windows). Constraint violations and other non-transient errors are never retried. The `tempId` is extracted from the `TEXT_SEND` payload (where the client always sets it) — **not** from the envelope `id` field, which is optional in `WsMessage` and may be undefined. Putting `tempId` in the typed `TextErrorPayload` ensures it is always present and type-checked via `satisfies`.
 
 - [ ] Task 20: Update WebSocket router to support async handlers
   - File: `server/src/ws/wsRouter.ts`
   - Action:
     - Update `WsHandler` type: `export type WsHandler = (ws: WebSocket, message: WsMessage, userId: string) => void | Promise<void>;`
-    - Update `routeMessage` to handle async handler returns:
+    - Update `routeMessage` to handle async handler returns with a last-resort error frame:
       ```typescript
       const result = handler(ws, message, userId);
       if (result instanceof Promise) {
         result.catch((err) => {
-          log.error({ err, userId, type: message.type }, 'Async WS handler error');
+          log.error({ err, userId, type: message.type }, 'Unhandled async WS handler error');
+          // Last-resort error frame — ensures the client always gets feedback
+          // even if the handler crashes before reaching its own try/catch
+          try {
+            ws.send(JSON.stringify({
+              type: WS_TYPES.TEXT_ERROR,
+              payload: { error: 'INTERNAL_ERROR', tempId: '' },
+            }));
+          } catch {
+            // WS already dead
+          }
         });
       }
       ```
-  - Notes: This ensures unhandled rejections from async handlers are logged instead of crashing the process. The fire-and-forget pattern (`.catch()` without await) is intentional — `routeMessage` itself is called synchronously from the WS `onmessage` event.
+  - Notes: This ensures unhandled rejections from async handlers are logged instead of crashing the process **and** the client receives feedback. Without the last-resort error frame, if a handler throws before entering its own try/catch (e.g., argument validation failure), the client gets complete silence — the message simply vanishes. The fire-and-forget pattern (`.catch()` without await) is intentional — `routeMessage` itself is called synchronously from the WS `onmessage` event. The `tempId: ''` is a fallback since the handler may have failed before extracting it from the payload.
 
 #### Phase 6: Other Domains
 
@@ -672,7 +840,7 @@ Database layer swap — rewrite Drizzle schema from `sqliteTable` to `pgTable`, 
   - File: `server/src/test/helpers.ts`
   - Action:
     - Remove `vi.stubEnv('DATABASE_PATH', ':memory:')` if present in helpers (it's in test files — but check)
-    - Track the current app instance for cleanup:
+    - Track the current app instance for cleanup. **Use `beforeAll`/`afterAll` pattern** — create PGlite once per test file, truncate tables in `beforeEach` for isolation (PGlite startup + migration is ~200-500ms, too slow for per-test creation):
       ```typescript
       let currentApp: FastifyInstance | null = null;
 
@@ -689,32 +857,48 @@ Database layer swap — rewrite Drizzle schema from `sqliteTable` to `pgTable`, 
           currentApp = null;
         }
       }
+
+      /** Truncate all tables for per-test isolation (faster than new PGlite instance).
+       *  Uses TRUNCATE CASCADE — instant metadata-only operation, auto-handles FK ordering. */
+      export async function truncateAll(db: AppDatabase): Promise<void> {
+        await db.execute(
+          sql`TRUNCATE TABLE messages, sessions, bans, invites, channels, users CASCADE`
+        );
+      }
       ```
     - `seedOwner()`: Add `await` to DB insert: `const [user] = await app.db.insert(users).values({...}).returning();`
     - `seedRegularUser()`: Same — `const [user] = await app.db.insert(users).values({...}).returning();`
     - `seedUserWithSession()`: Add `await` to user insert: `const [user] = await app.db.insert(users).values({...}).returning();`. Add `await` to `createSession()` call: `await createSession(app.db, user.id, refreshToken)`
     - `seedInvite()`: Add `await` to invite insert: `await app.db.insert(invites).values({...});`. Make function `async`, return type changes to `Promise<string>`.
-  - Notes: All callers of seed functions are in `beforeEach` hooks which are already `async`. The `seedInvite` sync -> async change requires updating its callers to add `await`. `teardownApp()` provides deterministic PGlite disposal — no reliance on garbage collection.
+  - Notes: All callers of seed functions are in `beforeEach` hooks which are already `async`. The `seedInvite` sync -> async change requires updating its callers to add `await`. Test files should use `beforeAll` → `setupApp()`, `beforeEach` → `truncateAll(app.db)` + seed, `afterAll` → `teardownApp()`. This pattern gives per-test isolation via truncation while only paying the PGlite startup cost once per file.
 
 - [ ] Task 27: Update session service tests for PGlite with cleanup
   - File: `server/src/plugins/auth/sessionService.test.ts`
   - Action:
-    - Replace the local `setupTestDb()` function: instead of `createDatabase(':memory:')`, call `createDatabase()` with no args (auto-detects PGlite). Make `setupTestDb` `async`:
+    - Replace the local `setupTestDb()` function: instead of `createDatabase(':memory:')`, call `createDatabase()` with no args (auto-detects PGlite). Create PGlite once per file using `beforeAll`:
       ```typescript
+      let db: AppDatabase;
       let closeDb: () => Promise<void>;
-      async function setupTestDb() {
+
+      beforeAll(async () => {
         const { db: testDb, close, migrate } = createDatabase();
         await migrate(migrationsFolder);
+        db = testDb;
         closeDb = close;
-        return testDb;
-      }
+      });
+
+      afterAll(async () => { await closeDb(); });
+
+      beforeEach(async () => {
+        // Truncate for per-test isolation (faster than new PGlite instance)
+        await db.delete(sessions);
+        await db.delete(users);
+      });
       ```
     - Remove `vi.stubEnv('DATABASE_PATH', ':memory:')` — PGlite is used when no DATABASE_URL is set
     - Local `seedUser()`: `const [user] = await db.insert(users).values({...}).returning();` — make `async`
     - All direct DB calls in test bodies: add `await` and use destructure pattern
-    - `beforeEach` becomes `async` (may already be) and calls `db = await setupTestDb()`
-    - **Add `afterEach`:** `afterEach(async () => { await closeDb(); });`
-  - Notes: This file bypasses Fastify entirely — tests the service against a raw DB instance. The PGlite swap is transparent since it speaks Postgres. Explicit `close()` in `afterEach` prevents resource leaks.
+  - Notes: This file bypasses Fastify entirely — tests the service against a raw DB instance. The PGlite swap is transparent since it speaks Postgres. Single instance per file with truncation in `beforeEach` avoids the ~200-500ms PGlite startup cost per test. Explicit `close()` in `afterAll` prevents resource leaks.
 
 - [ ] Task 28: Update channel service tests for async DB calls with cleanup
   - File: `server/src/plugins/channels/channelService.test.ts`
@@ -725,8 +909,13 @@ Database layer swap — rewrite Drizzle schema from `sqliteTable` to `pgTable`, 
     - `const msgs = await app.db.select().from(messages);` (remove `.all()`)
     - `const chs = await app.db.select().from(channels);` (remove `.all()`)
     - Remove `vi.stubEnv('DATABASE_PATH', ':memory:')` — PGlite auto-detected
-    - **Add `afterEach`:** `afterEach(async () => { await teardownApp(); });`
-  - Notes: Service calls like `createChannel()` and `deleteChannel()` are tested through the service functions (already `await`-ed by the test since they're called directly).
+    - **Use `beforeAll`/`afterAll` for app lifecycle, `beforeEach` for truncation:**
+      ```typescript
+      beforeAll(async () => { app = await setupApp(); });
+      afterAll(async () => { await teardownApp(); });
+      beforeEach(async () => { await truncateAll(app.db); /* seed test data */ });
+      ```
+  - Notes: Service calls like `createChannel()` and `deleteChannel()` are tested through the service functions (already `await`-ed by the test since they're called directly). Single PGlite instance per file with table truncation in `beforeEach` for per-test isolation.
 
 - [ ] Task 29: Update message routes tests for async DB calls and opaque cursors
   - File: `server/src/plugins/messages/messageRoutes.test.ts`
@@ -739,8 +928,14 @@ Database layer swap — rewrite Drizzle schema from `sqliteTable` to `pgTable`, 
       2. Extract the `cursor` from the response body
       3. Fetch the next page: `GET /:channelId/messages?limit=N&cursor=<value from step 2>`
       4. Verify the returned messages are the next page in order
-    - **Add `afterEach`:** `afterEach(async () => { await teardownApp(); });`
-  - Notes: HTTP inject tests (`app.inject()`) are already async — no changes to the inject calls themselves. The cursor value should be treated as opaque in tests — don't construct cursors manually, always use the value returned by the server.
+    - **Use `beforeAll`/`afterAll` for app lifecycle, `beforeEach` for truncation:**
+      ```typescript
+      beforeAll(async () => { app = await setupApp(); });
+      afterAll(async () => { await teardownApp(); });
+      beforeEach(async () => { await truncateAll(app.db); /* seed channel + messages */ });
+      ```
+    - **Add test for invalid cursor:** Verify `GET /:channelId/messages?cursor=garbage` returns 400 with `INVALID_CURSOR` error code.
+  - Notes: HTTP inject tests (`app.inject()`) are already async — no changes to the inject calls themselves. The cursor value should be treated as opaque in tests — don't construct cursors manually, always use the value returned by the server. Single PGlite instance per file with table truncation for per-test isolation.
 
 - [ ] Task 30: Update admin service tests for async DB calls with cleanup
   - File: `server/src/plugins/admin/adminService.test.ts`
@@ -751,8 +946,13 @@ Database layer swap — rewrite Drizzle schema from `sqliteTable` to `pgTable`, 
     - All service calls: add `await` where missing (`await kickUser(...)`, `await banUser(...)`, etc.)
     - `await createSession(...)` calls in test setup
     - Remove `vi.stubEnv('DATABASE_PATH', ':memory:')`
-    - **Add `afterEach`:** `afterEach(async () => { await teardownApp(); });`
-  - Notes: This is the most DB-assertion-heavy test file. Every verification step needs `await`.
+    - **Use `beforeAll`/`afterAll` for app lifecycle, `beforeEach` for truncation:**
+      ```typescript
+      beforeAll(async () => { app = await setupApp(); });
+      afterAll(async () => { await teardownApp(); });
+      beforeEach(async () => { await truncateAll(app.db); /* seed test data */ });
+      ```
+  - Notes: This is the most DB-assertion-heavy test file. Every verification step needs `await`. Single PGlite instance per file with table truncation for per-test isolation.
 
 #### Phase 8: Deployment & Configuration
 
@@ -762,10 +962,23 @@ Database layer swap — rewrite Drizzle schema from `sqliteTable` to `pgTable`, 
     - Replace `DATABASE_PATH=./data/discord_clone.db` with:
       ```
       # Database — Supabase managed Postgres
-      # Use session mode (port 5432) for full transaction support. SSL required.
+      # SSL required for all Supabase connections.
       # Supabase connection limits: 60 direct connections on Pro tier.
-      # If running multiple server instances, use Supavisor pooler (port 6543) with transaction mode.
+
+      # Option 1: Supavisor session mode (RECOMMENDED for most deployments)
+      # Routes through Supabase's connection pooler with dedicated sessions.
+      # Supports transactions and prepared statements.
       DATABASE_URL=postgresql://postgres.[project-ref]:[password]@aws-0-[region].pooler.supabase.com:5432/postgres?sslmode=require
+
+      # Option 2: Direct connection (bypasses Supavisor entirely)
+      # Use if you need maximum compatibility or are on a dedicated Supabase instance.
+      # Counts against the 60 direct connection limit on Pro tier.
+      # DATABASE_URL=postgresql://postgres:[password]@db.[project-ref].supabase.co:5432/postgres?sslmode=require
+
+      # Option 3: Supavisor transaction mode (for multiple server instances / serverless)
+      # Connections are pooled — each query may use a different connection.
+      # Requires prepare: false in postgres.js config (not currently set).
+      # DATABASE_URL=postgresql://postgres.[project-ref]:[password]@aws-0-[region].pooler.supabase.com:6543/postgres?sslmode=require
       ```
     - Add pool configuration variables (after DATABASE_URL):
       ```
@@ -774,7 +987,7 @@ Database layer swap — rewrite Drizzle schema from `sqliteTable` to `pgTable`, 
       # DB_IDLE_TIMEOUT=20
       # DB_CONNECT_TIMEOUT=10
       ```
-  - Notes: Keep all other env vars unchanged.
+  - Notes: Keep all other env vars unchanged. Option 1 (Supavisor session mode) is the default and recommended for the current single-instance deployment. Document all three options so operators can make informed choices if the deployment model changes.
 
 - [ ] Task 32: Remove SQLite volume from production Docker Compose
   - File: `docker-compose.yml`
@@ -867,11 +1080,20 @@ Database layer swap — rewrite Drizzle schema from `sqliteTable` to `pgTable`, 
         return { messages: decrypted, hasMore: result.cursor !== null, cursor: result.cursor };
       }
       ```
-    - **Note on apiRequest:** The message list endpoint now returns `{ data, cursor, count }` instead of just `data`. The `apiRequest` function currently extracts `body.data`. For this endpoint we need the full response body. Either:
-      - Add a `raw` parameter to `apiRequest` that returns the full body instead of `body.data`, OR
-      - Call `fetch` directly for this endpoint, OR
-      - Have `apiRequest` return `body` when a flag is set
-      Choose the approach that is least invasive. The simplest is to add an optional `returnFullBody` parameter.
+    - **Update `apiRequest` to support full body return:** The message list endpoint now returns `{ data, cursor, count }` instead of just `data`. The `apiRequest` function currently extracts `body.data`. Add an optional `returnFullBody` parameter:
+      ```typescript
+      export async function apiRequest<T>(
+        path: string,
+        options?: RequestInit,
+        returnFullBody?: boolean,
+      ): Promise<T> {
+        // ... existing fetch + token refresh logic ...
+        const body = await response.json();
+        if (!response.ok) { /* existing error handling */ }
+        return (returnFullBody ? body : body.data) as T;
+      }
+      ```
+      This is a single-parameter addition, backward-compatible with all existing callers (they pass no third argument and continue receiving `body.data`).
     - Update `fetchMessages`: pass cursor to `setMessages`:
       ```typescript
       useMessageStore.getState().setMessages(channelId, data.messages, data.hasMore, data.cursor);
@@ -901,44 +1123,63 @@ Database layer swap — rewrite Drizzle schema from `sqliteTable` to `pgTable`, 
 
 - [ ] Task 36: Add retry wrapper to API client for transient GET failures
   - File: `client/src/renderer/src/services/apiClient.ts`
-  - Action: Add a `withRetry` utility and integrate it for GET requests:
+  - Action: Add a `RetryableError` class and `withRetry` utility that only retries transient failures:
     ```typescript
+    export class RetryableError extends Error {
+      constructor(message: string) { super(message); this.name = 'RetryableError'; }
+    }
+
     async function withRetry<T>(fn: () => Promise<T>, maxRetries = 2): Promise<T> {
       for (let attempt = 0; attempt <= maxRetries; attempt++) {
         try {
           return await fn();
         } catch (err) {
-          if (attempt === maxRetries) throw err;
+          // Only retry on transient failures: network errors + 5xx server errors
+          const isRetryable = err instanceof RetryableError ||
+            err instanceof TypeError; // network failure from fetch()
+          if (!isRetryable || attempt === maxRetries) throw err;
           await new Promise((r) => setTimeout(r, 500 * (attempt + 1)));
         }
       }
       throw new Error('unreachable');
     }
     ```
+    Update `apiRequest` error handling to distinguish retryable vs non-retryable errors:
+    ```typescript
+    if (!response.ok) {
+      const apiError = body.error || { code: 'UNKNOWN', message: 'Request failed' };
+      if (response.status >= 500) {
+        throw new RetryableError(apiError.message);
+      }
+      throw new Error(apiError.message);
+    }
+    ```
     Export a convenience function for retriable GET requests:
     ```typescript
-    export async function apiGet<T>(path: string): Promise<T> {
-      return withRetry(() => apiRequest<T>(path));
+    export async function apiGet<T>(path: string, returnFullBody?: boolean): Promise<T> {
+      return withRetry(() => apiRequest<T>(path, undefined, returnFullBody));
     }
     ```
     Update `messageService.ts` and any other GET-only callers to use `apiGet` instead of `apiRequest` for read operations.
-  - Notes: Only idempotent GET requests are retried. Mutations (POST/PUT/DELETE) continue using `apiRequest` directly — no retry. The linear backoff (500ms, 1000ms) is deliberately simple. No exponential backoff or circuit breakers needed at this scale.
+  - Notes: Only idempotent GET requests are retried. Mutations (POST/PUT/DELETE) continue using `apiRequest` directly — no retry. **Only transient failures are retried** — network errors (`TypeError` from `fetch`) and 5xx server errors (`RetryableError`). Client errors (4xx) are never retried since they will not succeed on retry. The linear backoff (500ms, 1000ms) is deliberately simple. No exponential backoff or circuit breakers needed at this scale.
 
 - [ ] Task 37: Add TEXT_ERROR WebSocket handler on client
   - File: `client/src/renderer/src/services/wsClient.ts`
-  - Action: Add a case for `TEXT_ERROR` in the `handleMessage` method, after the `TEXT_RECEIVE` case:
+  - Action: Add a case for `TEXT_ERROR` in the `handleMessage` method, after the `TEXT_RECEIVE` case. Read `tempId` from the **payload** (not the envelope `id` field):
     ```typescript
     } else if (message.type === WS_TYPES.TEXT_ERROR) {
-      if (message.id) {
+      const payload = message.payload as TextErrorPayload;
+      if (payload.tempId) {
         import('../stores/useMessageStore').then(({ default: useMessageStore }) => {
-          useMessageStore.getState().markMessageFailed(message.id!);
+          useMessageStore.getState().markMessageFailed(payload.tempId);
         }).catch((err) => {
           console.warn('[wsClient] Failed to mark message as failed:', err);
         });
       }
     }
     ```
-  - Notes: The `message.id` carries the `tempId` from the original `TEXT_SEND`. The existing `markMessageFailed` method already sets the message status to `'failed'` and displays an error to the user — no additional UI work needed. This replaces the `ws.close(4003)` behavior where the entire connection would drop and trigger a full reconnect cycle.
+    - Add import: `import type { TextErrorPayload } from 'discord-clone-shared';`
+  - Notes: The `tempId` is read from `payload.tempId` (the typed `TextErrorPayload` field) — **not** from `message.id` (the optional envelope field). This ensures the field is always present when the server sends a `TEXT_ERROR`. The existing `markMessageFailed` method already sets the message status to `'failed'` and displays an error to the user — no additional UI work needed. This replaces the `ws.close(4003)` behavior where the entire connection would drop and trigger a full reconnect cycle.
 
 #### Phase 10: Documentation Updates
 
@@ -984,7 +1225,9 @@ Database layer swap — rewrite Drizzle schema from `sqliteTable` to `pgTable`, 
 
 #### Schema & Connection
 
-- [ ] AC 1: Given the new schema.ts, when Drizzle Kit generates migrations, then a valid Postgres migration is produced with all 6 tables, 2 enums, all indexes (including the composite `messages_channel_created_idx`), and all foreign key constraints.
+- [ ] AC 1: Given the new schema.ts, when Drizzle Kit generates migrations, then a valid Postgres migration is produced with all 6 tables, 2 enums, all indexes (including the composite `messages_channel_created_idx` and `idx_sessions_token_hash`), all foreign key constraints with `ON DELETE CASCADE` on all FKs, RLS enabled with zero policies on all tables, and `REVOKE ALL` from anon/authenticated roles.
+- [ ] AC 1b: Given the generated migration, when applied to a real Supabase instance (not just PGlite), then all tables, enums, indexes, and constraints are created without errors. Pre-installed extensions are inventoried and confirmed non-conflicting.
+- [ ] AC 1c: Given the migration has been applied to a real Supabase instance, when the Supabase `anon` key is used to query any application table via PostgREST, then all requests are denied (RLS blocks access).
 - [ ] AC 2: Given `DATABASE_URL` is set to a valid Postgres connection string, when `createDatabase()` is called, then it returns a working `{ db, close, migrate }` using postgres.js driver with connection pooling.
 - [ ] AC 3: Given `DATABASE_URL` is NOT set, when `createDatabase()` is called, then it returns a working `{ db, close, migrate }` using PGlite in-memory.
 - [ ] AC 4: Given the new connection layer, when `close()` is called, then the connection pool is drained (postgres.js) or the PGlite instance is closed cleanly with no hanging processes.
@@ -993,7 +1236,7 @@ Database layer swap — rewrite Drizzle schema from `sqliteTable` to `pgTable`, 
 
 #### Supabase Configuration
 
-- [ ] AC 7: Given the generated Postgres migration is applied to a fresh Supabase database, then RLS is disabled on all 6 application tables.
+- [ ] AC 7: Given the generated Postgres migration is applied to a fresh Supabase database, then RLS is enabled with zero policies on all 6 application tables, RLS is forced for table owners, and the `anon` and `authenticated` roles have all privileges revoked on `public` schema tables.
 
 #### Async Migration
 
@@ -1002,12 +1245,14 @@ Database layer swap — rewrite Drizzle schema from `sqliteTable` to `pgTable`, 
 - [ ] AC 10: Given any service function that previously used `.run()`, when called with `await`, then the write operation completes without returning data.
 - [ ] AC 11: Given the registration transaction in `authRoutes.ts`, when a race condition occurs (two simultaneous first-user registrations), then only one user gets the `owner` role — the transaction provides atomicity.
 - [ ] AC 12: Given the deleteChannel transaction in `channelService.ts`, when a channel with messages is deleted, then both the messages and the channel are removed atomically.
+- [ ] AC 12b: Given the registration endpoint, when a duplicate username is submitted, then the server returns a 409 response with `USERNAME_TAKEN` error code — not an unhandled 500. (Validates Postgres error code `23505` matching replaces the old SQLite `UNIQUE constraint failed` string match.)
 
 #### Cursor Pagination
 
 - [ ] AC 13: Given a channel with 100 messages, when `getMessagesByChannel` is called with `limit=50` and no cursor, then the 50 most recent messages are returned ordered by newest first, and a non-null `nextCursor` is returned.
 - [ ] AC 14: Given a channel with 100 messages, when `getMessagesByChannel` is called with the `nextCursor` from the first page, then the next 50 messages are returned ordered by newest first, and `nextCursor` is null (no more pages).
 - [ ] AC 15: Given 3 messages inserted with the same `created_at` timestamp, when paginated with `limit=1`, then each page returns exactly one message with no duplicates or skipped messages across pages.
+- [ ] AC 15b: Given a request with a malformed or tampered `cursor` query parameter, when `GET /:channelId/messages?cursor=garbage` is called, then the server returns a 400 response with error code `INVALID_CURSOR` (not a 500 crash).
 
 #### WebSocket Error Handling
 
@@ -1017,13 +1262,14 @@ Database layer swap — rewrite Drizzle schema from `sqliteTable` to `pgTable`, 
 #### Test Infrastructure
 
 - [ ] AC 18: Given no `DATABASE_URL` environment variable, when `setupApp()` is called in a test, then a PGlite in-memory database is created, migrations are applied using `drizzle-orm/pglite/migrator`, and the app is ready for testing.
-- [ ] AC 19: Given a test suite with `beforeEach` creating a fresh app and `afterEach` calling `teardownApp()`, when multiple tests run sequentially, then each test gets a clean database with no cross-test contamination and no resource leaks.
+- [ ] AC 19: Given a test suite with `beforeAll` creating the app (single PGlite instance), `beforeEach` truncating all tables, and `afterAll` calling `teardownApp()`, when multiple tests run sequentially, then each test gets a clean database with no cross-test contamination and no resource leaks.
 - [ ] AC 20: Given the full test suite, when `npm test` is run, then all existing tests pass against PGlite with no behavioral regressions.
 
 #### Client
 
 - [ ] AC 21: Given the updated client message service, when `fetchOlderMessages` is called, then it uses the opaque `cursor` from the previous server response instead of constructing a cursor from the oldest message ID.
 - [ ] AC 22: Given a transient server error (500) on a GET request, when `apiGet` is called, then the request is retried up to 2 times with linear backoff before throwing.
+- [ ] AC 22b: Given a client error (400, 403, 404) on a GET request, when `apiGet` is called, then the error is thrown immediately with no retries.
 - [ ] AC 23: Given the client receives a `TEXT_ERROR` frame via WebSocket, when the frame contains a `tempId`, then the corresponding optimistic message is marked as failed and the connection remains open.
 
 #### Deployment
@@ -1058,13 +1304,13 @@ Database layer swap — rewrite Drizzle schema from `sqliteTable` to `pgTable`, 
 
 ### Testing Strategy
 
-- **PGlite in-memory:** Each test suite creates a fresh PGlite instance — no shared state, no Docker dependency
+- **PGlite in-memory:** Each test **file** creates a single PGlite instance in `beforeAll` — no shared state across files, no Docker dependency
 - **Two test tiers preserved:**
   - `sessionService.test.ts`: Direct `createDatabase()` -> PGlite — no Fastify app, lightweight
   - `channelService/messageRoutes/adminService tests`: Full `setupApp()` with PGlite-backed DB
   - `authService.test.ts`: No changes — pure function tests, no DB involvement
 - **Dual-mode migration:** `createDatabase()` returns a driver-matched `migrate` function. Tests use `drizzle-orm/pglite/migrator`, production uses `drizzle-orm/postgres-js/migrator`. Same migration SQL files, different execution engine.
-- **Test isolation:** `beforeEach` creates fresh PGlite instance per test (new `setupApp()` or new `createDatabase()`). **`afterEach` calls `teardownApp()` or `close()` for deterministic cleanup** — PGlite manages an embedded Postgres engine with file descriptors and memory-mapped state, so explicit disposal prevents resource leaks.
+- **Test isolation:** Single PGlite instance per test file (created in `beforeAll`, closed in `afterAll`). **`beforeEach` truncates all tables** (child tables first to respect FK constraints) for per-test isolation. This avoids the ~200-500ms PGlite startup + migration cost per test. PGlite manages an embedded Postgres engine with file descriptors and memory-mapped state, so explicit `close()` in `afterAll` prevents resource leaks.
 - **Migration in tests:** `await runMigrations(migrate)` runs the same Postgres migrations as production — tests validate the real schema
 
 ### Rollback Procedure
@@ -1088,8 +1334,16 @@ The SQLite backup (`server/drizzle-sqlite-backup/`) must not be deleted until th
 - `authService.ts` does NOT need changes — confirmed no DB calls (pure bcrypt/JWT/crypto)
 - `toISOTimestamp()` is deleted — Postgres timestamps are native `Date` objects through Drizzle, `.toISOString()` is used directly
 - Supabase connection string must use `?sslmode=require` for production, session mode port 5432
-- **Supabase RLS:** Disabled on all tables via migration. The app uses custom JWT auth, not Supabase Auth — Supabase RLS policies (`auth.uid()`) are not applicable.
+- **Supabase RLS:** Enabled with **zero policies** on all tables via migration — blocks PostgREST API access (anon/authenticated keys) while the `postgres` role (our connection) bypasses RLS. `REVOKE ALL` on anon/authenticated provides defense-in-depth. The app uses custom JWT auth, not Supabase Auth — Supabase RLS policies (`auth.uid()`) are not applicable.
 - **Supabase connection limits:** 60 direct connections on Pro tier. `DB_POOL_MAX=10` is suitable for single-instance deployment. If running multiple replicas, use Supavisor pooler (port 6543) with transaction mode.
-- **Opaque cursor design:** The `base64url({ t, id })` cursor encoding is intentionally simple. If cursor tampering is a concern in the future, add HMAC signing. For now, the worst case of a malformed cursor is a 400 error.
-- **WsHandler async support:** The `routeMessage` function uses `.catch()` on the handler Promise (fire-and-forget) rather than `await`, because `routeMessage` is called from the synchronous `ws.onmessage` event. Errors are logged, not propagated.
-- **Risk: PGlite compatibility** — PGlite supports most Postgres features but may have edge cases with `pgEnum` or `uuid` generation. If issues arise during Task 42, document and patch.
+- **Opaque cursor design:** The `base64url({ t, id })` cursor encoding is intentionally simple. Malformed cursors are caught by `decodeCursor()` validation and returned as 400 errors (not 500 crashes). If cursor tampering is a concern in the future, add HMAC signing.
+- **Cursor ordering trade-off:** UUIDv4 values are random — same-millisecond messages are ordered by UUID bytes, which is deterministic but not insertion-ordered. This is acceptable for chat UX where sub-millisecond ordering is not user-visible. If insertion order ever becomes critical, add a `serial` sequence column as a future enhancement.
+- **WsHandler async support:** The `routeMessage` function uses `.catch()` on the handler Promise (fire-and-forget) rather than `await`, because `routeMessage` is called from the synchronous `ws.onmessage` event. The `.catch()` handler sends a last-resort `TEXT_ERROR` frame before logging, ensuring the client always receives feedback even when a handler crashes before reaching its own try/catch.
+- **Postgres error codes:** The `authRoutes.ts` UNIQUE constraint error handler uses Postgres error code `23505` (unique_violation) instead of the SQLite-specific `UNIQUE constraint failed` string match. All `postgres.js` errors expose a `.code` property for programmatic matching.
+- **Foreign key cascades:** All foreign key `ON DELETE` behaviors are explicitly defined in the Drizzle schema (see Task 2). The SQLite defaults (`NO ACTION` on all FKs) are replaced with `CASCADE` on all FKs to prevent orphaned rows in managed Postgres. All FK columns remain NOT NULL — no nullable FK columns are introduced. Preserving messages from deleted users (SET NULL on `user_id`) is deferred to a follow-up spec that includes the necessary null-handling code changes across the codebase.
+- **Connection health:** The db plugin runs a periodic health check (`SELECT 1`) every 60 seconds with a **consecutive failure threshold** (3 failures ≈ 3 minutes tolerance) before exiting — handles brief Supabase maintenance windows gracefully. `max_lifetime: 1800` on the pool rotates connections every 30 minutes to handle infrastructure updates. `statement_timeout: 30000` prevents slow queries from holding pool connections (migrations use a separate connection without this timeout).
+- **Server-side transient retry:** `withDbRetry()` wrapper retries transient Postgres connection errors (codes `08006`, `08001`, `57P01`) with 1 retry and 200ms delay. Applied to `createMessage` in the WS handler to prevent Supabase maintenance hiccups from dropping user messages. Not applied to transactions.
+- **`count()` type:** Postgres `count()` returns `bigint`, which `postgres.js` serializes as a JavaScript `string`. `Number()` coercion is used for all count checks in this codebase (safe for small-value comparisons like `> 0`).
+- **Known limitation — no message retry UI:** When a message fails to persist (`TEXT_ERROR`), it is marked as `'failed'` in the store but there is no UI for the user to retry sending. Failed messages must be manually retyped. A `retryMessage()` store method is deferred to a follow-up spec.
+- **Risk: PGlite compatibility** — PGlite supports most Postgres features but may have edge cases with `pgEnum` or `uuid` generation. Task 6b validates the migration against real Supabase. If PGlite-specific issues arise during Task 42, document and patch.
+- **Risk: Supabase managed environment** — Supabase pre-installs extensions (`pg_net`, `pgsodium`, `supautils`) and has system schemas (`auth`, `storage`, `realtime`). Generated Drizzle migrations may conflict with these. Task 6b is a **mandatory gate** that validates against real Supabase before proceeding with service-layer code changes (Tasks 13+). Extension inventory and type conflict checks are explicitly required.

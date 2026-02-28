@@ -38,7 +38,7 @@ _Migration architecture document for transitioning discord_clone from embedded S
 | Drizzle config | `dialect: 'sqlite'` | `dialect: 'postgresql'` | Trivial |
 | Docker volume | `./data/sqlite:/app/data` | Removed (database is external) | Trivial |
 | Environment config | `DATABASE_PATH` (file path) | `DATABASE_URL` (connection string) | Trivial |
-| Test database | In-memory SQLite (`:memory:`) | Supabase test project or local Postgres via Docker | Low |
+| Test database | In-memory SQLite (`:memory:`) | PGlite in-process Postgres (no Docker dependency for tests) | Low |
 | SQLite PRAGMAs | WAL mode, foreign keys | Removed (Postgres handles natively) | Trivial |
 | Backup strategy | File copy of `.db` file | Supabase automatic backups + `pg_dump` | Trivial |
 
@@ -51,9 +51,9 @@ Everything else. Specifically:
 - **WebSocket layer** — same Fastify WebSocket, same message routing, same handlers
 - **mediasoup SFU** — voice/video completely unaffected (no DB dependency)
 - **E2E encryption** — same libsodium, same client-side encrypt/decrypt, same opaque ciphertext storage
-- **Electron client** — zero client-side changes (client talks to REST/WS API, not directly to DB)
+- **Electron client** — minimal changes limited to pagination cursor handling, transient error retry, and `TEXT_ERROR` WebSocket frame support (no UI redesign, no new features)
 - **Nginx / coturn / certbot** — unchanged
-- **All API contracts** — same REST endpoints, same response envelopes, same WS message types
+- **Most API contracts** — same REST endpoints, same response envelopes. Exception: message list endpoint changes `before` (message ID) query param to `cursor` (opaque string) and adds `cursor` field to response
 - **Supabase Auth** — NOT adopted. We keep our custom auth system.
 - **Supabase Realtime** — NOT adopted. We keep our custom WebSocket layer.
 - **Supabase client SDK** — NOT used in application code. Drizzle ORM talks directly to Postgres via connection string.
@@ -156,33 +156,18 @@ Rationale:
 
 | Option | Pros | Cons |
 |--------|------|------|
-| **Local Postgres via Docker — SELECTED** | Fast, isolated, matches production, free, no network latency | Requires Docker for local dev |
+| Local Postgres via Docker | Fast, isolated, matches production, free, no network latency | Requires Docker for local dev — friction for `npm test` |
 | Supabase test project | Matches production exactly | Network latency in tests, costs money, shared state risk |
-| Embedded PGlite | In-process like SQLite was, fast | Incomplete Postgres compatibility, experimental |
+| **Embedded PGlite — SELECTED** | In-process like SQLite was, zero Docker dependency for tests, fast, `pgTable`-compatible | Minor Postgres compatibility gaps (validated via Task 6b against real Supabase) |
 
 **Approach:**
-- Add a `postgres` service to `docker-compose.dev.yml` for local development and testing
-- Tests use a dedicated test database (`discord_clone_test`) or a fresh schema per test run
-- Test helpers create a fresh connection per test suite and run migrations
-- `setupApp()` in test helpers accepts a `DATABASE_URL` override pointing to the test database
+- `createDatabase()` dual-mode: uses PGlite when `DATABASE_URL` is not set (tests), postgres.js when set (production)
+- Single PGlite instance per test file (created in `beforeAll`, closed in `afterAll`) — avoids ~200-500ms startup cost per test
+- `beforeEach` truncates all tables for per-test isolation
+- No Docker dependency for `npm test` — developers can run tests immediately after clone
+- `docker-compose.dev.yml` includes a local Postgres service for optional manual dev/testing against real Postgres
 
-**docker-compose.dev.yml addition:**
-```yaml
-services:
-  postgres:
-    image: postgres:15-alpine
-    environment:
-      POSTGRES_USER: discord_clone
-      POSTGRES_PASSWORD: dev_password
-      POSTGRES_DB: discord_clone_dev
-    ports:
-      - "5432:5432"
-    volumes:
-      - pgdata:/var/lib/postgresql/data
-
-volumes:
-  pgdata:
-```
+**PGlite risk mitigation:** Generated Drizzle migrations are validated against a real Supabase instance (Task 6b) before any code changes. PGlite may accept SQL that Supabase rejects — the validation step catches this. `pgEnum` and `uuid` generation are explicitly verified against both PGlite and Supabase.
 
 ### Decision 6: Connection Pooling & Lifecycle
 
@@ -235,14 +220,13 @@ All other env vars remain unchanged: `JWT_ACCESS_SECRET`, `JWT_REFRESH_SECRET`, 
 | `server/src/plugins/db.ts` | Update: `AppDatabase` type changes. Async connection. Add `onClose` hook for pool drain. |
 | `server/src/index.ts` | Update: `runMigrations()` becomes async. `runSeed()` becomes async. |
 
-### Auth Domain (4 files)
+### Auth Domain (3 files)
 
 | File | Change Required |
 |------|-----------------|
-| `server/src/plugins/auth/authRoutes.ts` | Update: Add `await` to DB calls. |
-| `server/src/plugins/auth/authService.ts` | Update: Add `await` to DB calls. |
+| `server/src/plugins/auth/authRoutes.ts` | Update: Add `await` to DB calls. Update UNIQUE constraint error from SQLite string match to Postgres error code `23505`. |
 | `server/src/plugins/auth/sessionService.ts` | Update: Add `await` to all session CRUD. `.get()` → destructured array. |
-| `server/src/plugins/auth/sessionService.test.ts` | Update: Add `await`, use test Postgres. |
+| `server/src/plugins/auth/sessionService.test.ts` | Update: Add `await`, use PGlite in-memory. |
 
 ### Channel Domain (3 files)
 
@@ -277,37 +261,59 @@ All other env vars remain unchanged: `JWT_ACCESS_SECRET`, `JWT_REFRESH_SECRET`, 
 |------|-----------------|
 | `server/src/plugins/voice/voiceWsHandler.ts` | Update: Add `await` if any DB calls exist. |
 
+### WebSocket Infrastructure (1 file)
+
+| File | Change Required |
+|------|-----------------|
+| `server/src/ws/wsRouter.ts` | Update: `WsHandler` return type from `void` to `void | Promise<void>`. `routeMessage` awaits async handlers with `.catch()` error frame fallback. |
+
 ### Test Infrastructure (1 file)
 
 | File | Change Required |
 |------|-----------------|
-| `server/src/test/helpers.ts` | Rewrite: Replace in-memory SQLite with test Postgres connection. Add `await` to all seed functions. `.returning().get()` → `[result] = await .returning()`. |
+| `server/src/test/helpers.ts` | Rewrite: Replace in-memory SQLite with PGlite via `createDatabase()`. Add `await` to all seed functions. `.returning().get()` → `[result] = await .returning()`. Add `teardownApp()` and `truncateAll()` exports. |
 
 ### Configuration & Deployment (4 files)
 
 | File | Change Required |
 |------|-----------------|
-| `server/package.json` | Update: Remove `better-sqlite3` + `@types/better-sqlite3`. Add `postgres`. |
+| `server/package.json` | Update: Remove `better-sqlite3` + `@types/better-sqlite3`. Add `postgres`. Add `@electric-sql/pglite` (devDependency). |
 | `docker-compose.yml` | Update: Remove `./data/sqlite:/app/data` volume from `app` service. |
-| `docker-compose.dev.yml` | Update: Add `postgres` service for local dev/test. |
+| `docker-compose.dev.yml` | Update: Add `postgres` service for optional local dev/test. |
 | `.env.example` | Update: Replace `DATABASE_PATH` with `DATABASE_URL`. |
+
+### Shared Package (3 files)
+
+| File | Change Required |
+|------|-----------------|
+| `shared/src/ws-messages.ts` | Update: Add `TEXT_ERROR: 'text:error'` to `WS_TYPES`. Add `TextErrorPayload` interface with `error` and `tempId` fields. |
+| `shared/src/types.ts` | Update: Add `ApiPaginatedList<T>` interface with `data`, `cursor`, and `count` fields for opaque cursor pagination. |
+| `shared/src/index.ts` | Update: Export `TextErrorPayload` and `ApiPaginatedList`. |
+
+### Client (4 files)
+
+| File | Change Required |
+|------|-----------------|
+| `client/src/renderer/src/stores/useMessageStore.ts` | Update: Add `cursors: Map<string, string | null>` state, `setCursor`/`getCursor` methods. Update `setMessages`/`prependMessages` to accept cursor. |
+| `client/src/renderer/src/services/messageService.ts` | Update: Replace message-ID `before` param with opaque `cursor` from server. Use `cursor !== null` for `hasMore` instead of length heuristic. |
+| `client/src/renderer/src/services/apiClient.ts` | Update: Add `RetryableError` class, `withRetry` wrapper for transient GET failures (2 retries, linear backoff). Add `returnFullBody` param to `apiRequest`. Export `apiGet` convenience function. |
+| `client/src/renderer/src/services/wsClient.ts` | Update: Add `TEXT_ERROR` handler that calls `markMessageFailed(tempId)` — keeps WS connection open instead of full reconnect. |
 
 ### Files NOT Affected
 
-- All `client/` files (zero changes)
-- All `shared/` files (zero changes)
+- `server/src/plugins/auth/authService.ts` (pure bcrypt/JWT/crypto — no DB calls)
+- `server/src/plugins/auth/authService.test.ts` (pure function tests — no DB)
 - `server/src/plugins/auth/authMiddleware.ts` (no DB calls)
 - `server/src/plugins/presence/presenceService.ts` (in-memory only)
 - `server/src/plugins/voice/mediasoupManager.ts` (no DB calls)
 - `server/src/plugins/voice/voiceService.ts` (in-memory state only)
 - `server/src/ws/wsServer.ts` (no DB calls)
-- `server/src/ws/wsRouter.ts` (no DB calls)
 - `server/src/services/encryptionService.ts` (no DB calls)
 - `docker/nginx/` configs
 - `docker/coturn/` configs
-- `.github/workflows/` (CI/CD unchanged — tests will run against local Postgres in CI)
+- `.github/workflows/` (CI/CD unchanged — tests run against PGlite in CI, no Docker Postgres needed)
 
-**Total: ~29 server files modified, 0 client files modified.**
+**Total: ~30 server files, 3 shared files, 4 client files modified (~37 files total).**
 
 ---
 
@@ -346,19 +352,20 @@ export const users = pgTable('users', {
 // --- Sessions ---
 export const sessions = pgTable('sessions', {
   id: uuid('id').primaryKey().defaultRandom(),
-  user_id: uuid('user_id').notNull().references(() => users.id),
+  user_id: uuid('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
   refresh_token_hash: text('refresh_token_hash').notNull(),
   expires_at: timestamp('expires_at', { withTimezone: true }).notNull(),
   created_at: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
 }, (table) => [
   index('idx_sessions_user_id').on(table.user_id),
+  index('idx_sessions_token_hash').on(table.refresh_token_hash),
 ]);
 
 // --- Invites ---
 export const invites = pgTable('invites', {
   id: uuid('id').primaryKey().defaultRandom(),
   token: text('token').notNull().unique(),
-  created_by: uuid('created_by').notNull().references(() => users.id),
+  created_by: uuid('created_by').notNull().references(() => users.id, { onDelete: 'cascade' }),
   revoked: boolean('revoked').notNull().default(false),
   created_at: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
 });
@@ -366,8 +373,8 @@ export const invites = pgTable('invites', {
 // --- Bans ---
 export const bans = pgTable('bans', {
   id: uuid('id').primaryKey().defaultRandom(),
-  user_id: uuid('user_id').notNull().references(() => users.id),
-  banned_by: uuid('banned_by').notNull().references(() => users.id),
+  user_id: uuid('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+  banned_by: uuid('banned_by').notNull().references(() => users.id, { onDelete: 'cascade' }),
   created_at: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
 }, (table) => [
   index('idx_bans_user_id').on(table.user_id),
@@ -386,8 +393,8 @@ export const channels = pgTable('channels', {
 // --- Messages ---
 export const messages = pgTable('messages', {
   id: uuid('id').primaryKey().defaultRandom(),
-  channel_id: uuid('channel_id').notNull().references(() => channels.id),
-  user_id: uuid('user_id').notNull().references(() => users.id),
+  channel_id: uuid('channel_id').notNull().references(() => channels.id, { onDelete: 'cascade' }),
+  user_id: uuid('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
   encrypted_content: text('encrypted_content').notNull(),
   nonce: text('nonce').notNull(),
   created_at: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
@@ -554,31 +561,18 @@ const owner = app.db.insert(users).values({ ... }).returning().get(); // sync
 ### Target Test Helper
 
 ```typescript
-// Local Postgres via Docker — async, still fast, isolated
-const app = await buildApp({ databaseUrl: process.env.DATABASE_URL_TEST });
-await runMigrations(app.db);  // async
+// PGlite in-process Postgres — async, no Docker required, isolated
+const app = await buildApp(); // PGlite auto-detected (no DATABASE_URL)
+await runMigrations(app.migrate);  // async, uses drizzle-orm/pglite/migrator
 const [owner] = await app.db.insert(users).values({ ... }).returning(); // async
 ```
 
-**Test isolation strategy:** Each test suite creates its own schema (or truncates tables) to avoid cross-test contamination. Use `beforeEach` to clean state.
+**Test isolation strategy:**
+- Single PGlite instance per test **file** (created in `beforeAll`, closed in `afterAll`) — avoids ~200-500ms PGlite startup cost per test
+- `beforeEach` truncates all tables via `TRUNCATE ... CASCADE` for per-test isolation
+- Explicit `close()` in `afterAll` prevents resource leaks (PGlite manages file descriptors and memory-mapped state)
 
-**CI pipeline:** GitHub Actions adds a Postgres service container:
-```yaml
-services:
-  postgres:
-    image: postgres:15-alpine
-    env:
-      POSTGRES_USER: test
-      POSTGRES_PASSWORD: test
-      POSTGRES_DB: discord_clone_test
-    ports:
-      - 5432:5432
-    options: >-
-      --health-cmd pg_isready
-      --health-interval 10s
-      --health-timeout 5s
-      --health-retries 5
-```
+**CI pipeline:** No Postgres service container needed — PGlite runs in-process. Tests execute with `npm test` immediately, zero infrastructure dependencies.
 
 ---
 
@@ -661,41 +655,55 @@ For 20 users with encrypted text messages, 500 MB is more than enough. If needed
 7. Run `drizzle-kit generate` to create fresh Postgres migrations
 8. Update `AppDatabase` type exports
 
-### Phase 2: Service Layer (Async Migration)
+### Phase 2: Fastify Infrastructure & Shared Types
 
 9. Update `server/src/db/seed.ts` — async inserts
-10. Update `server/src/plugins/auth/sessionService.ts` — async CRUD
-11. Update `server/src/plugins/auth/authService.ts` — async DB calls
-12. Update `server/src/plugins/auth/authRoutes.ts` — await service calls
-13. Update `server/src/plugins/channels/channelService.ts` — async CRUD
-14. Update `server/src/plugins/channels/channelRoutes.ts` — await
-15. Update `server/src/plugins/messages/messageService.ts` — async
-16. Update `server/src/plugins/messages/messageRoutes.ts` — await
-17. Update `server/src/plugins/messages/messageWsHandler.ts` — await
-18. Update `server/src/plugins/invites/inviteService.ts` — async
-19. Update `server/src/plugins/users/userService.ts` — async
-20. Update `server/src/plugins/admin/adminService.ts` — async
-21. Update `server/src/plugins/admin/adminRoutes.ts` — await
-22. Update `server/src/plugins/voice/voiceWsHandler.ts` — await (if DB calls exist)
+10. Update `server/src/plugins/db.ts` — new type, onClose hook, health check
+11. Update `server/src/index.ts` — async migrations + seed
+12. Update `shared/src/ws-messages.ts` — add `TEXT_ERROR` type and `TextErrorPayload`
+13. Update `shared/src/types.ts` — add `ApiPaginatedList<T>`
+14. Update `shared/src/index.ts` — export new types
+15. Update `server/src/ws/wsRouter.ts` — async handler support with error frame fallback
 
-### Phase 3: Infrastructure & Tests
+### Phase 3: Service Layer (Async Migration)
 
-23. Update `server/src/plugins/db.ts` — new type, onClose hook for pool drain
-24. Update `server/src/index.ts` — async migrations + seed
-25. Update `server/src/test/helpers.ts` — Postgres test connection, async seeds
-26. Update all test files — async DB calls, test Postgres
-27. Update `docker-compose.yml` — remove SQLite volume
-28. Update `docker-compose.dev.yml` — add Postgres service
-29. Update `.env.example` — `DATABASE_URL`
-30. Update `server/package.json` — dependency swap
+16. Update `server/src/plugins/auth/sessionService.ts` — async CRUD
+17. Update `server/src/plugins/auth/authRoutes.ts` — await service calls, Postgres error code
+18. Update `server/src/plugins/channels/channelService.ts` — async CRUD
+19. Update `server/src/plugins/channels/channelRoutes.ts` — await
+20. Update `server/src/plugins/messages/messageService.ts` — async + opaque cursor pagination
+21. Update `server/src/plugins/messages/messageRoutes.ts` — await + cursor response
+22. Update `server/src/plugins/messages/messageWsHandler.ts` — async + TEXT_ERROR
+23. Update `server/src/plugins/invites/inviteService.ts` — async
+24. Update `server/src/plugins/users/userService.ts` — async
+25. Update `server/src/plugins/admin/adminService.ts` — async
+26. Update `server/src/plugins/admin/adminRoutes.ts` — await
+27. Update `server/src/plugins/voice/voiceWsHandler.ts` — await
 
-### Phase 4: Validation
+### Phase 4: Tests & Configuration
 
-31. Run full test suite against local Postgres
-32. Deploy to staging Supabase project
-33. Run smoke tests (register, login, send message, join voice)
-34. Verify backup/restore works via Supabase dashboard
-35. Cut over production
+28. Update `server/src/test/helpers.ts` — PGlite test connection, async seeds, truncateAll
+29. Update all test files — async DB calls, PGlite in-memory
+30. Update `docker-compose.yml` — remove SQLite volume
+31. Update `docker-compose.dev.yml` — add optional Postgres service
+32. Update `.env.example` — `DATABASE_URL`
+33. Update `server/package.json` — dependency swap
+
+### Phase 5: Client Updates
+
+34. Update `client/src/renderer/src/stores/useMessageStore.ts` — cursor state
+35. Update `client/src/renderer/src/services/messageService.ts` — opaque cursor pagination
+36. Update `client/src/renderer/src/services/apiClient.ts` — retry wrapper for GET requests
+37. Update `client/src/renderer/src/services/wsClient.ts` — TEXT_ERROR handler
+
+### Phase 6: Validation
+
+38. Run full test suite against PGlite
+39. Validate migration against real Supabase (mandatory gate)
+40. Deploy to staging Supabase project
+41. Run smoke tests (register, login, send message, join voice)
+42. Verify backup/restore works via Supabase dashboard
+43. Cut over production
 
 ---
 
@@ -703,9 +711,9 @@ For 20 users with encrypted text messages, 500 MB is more than enough. If needed
 
 If the migration fails or Supabase proves problematic:
 
-1. **Code rollback:** `git revert` the migration branch — all changes are in server-side files
+1. **Code rollback:** `git revert` the migration branch — reverts server, shared, and client changes
 2. **Data:** SQLite database file is still on disk in `./data/sqlite/` — just restore the volume mount
-3. **Zero client impact:** No client-side code changed, so no client rollback needed
+3. **Client rollback:** Client changes (cursor pagination, retry, TEXT_ERROR) are reverted with the git revert — the old message-ID pagination is restored
 4. **Supabase project:** Can be paused or deleted — no vendor lock-in
 
 ---
@@ -750,21 +758,22 @@ After implementation, update these files to reflect the new architecture:
 
 ## Architecture Completeness Checklist
 
-- [x] Migration scope clearly bounded (database layer only)
-- [x] All 29 affected files identified with specific changes required
+- [x] Migration scope clearly bounded (database layer + pagination/error handling ripple to shared/client)
+- [x] All ~37 affected files identified with specific changes required (server, shared, client)
 - [x] Schema translation fully specified with target code
-- [x] Connection layer translation fully specified with target code
+- [x] Connection layer translation fully specified with target code (dual-mode: postgres.js + PGlite)
 - [x] Sync-to-async migration pattern documented with before/after examples
-- [x] Test infrastructure strategy defined (local Postgres via Docker)
+- [x] Test infrastructure strategy defined (PGlite in-process — no Docker dependency)
 - [x] Deployment changes documented (Docker Compose, env vars)
-- [x] CI/CD pipeline changes documented (Postgres service container)
+- [x] CI/CD pipeline unchanged (PGlite runs in-process, no Postgres service container needed)
 - [x] Supabase project setup documented
 - [x] Privacy/security impact assessed
 - [x] Rollback plan defined
-- [x] Implementation sequence ordered with phases
+- [x] Implementation sequence ordered with phases (6 phases)
 - [x] Documentation update list provided
-- [x] No client-side changes required (verified)
-- [x] No auth system changes required (verified)
-- [x] No WebSocket changes required (verified)
+- [x] Client-side changes scoped (cursor pagination, retry, TEXT_ERROR — no UI redesign)
+- [x] Shared package changes scoped (TextErrorPayload, ApiPaginatedList types)
+- [x] No auth system changes required (verified — authService.ts is pure functions, no DB)
+- [x] WebSocket infrastructure changes scoped (async handler support in wsRouter.ts, TEXT_ERROR in messageWsHandler.ts)
 
 **Status: READY FOR IMPLEMENTATION**
