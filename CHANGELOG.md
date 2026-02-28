@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.99.123](https://github.com/AidenWoodside/discord_clone/compare/v0.99.122...v0.99.123) (2026-02-28)
+
+
+### Bug Fixes
+
+* authenticate with GHCR before pulling private server image ([93911aa](https://github.com/AidenWoodside/discord_clone/commit/93911aa88943032df05f3bdfbce67269d99e962b))
+* authenticate with GHCR before pulling server image ([bf31880](https://github.com/AidenWoodside/discord_clone/commit/bf318801c3be188c4a01aa78d662bbf70f6e3e4c))
+
 ## [0.99.122](https://github.com/AidenWoodside/discord_clone/compare/v0.99.121...v0.99.122) (2026-02-28)
 
 
