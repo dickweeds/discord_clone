@@ -1,5 +1,20 @@
 # Changelog
 
+## [0.99.117](https://github.com/AidenWoodside/discord_clone/compare/v0.99.116...v0.99.117) (2026-02-28)
+
+
+### Bug Fixes
+
+* use PAT for release-please to trigger release workflow ([7c70673](https://github.com/AidenWoodside/discord_clone/commit/7c706737a70e2e639e8e486ba4cb1e8fc5e6ef19))
+* use PAT for release-please to trigger release workflow ([5202d70](https://github.com/AidenWoodside/discord_clone/commit/5202d706d7794e5e8679700e5af69fdcfc88c041))
+
+
+### Performance Improvements
+
+* mock mediasoup and reduce bcrypt rounds in tests ([2a8deba](https://github.com/AidenWoodside/discord_clone/commit/2a8deba109f5ca717f036888e6d06e183741a7a0))
+* mock mediasoup in non-voice tests via vitest setup file ([da5e4a2](https://github.com/AidenWoodside/discord_clone/commit/da5e4a29fb93b89fd1344a8028c7931d0b455c33))
+* use minimal bcrypt rounds in test environment ([5b11bbf](https://github.com/AidenWoodside/discord_clone/commit/5b11bbfa40c6f740516d4de1a880de07009eb462))
+
 ## [0.99.116](https://github.com/AidenWoodside/discord_clone/compare/v0.99.115...v0.99.116) (2026-02-28)
 
 
