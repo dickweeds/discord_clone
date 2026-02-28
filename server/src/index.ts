@@ -1,11 +1,3 @@
-import dotenv from 'dotenv';
-import path from 'path';
-import { fileURLToPath } from 'url';
-
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
-dotenv.config({ path: path.resolve(__dirname, '../../.env') });
-
 async function start(): Promise<void> {
   // Generate GROUP_ENCRYPTION_KEY before any modules read it
   if (!process.env.GROUP_ENCRYPTION_KEY) {
