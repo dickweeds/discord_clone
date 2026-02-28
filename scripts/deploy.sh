@@ -65,7 +65,7 @@ if [ "$ACTIVE" = "none" ]; then
   echo "Cold start — waiting for container to accept connections..."
   sleep 5
   echo "Running migrations before health check..."
-  if ! docker compose exec -T "app-$NEW" node dist/scripts/migrate.js 2>&1; then
+  if ! docker compose exec -T "app-$NEW" node server/dist/scripts/migrate.js 2>&1; then
     echo "FATAL: cold-start migration failed on app-$NEW"
     docker compose stop "app-$NEW"
     exit 1
@@ -89,7 +89,7 @@ done
 
 # 5. Run database migrations on new slot against Supabase (old slot still serves traffic)
 # Both slots can safely connect to Supabase concurrently — Postgres handles concurrent access.
-if ! docker compose exec -T "app-$NEW" node dist/scripts/migrate.js 2>&1; then
+if ! docker compose exec -T "app-$NEW" node server/dist/scripts/migrate.js 2>&1; then
   echo "FATAL: database migration failed on app-$NEW (Supabase)"
   docker compose stop "app-$NEW"
   exit 1
