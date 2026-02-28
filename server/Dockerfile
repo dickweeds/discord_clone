@@ -13,8 +13,9 @@ COPY shared/package.json shared/
 # Note: npm ci installs the full lockfile (~412 packages incl. client deps).
 # This is intentional — the lockfile pins patched versions of transitive deps,
 # and mediasoup C++ compilation dominates build time regardless of package count.
-# Docker layer caching (GHA cache) skips this step when lockfile is unchanged.
-RUN npm ci
+# Cache mount keeps npm's download cache across builds so even when the layer
+# is invalidated (e.g. version bump in package.json), packages are not re-downloaded.
+RUN --mount=type=cache,target=/root/.npm npm ci
 
 # Copy source and compile TypeScript
 COPY shared/src/ shared/src/
