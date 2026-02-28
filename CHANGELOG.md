@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.99.124](https://github.com/AidenWoodside/discord_clone/compare/v0.99.123...v0.99.124) (2026-02-28)
+
+
+### Bug Fixes
+
+* replace awslogs-stream-prefix with tag option ([09a6935](https://github.com/AidenWoodside/discord_clone/commit/09a693582855969341ace465774753955898c270))
+* replace awslogs-stream-prefix with tag option ([96b91e9](https://github.com/AidenWoodside/discord_clone/commit/96b91e970855a000913a79062455194c6d9a8a0c))
+
 ## [0.99.123](https://github.com/AidenWoodside/discord_clone/compare/v0.99.122...v0.99.123) (2026-02-28)
 
 
