@@ -28,9 +28,14 @@ async function start(): Promise<void> {
   const app = await buildApp();
 
   try {
-    runMigrations(app.db);
+    await runMigrations(app.migrate);
     app.log.info('Database migrations completed');
+  } catch (err) {
+    app.log.fatal({ err }, 'Migration failed — aborting startup');
+    process.exit(1);
+  }
 
+  try {
     await runSeed(app.db, app.log);
 
     await app.listen({ port: PORT, host: HOST });

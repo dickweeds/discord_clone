@@ -6,7 +6,6 @@ vi.hoisted(() => {
   process.env.JWT_REFRESH_SECRET = 'test-refresh-secret-key-for-testing';
   process.env.GROUP_ENCRYPTION_KEY = 'rSxlHxEjeJC7RY079zu0Kg9fHWEIdAtGE4s76zAI9Rw';
 });
-vi.stubEnv('DATABASE_PATH', ':memory:');
 
 import { setupApp, seedOwner, seedInvite } from '../../test/helpers.js';
 import { hashPassword, generateRefreshToken, hashToken } from './authService.js';
@@ -34,7 +33,7 @@ describe('authRoutes', () => {
     it('should register a user with a valid invite', async () => {
       app = await setupApp();
       const { id: ownerId } = await seedOwner(app);
-      seedInvite(app, ownerId);
+      await seedInvite(app, ownerId);
 
       const response = await app.inject({
         method: 'POST',
@@ -58,7 +57,7 @@ describe('authRoutes', () => {
     it('should normalize username by trimming and lowercasing', async () => {
       app = await setupApp();
       const { id: ownerId } = await seedOwner(app);
-      seedInvite(app, ownerId);
+      await seedInvite(app, ownerId);
 
       const response = await app.inject({
         method: 'POST',
@@ -77,7 +76,7 @@ describe('authRoutes', () => {
     it('should revoke invite token after successful registration', async () => {
       app = await setupApp();
       const { id: ownerId } = await seedOwner(app);
-      seedInvite(app, ownerId);
+      await seedInvite(app, ownerId);
 
       await app.inject({
         method: 'POST',
@@ -90,8 +89,8 @@ describe('authRoutes', () => {
       });
 
       // Verify invite is now revoked
-      const invite = app.db.select().from(invites)
-        .where(eq(invites.token, 'valid-invite-token')).get();
+      const [invite] = await app.db.select().from(invites)
+        .where(eq(invites.token, 'valid-invite-token'));
       expect(invite!.revoked).toBe(true);
 
       // Trying to use the same invite again should fail
@@ -130,12 +129,11 @@ describe('authRoutes', () => {
     it('should return 400 INVALID_INVITE for revoked invite token', async () => {
       app = await setupApp();
       const { id: ownerId } = await seedOwner(app);
-      seedInvite(app, ownerId, 'revoked-token');
+      await seedInvite(app, ownerId, 'revoked-token');
 
-      app.db.update(invites)
+      await app.db.update(invites)
         .set({ revoked: true })
-        .where(eq(invites.token, 'revoked-token'))
-        .run();
+        .where(eq(invites.token, 'revoked-token'));
 
       const response = await app.inject({
         method: 'POST',
@@ -154,8 +152,8 @@ describe('authRoutes', () => {
     it('should return 409 USERNAME_TAKEN for duplicate username', async () => {
       app = await setupApp();
       const { id: ownerId } = await seedOwner(app);
-      seedInvite(app, ownerId, 'invite-1');
-      seedInvite(app, ownerId, 'invite-2');
+      await seedInvite(app, ownerId, 'invite-1');
+      await seedInvite(app, ownerId, 'invite-2');
 
       // Register first user (revokes invite-1)
       await app.inject({
@@ -186,20 +184,20 @@ describe('authRoutes', () => {
     it('should return 403 when banned user tries to register', async () => {
       app = await setupApp();
       const { id: ownerId } = await seedOwner(app);
-      seedInvite(app, ownerId);
+      await seedInvite(app, ownerId);
 
       // Create a user and ban them
       const bannedHash = await hashPassword('banned123');
-      const bannedUser = app.db.insert(users).values({
+      const [bannedUser] = await app.db.insert(users).values({
         username: 'banneduser',
         password_hash: bannedHash,
         role: 'user',
-      }).returning().get();
+      }).returning();
 
-      app.db.insert(bans).values({
+      await app.db.insert(bans).values({
         user_id: bannedUser.id,
         banned_by: ownerId,
-      }).run();
+      });
 
       // Try to register with the banned username
       const response = await app.inject({
@@ -233,7 +231,7 @@ describe('authRoutes', () => {
     it('should return 400 for password exceeding 72 characters', async () => {
       app = await setupApp();
       const { id: ownerId } = await seedOwner(app);
-      seedInvite(app, ownerId);
+      await seedInvite(app, ownerId);
 
       const response = await app.inject({
         method: 'POST',
@@ -251,7 +249,7 @@ describe('authRoutes', () => {
     it('should register with publicKey and return encryptedGroupKey', async () => {
       app = await setupApp();
       const { id: ownerId } = await seedOwner(app);
-      seedInvite(app, ownerId);
+      await seedInvite(app, ownerId);
 
       await sodium.ready;
       const keypair = sodium.crypto_box_keypair();
@@ -281,7 +279,7 @@ describe('authRoutes', () => {
       expect(sodium.to_base64(decrypted)).toBe(sodium.to_base64(expectedGroupKey));
 
       // Verify DB has both columns stored
-      const user = app.db.select().from(users).where(eq(users.username, 'jordan')).get();
+      const [user] = await app.db.select().from(users).where(eq(users.username, 'jordan'));
       expect(user!.public_key).toBe(publicKeyB64);
       expect(user!.encrypted_group_key).toBe(body.data.encryptedGroupKey);
     });
@@ -289,7 +287,7 @@ describe('authRoutes', () => {
     it('should register without publicKey (backward compatibility)', async () => {
       app = await setupApp();
       const { id: ownerId } = await seedOwner(app);
-      seedInvite(app, ownerId);
+      await seedInvite(app, ownerId);
 
       const response = await app.inject({
         method: 'POST',
@@ -305,7 +303,7 @@ describe('authRoutes', () => {
       const body = response.json();
       expect(body.data.encryptedGroupKey).toBeNull();
 
-      const user = app.db.select().from(users).where(eq(users.username, 'jordan')).get();
+      const [user] = await app.db.select().from(users).where(eq(users.username, 'jordan'));
       expect(user!.public_key).toBeNull();
       expect(user!.encrypted_group_key).toBeNull();
     });
@@ -313,7 +311,7 @@ describe('authRoutes', () => {
     it('should return 400 for invalid publicKey (wrong length)', async () => {
       app = await setupApp();
       const { id: ownerId } = await seedOwner(app);
-      seedInvite(app, ownerId);
+      await seedInvite(app, ownerId);
 
       await sodium.ready;
       // 16 bytes instead of 32
@@ -337,7 +335,7 @@ describe('authRoutes', () => {
     it('should return 400 for invalid publicKey (not base64)', async () => {
       app = await setupApp();
       const { id: ownerId } = await seedOwner(app);
-      seedInvite(app, ownerId);
+      await seedInvite(app, ownerId);
 
       const response = await app.inject({
         method: 'POST',
@@ -433,16 +431,16 @@ describe('authRoutes', () => {
 
       // Create and ban a user
       const userHash = await hashPassword('userpass123');
-      const regularUser = app.db.insert(users).values({
+      const [regularUser] = await app.db.insert(users).values({
         username: 'banneduser',
         password_hash: userHash,
         role: 'user',
-      }).returning().get();
+      }).returning();
 
-      app.db.insert(bans).values({
+      await app.db.insert(bans).values({
         user_id: regularUser.id,
         banned_by: ownerId,
-      }).run();
+      });
 
       const response = await app.inject({
         method: 'POST',
@@ -464,8 +462,8 @@ describe('authRoutes', () => {
       const loginData = await loginUser(app, 'owner', 'ownerPass123');
       const tokenHash = hashToken(loginData.refreshToken);
 
-      const session = app.db.select().from(sessions)
-        .where(eq(sessions.refresh_token_hash, tokenHash)).get();
+      const [session] = await app.db.select().from(sessions)
+        .where(eq(sessions.refresh_token_hash, tokenHash));
       expect(session).toBeDefined();
       expect(session!.user_id).toBe(loginData.user.id);
     });
@@ -473,7 +471,7 @@ describe('authRoutes', () => {
     it('should return encryptedGroupKey in login response when user has one', async () => {
       app = await setupApp();
       const { id: ownerId } = await seedOwner(app);
-      seedInvite(app, ownerId);
+      await seedInvite(app, ownerId);
 
       await sodium.ready;
       const keypair = sodium.crypto_box_keypair();
@@ -585,11 +583,11 @@ describe('authRoutes', () => {
       // Create a refresh token and session manually with expired date
       const refreshToken = generateRefreshToken({ userId: ownerId, role: 'owner', username: 'owner' });
       const tokenHash = hashToken(refreshToken);
-      app.db.insert(sessions).values({
+      await app.db.insert(sessions).values({
         user_id: ownerId,
         refresh_token_hash: tokenHash,
         expires_at: new Date(Date.now() - 1000), // expired
-      }).run();
+      });
 
       const response = await app.inject({
         method: 'POST',
@@ -647,8 +645,8 @@ describe('authRoutes', () => {
 
       // Verify session was deleted
       const tokenHash = hashToken(loginData.refreshToken);
-      const session = app.db.select().from(sessions)
-        .where(eq(sessions.refresh_token_hash, tokenHash)).get();
+      const [session] = await app.db.select().from(sessions)
+        .where(eq(sessions.refresh_token_hash, tokenHash));
       expect(session).toBeUndefined();
     });
 
@@ -811,7 +809,7 @@ describe('authRoutes', () => {
 
       expect(response.statusCode).toBe(201);
 
-      const allChannels = app.db.select().from(channels).all();
+      const allChannels = await app.db.select().from(channels);
       expect(allChannels).toHaveLength(2);
 
       const general = allChannels.find(c => c.name === 'general');
@@ -864,7 +862,7 @@ describe('authRoutes', () => {
       const ownerId = setupResponse.json().data.user.id;
 
       // Create invite
-      seedInvite(app, ownerId);
+      await seedInvite(app, ownerId);
 
       // Register second user with invite
       const response = await app.inject({

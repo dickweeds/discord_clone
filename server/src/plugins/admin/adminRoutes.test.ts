@@ -6,7 +6,7 @@ vi.hoisted(() => {
   process.env.JWT_REFRESH_SECRET = 'test-refresh-secret-key-for-testing';
   process.env.GROUP_ENCRYPTION_KEY = 'rSxlHxEjeJC7RY079zu0Kg9fHWEIdAtGE4s76zAI9Rw';
 });
-vi.stubEnv('DATABASE_PATH', ':memory:');
+
 
 import { setupApp, seedOwner, seedRegularUser, seedInvite } from '../../test/helpers.js';
 import { bans } from '../../db/schema.js';
@@ -69,7 +69,7 @@ describe('adminRoutes', () => {
 
       const response = await app.inject({
         method: 'POST',
-        url: '/api/admin/kick/non-existent-id',
+        url: '/api/admin/kick/00000000-0000-0000-0000-000000000099',
         headers: { authorization: `Bearer ${owner.token}` },
       });
 
@@ -125,7 +125,7 @@ describe('adminRoutes', () => {
 
       const response = await app.inject({
         method: 'POST',
-        url: '/api/admin/ban/non-existent-id',
+        url: '/api/admin/ban/00000000-0000-0000-0000-000000000099',
         headers: { authorization: `Bearer ${owner.token}` },
       });
 
@@ -162,7 +162,7 @@ describe('adminRoutes', () => {
       await seedRegularUser(app);
 
       // Ban the user via admin route
-      const usersResult = app.db.select().from(users).where(eq(users.username, 'regular')).get();
+      const [usersResult] = await app.db.select().from(users).where(eq(users.username, 'regular'));
       await app.inject({
         method: 'POST',
         url: `/api/admin/ban/${usersResult!.id}`,
@@ -184,7 +184,7 @@ describe('adminRoutes', () => {
     it('banned user cannot register with same username', async () => {
       const owner = await seedOwner(app);
       const user = await seedRegularUser(app);
-      const inviteToken = seedInvite(app, owner.id);
+      const inviteToken = await seedInvite(app, owner.id);
 
       // Ban the user
       await app.inject({
@@ -212,7 +212,7 @@ describe('adminRoutes', () => {
       const user = await seedRegularUser(app);
 
       // Ban the user first
-      app.db.insert(bans).values({ user_id: user.id, banned_by: owner.id }).run();
+      await app.db.insert(bans).values({ user_id: user.id, banned_by: owner.id });
 
       const response = await app.inject({
         method: 'POST',
@@ -266,7 +266,7 @@ describe('adminRoutes', () => {
       expect(typeof body.data.temporaryPassword).toBe('string');
 
       // Verify the temporary password actually works
-      const updatedUser = app.db.select().from(users).where(eq(users.id, user.id)).get();
+      const [updatedUser] = await app.db.select().from(users).where(eq(users.id, user.id));
       const isValid = await verifyPassword(body.data.temporaryPassword, updatedUser!.password_hash);
       expect(isValid).toBe(true);
     });
@@ -303,7 +303,7 @@ describe('adminRoutes', () => {
 
       const response = await app.inject({
         method: 'POST',
-        url: '/api/admin/reset-password/non-existent-id',
+        url: '/api/admin/reset-password/00000000-0000-0000-0000-000000000099',
         headers: { authorization: `Bearer ${owner.token}` },
       });
 
@@ -317,10 +317,10 @@ describe('adminRoutes', () => {
       const user1 = await seedRegularUser(app, 'banned1');
       const user2 = await seedRegularUser(app, 'banned2');
 
-      app.db.insert(bans).values([
+      await app.db.insert(bans).values([
         { user_id: user1.id, banned_by: owner.id },
         { user_id: user2.id, banned_by: owner.id },
-      ]).run();
+      ]);
 
       const response = await app.inject({
         method: 'GET',

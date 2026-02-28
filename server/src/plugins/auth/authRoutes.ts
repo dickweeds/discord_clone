@@ -35,7 +35,7 @@ export default fp(async (fastify: FastifyInstance) => {
   // Clean up expired sessions on startup
   fastify.addHook('onReady', async () => {
     try {
-      const deleted = cleanExpiredSessions(fastify.db);
+      const deleted = await cleanExpiredSessions(fastify.db);
       if (deleted > 0) {
         fastify.log.info(`Cleaned ${deleted} expired session(s)`);
       }
@@ -51,8 +51,8 @@ export default fp(async (fastify: FastifyInstance) => {
 
   // GET /api/server/status — PUBLIC
   fastify.get('/api/server/status', async (_request, reply) => {
-    const result = fastify.db.select({ value: count() }).from(users).get();
-    const userCount = result?.value ?? 0;
+    const [result] = await fastify.db.select({ value: count() }).from(users);
+    const userCount = Number(result?.value ?? 0);
     return reply.status(200).send({ data: { needsSetup: userCount === 0 } });
   });
 
@@ -99,8 +99,8 @@ export default fp(async (fastify: FastifyInstance) => {
     }
 
     // Check if this is the first-user setup (no users exist yet)
-    const userCountResult = fastify.db.select({ value: count() }).from(users).get();
-    const isSetup = (userCountResult?.value ?? 0) === 0;
+    const [userCountResult] = await fastify.db.select({ value: count() }).from(users);
+    const isSetup = Number(userCountResult?.value ?? 0) === 0;
 
     // 1. Validate invite token (skip for first-user setup)
     if (!isSetup) {
@@ -112,7 +112,7 @@ export default fp(async (fastify: FastifyInstance) => {
           },
         });
       }
-      const inviteResult = validateInvite(fastify.db, inviteToken);
+      const inviteResult = await validateInvite(fastify.db, inviteToken);
       if (!inviteResult.valid) {
         return reply.status(400).send({
           error: {
@@ -134,10 +134,10 @@ export default fp(async (fastify: FastifyInstance) => {
     }
 
     // 4. All DB mutations in a transaction for atomicity
-    const result = fastify.db.transaction((tx) => {
+    const result = await fastify.db.transaction(async (tx) => {
       // Re-check user count inside transaction for race condition safety
-      const innerCount = tx.select({ value: count() }).from(users).get();
-      const isSetupInner = (innerCount?.value ?? 0) === 0;
+      const [innerCount] = await tx.select({ value: count() }).from(users);
+      const isSetupInner = Number(innerCount?.value ?? 0) === 0;
 
       // If outer check said setup but another request already created the first user
       if (isSetup && !isSetupInner) {
@@ -145,23 +145,21 @@ export default fp(async (fastify: FastifyInstance) => {
       }
 
       // 4a. Check bans (lightweight username-based check)
-      const bannedUser = tx
+      const [bannedUser] = await tx
         .select({ userId: bans.user_id })
         .from(bans)
         .innerJoin(users, eq(bans.user_id, users.id))
-        .where(eq(users.username, username))
-        .get();
+        .where(eq(users.username, username));
 
       if (bannedUser) {
         return { error: 'REGISTRATION_BLOCKED' } as const;
       }
 
       // 4b. Check username uniqueness (fast-path before INSERT)
-      const existingUser = tx
+      const [existingUser] = await tx
         .select()
         .from(users)
-        .where(eq(users.username, username))
-        .get();
+        .where(eq(users.username, username));
 
       if (existingUser) {
         return { error: 'USERNAME_TAKEN' } as const;
@@ -169,7 +167,7 @@ export default fp(async (fastify: FastifyInstance) => {
 
       // 4c. Insert user with publicKey and encryptedGroupKey
       try {
-        const newUser = tx
+        const [newUser] = await tx
           .insert(users)
           .values({
             username,
@@ -178,29 +176,28 @@ export default fp(async (fastify: FastifyInstance) => {
             public_key: publicKey ?? null,
             encrypted_group_key: encryptedGroupKey,
           })
-          .returning()
-          .get();
+          .returning();
 
         if (isSetupInner) {
           // Seed default channels during first-user setup
-          const existingChannels = tx.select({ value: count() }).from(channels).get();
-          if ((existingChannels?.value ?? 0) === 0) {
-            tx.insert(channels).values([
+          const [existingChannels] = await tx.select({ value: count() }).from(channels);
+          if (Number(existingChannels?.value ?? 0) === 0) {
+            await tx.insert(channels).values([
               { name: 'general', type: 'text' },
               { name: 'Gaming', type: 'voice' },
-            ]).run();
+            ]);
           }
         } else {
           // 4d. Revoke invite token (single-use)
-          tx.update(invites)
+          await tx.update(invites)
             .set({ revoked: true })
-            .where(eq(invites.token, inviteToken!))
-            .run();
+            .where(eq(invites.token, inviteToken!));
         }
 
         return { error: null, user: newUser } as const;
       } catch (err: unknown) {
-        if (err instanceof Error && err.message.includes('UNIQUE constraint failed: users.username')) {
+        // Postgres error code 23505 = unique_violation
+        if (err instanceof Error && (err as { code?: string }).code === '23505') {
           return { error: 'USERNAME_TAKEN' } as const;
         }
         throw err;
@@ -238,7 +235,7 @@ export default fp(async (fastify: FastifyInstance) => {
     const tokenPayload = { userId: result.user.id, role: result.user.role, username: result.user.username };
     const accessToken = generateAccessToken(tokenPayload);
     const refreshToken = generateRefreshToken(tokenPayload);
-    createSession(fastify.db, result.user.id, refreshToken);
+    await createSession(fastify.db, result.user.id, refreshToken);
 
     // Notify existing clients about the new member
     broadcastToAll({
@@ -283,11 +280,10 @@ export default fp(async (fastify: FastifyInstance) => {
     const username = rawUsername.trim().toLowerCase();
 
     // 1. Look up user
-    const user = fastify.db
+    const [user] = await fastify.db
       .select()
       .from(users)
-      .where(eq(users.username, username))
-      .get();
+      .where(eq(users.username, username));
 
     if (!user) {
       return reply.status(401).send({
@@ -296,11 +292,10 @@ export default fp(async (fastify: FastifyInstance) => {
     }
 
     // 2. Check bans (before expensive bcrypt — timing attack prevention)
-    const ban = fastify.db
+    const [ban] = await fastify.db
       .select()
       .from(bans)
-      .where(eq(bans.user_id, user.id))
-      .get();
+      .where(eq(bans.user_id, user.id));
 
     if (ban) {
       return reply.status(403).send({
@@ -322,7 +317,7 @@ export default fp(async (fastify: FastifyInstance) => {
     const refreshToken = generateRefreshToken(tokenPayload);
 
     // 5. Create session in DB (hash refresh token before storing)
-    createSession(fastify.db, user.id, refreshToken);
+    await createSession(fastify.db, user.id, refreshToken);
 
     return reply.status(200).send({
       data: {
@@ -364,7 +359,7 @@ export default fp(async (fastify: FastifyInstance) => {
 
     // 2. Hash incoming token, find matching session in DB
     const tokenHash = hashToken(refreshToken);
-    const session = findSessionByTokenHash(fastify.db, tokenHash);
+    const session = await findSessionByTokenHash(fastify.db, tokenHash);
 
     if (!session) {
       return reply.status(401).send({
@@ -374,20 +369,20 @@ export default fp(async (fastify: FastifyInstance) => {
 
     // 3. Verify session not expired
     if (session.expires_at < new Date()) {
-      deleteSession(fastify.db, session.id);
+      await deleteSession(fastify.db, session.id);
       return reply.status(401).send({
         error: { code: 'INVALID_REFRESH_TOKEN', message: 'Invalid or expired refresh token.' },
       });
     }
 
     // 4. Token rotation: delete old session, create new session with new tokens
-    deleteSession(fastify.db, session.id);
+    await deleteSession(fastify.db, session.id);
 
     const tokenPayload = { userId: payload.userId, role: payload.role, username: payload.username };
     const newAccessToken = generateAccessToken(tokenPayload);
     const newRefreshToken = generateRefreshToken(tokenPayload);
 
-    createSession(fastify.db, payload.userId, newRefreshToken);
+    await createSession(fastify.db, payload.userId, newRefreshToken);
 
     return reply.status(200).send({
       data: {
@@ -415,10 +410,10 @@ export default fp(async (fastify: FastifyInstance) => {
 
     // Hash the refresh token, find and delete the matching session
     const tokenHash = hashToken(refreshToken);
-    const session = findSessionByTokenHash(fastify.db, tokenHash);
+    const session = await findSessionByTokenHash(fastify.db, tokenHash);
 
     if (session) {
-      deleteSession(fastify.db, session.id);
+      await deleteSession(fastify.db, session.id);
     }
 
     // Return 204 regardless (idempotent — don't leak session existence)

@@ -8,32 +8,31 @@ export function generateInviteToken(): string {
   return crypto.randomBytes(32).toString('base64url');
 }
 
-export function createInvite(db: AppDatabase, createdBy: string): Invite {
+export async function createInvite(db: AppDatabase, createdBy: string): Promise<Invite> {
   const token = generateInviteToken();
-  return db
+  const [invite] = await db
     .insert(invites)
     .values({ token, created_by: createdBy })
-    .returning()
-    .get();
+    .returning();
+  return invite;
 }
 
-export function revokeInvite(db: AppDatabase, inviteId: string): boolean {
-  const result = db.update(invites)
+export async function revokeInvite(db: AppDatabase, inviteId: string): Promise<boolean> {
+  const result = await db.update(invites)
     .set({ revoked: true })
     .where(eq(invites.id, inviteId))
-    .run();
-  return result.changes > 0;
+    .returning({ id: invites.id });
+  return result.length > 0;
 }
 
-export function validateInvite(
+export async function validateInvite(
   db: AppDatabase,
   token: string,
-): { valid: boolean; serverName: string } {
-  const invite = db
+): Promise<{ valid: boolean; serverName: string }> {
+  const [invite] = await db
     .select()
     .from(invites)
-    .where(eq(invites.token, token))
-    .get();
+    .where(eq(invites.token, token));
 
   if (!invite || invite.revoked) {
     return { valid: false, serverName: '' };
@@ -43,6 +42,6 @@ export function validateInvite(
   return { valid: true, serverName };
 }
 
-export function getInvites(db: AppDatabase): Invite[] {
-  return db.select().from(invites).all();
+export async function getInvites(db: AppDatabase): Promise<Invite[]> {
+  return await db.select().from(invites);
 }

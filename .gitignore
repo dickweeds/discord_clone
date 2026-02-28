@@ -11,6 +11,7 @@ out/
 
 # Database (SQLite DB file auto-created on first server start)
 data/
+server/drizzle-sqlite-backup/
 
 # Logs
 *.log

@@ -1,1 +1,0 @@
-ALTER TABLE `users` ADD `encrypted_group_key` text;

@@ -14,15 +14,18 @@ export interface DecryptedMessage {
 interface MessageState {
   messages: Map<string, DecryptedMessage[]>;
   hasMoreMessages: Map<string, boolean>;
+  cursors: Map<string, string | null>;
   isLoadingMore: boolean;
   currentChannelId: string | null;
   isLoading: boolean;
   error: string | null;
   sendError: string | null;
   addOptimisticMessage: (channelId: string, message: DecryptedMessage) => void;
-  setMessages: (channelId: string, messages: DecryptedMessage[], hasMore?: boolean) => void;
-  prependMessages: (channelId: string, messages: DecryptedMessage[], hasMore: boolean) => void;
+  setMessages: (channelId: string, messages: DecryptedMessage[], hasMore?: boolean, cursor?: string | null) => void;
+  prependMessages: (channelId: string, messages: DecryptedMessage[], hasMore: boolean, cursor?: string | null) => void;
   getOldestMessageId: (channelId: string) => string | undefined;
+  getCursor: (channelId: string) => string | null;
+  setCursor: (channelId: string, cursor: string | null) => void;
   addReceivedMessage: (message: DecryptedMessage) => void;
   confirmMessage: (tempId: string, serverMessage: TextReceivePayload) => void;
   markMessageFailed: (tempId: string) => void;
@@ -38,6 +41,7 @@ interface MessageState {
 const useMessageStore = create<MessageState>((set, get) => ({
   messages: new Map(),
   hasMoreMessages: new Map(),
+  cursors: new Map(),
   isLoadingMore: false,
   currentChannelId: null,
   isLoading: false,
@@ -51,27 +55,41 @@ const useMessageStore = create<MessageState>((set, get) => ({
     set({ messages: newMessages, sendError: null });
   },
 
-  setMessages: (channelId: string, msgs: DecryptedMessage[], hasMore?: boolean) => {
+  setMessages: (channelId: string, msgs: DecryptedMessage[], hasMore?: boolean, cursor?: string | null) => {
     const newMessages = new Map(get().messages);
     newMessages.set(channelId, msgs);
     const newHasMore = new Map(get().hasMoreMessages);
     newHasMore.set(channelId, hasMore ?? true);
-    set({ messages: newMessages, hasMoreMessages: newHasMore });
+    const newCursors = new Map(get().cursors);
+    newCursors.set(channelId, cursor ?? null);
+    set({ messages: newMessages, hasMoreMessages: newHasMore, cursors: newCursors });
   },
 
-  prependMessages: (channelId: string, msgs: DecryptedMessage[], hasMore: boolean) => {
+  prependMessages: (channelId: string, msgs: DecryptedMessage[], hasMore: boolean, cursor?: string | null) => {
     const newMessages = new Map(get().messages);
     const existing = newMessages.get(channelId) ?? [];
     newMessages.set(channelId, [...msgs, ...existing]);
     const newHasMore = new Map(get().hasMoreMessages);
     newHasMore.set(channelId, hasMore);
-    set({ messages: newMessages, hasMoreMessages: newHasMore });
+    const newCursors = new Map(get().cursors);
+    newCursors.set(channelId, cursor ?? null);
+    set({ messages: newMessages, hasMoreMessages: newHasMore, cursors: newCursors });
   },
 
   getOldestMessageId: (channelId: string): string | undefined => {
     const msgs = get().messages.get(channelId);
     if (!msgs || msgs.length === 0) return undefined;
     return msgs[0].id;
+  },
+
+  getCursor: (channelId: string): string | null => {
+    return get().cursors.get(channelId) ?? null;
+  },
+
+  setCursor: (channelId: string, cursor: string | null) => {
+    const newCursors = new Map(get().cursors);
+    newCursors.set(channelId, cursor);
+    set({ cursors: newCursors });
   },
 
   addReceivedMessage: (message: DecryptedMessage) => {

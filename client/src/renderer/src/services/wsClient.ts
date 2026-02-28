@@ -3,6 +3,7 @@ import type {
   PresenceUpdatePayload,
   PresenceSyncPayload,
   TextReceivePayload,
+  TextErrorPayload,
   ChannelCreatedPayload,
   ChannelDeletedPayload,
   MemberAddedPayload,
@@ -291,6 +292,15 @@ class WsClient {
       usePresenceStore.getState().syncOnlineUsers(payload.users);
     } else if (message.type === WS_TYPES.TEXT_RECEIVE) {
       this.handleTextReceive(message as WsMessage<TextReceivePayload>);
+    } else if (message.type === WS_TYPES.TEXT_ERROR) {
+      const payload = message.payload as TextErrorPayload;
+      if (payload.tempId) {
+        import('../stores/useMessageStore').then(({ default: useMessageStore }) => {
+          useMessageStore.getState().markMessageFailed(payload.tempId);
+        }).catch((err) => {
+          console.warn('[wsClient] Failed to mark message as failed:', err);
+        });
+      }
     } else if (message.type === WS_TYPES.CHANNEL_CREATED) {
       const payload = message.payload as ChannelCreatedPayload;
       useChannelStore.getState().addChannel(payload.channel);

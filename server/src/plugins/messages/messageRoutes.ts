@@ -1,12 +1,12 @@
 import type { FastifyInstance } from 'fastify';
 import { eq } from 'drizzle-orm';
 import { channels } from '../../db/schema.js';
-import { getMessagesByChannel, toISOTimestamp } from './messageService.js';
+import { getMessagesByChannel, InvalidCursorError } from './messageService.js';
 
 export default async function messageRoutes(fastify: FastifyInstance) {
   fastify.get<{
     Params: { channelId: string };
-    Querystring: { limit?: number; before?: string };
+    Querystring: { limit?: number; cursor?: string };
   }>('/:channelId/messages', {
     schema: {
       params: {
@@ -20,13 +20,13 @@ export default async function messageRoutes(fastify: FastifyInstance) {
         type: 'object',
         properties: {
           limit: { type: 'integer', minimum: 1, maximum: 100, default: 50 },
-          before: { type: 'string' },
+          cursor: { type: 'string' },
         },
       },
       response: {
         200: {
           type: 'object',
-          required: ['data', 'count'],
+          required: ['data', 'cursor', 'count'],
           properties: {
             data: {
               type: 'array',
@@ -43,6 +43,7 @@ export default async function messageRoutes(fastify: FastifyInstance) {
                 },
               },
             },
+            cursor: { type: ['string', 'null'] },
             count: { type: 'number' },
           },
         },
@@ -50,27 +51,34 @@ export default async function messageRoutes(fastify: FastifyInstance) {
     },
   }, async (request, reply) => {
     const { channelId } = request.params;
-    const { limit, before } = request.query;
+    const { limit, cursor } = request.query;
 
     // Validate channel exists
-    const channel = fastify.db.select().from(channels).where(eq(channels.id, channelId)).get();
+    const [channel] = await fastify.db.select().from(channels).where(eq(channels.id, channelId));
     if (!channel) {
       return reply.status(404).send({
         error: { code: 'CHANNEL_NOT_FOUND', message: 'Channel does not exist' },
       });
     }
 
-    const rows = getMessagesByChannel(fastify.db, channelId, limit, before);
+    try {
+      const { rows, nextCursor } = await getMessagesByChannel(fastify.db, channelId, limit, cursor);
 
-    const data = rows.map((row) => ({
-      messageId: row.id,
-      channelId: row.channel_id,
-      authorId: row.user_id,
-      content: row.encrypted_content,
-      nonce: row.nonce,
-      createdAt: toISOTimestamp(row.created_at),
-    }));
+      const data = rows.map((row) => ({
+        messageId: row.id,
+        channelId: row.channel_id,
+        authorId: row.user_id,
+        content: row.encrypted_content,
+        nonce: row.nonce,
+        createdAt: row.created_at.toISOString(),
+      }));
 
-    return reply.send({ data, count: data.length });
+      return reply.send({ data, cursor: nextCursor, count: data.length });
+    } catch (err) {
+      if (err instanceof InvalidCursorError) {
+        return reply.code(400).send({ error: { code: 'INVALID_CURSOR', message: 'Malformed pagination cursor' } });
+      }
+      throw err;
+    }
   });
 }

@@ -38,7 +38,26 @@ async function attemptRefresh(): Promise<boolean> {
   }
 }
 
-export async function apiRequest<T>(path: string, options?: RequestInit): Promise<T> {
+export class RetryableError extends Error {
+  constructor(message: string) { super(message); this.name = 'RetryableError'; }
+}
+
+async function withRetry<T>(fn: () => Promise<T>, maxRetries = 2): Promise<T> {
+  for (let attempt = 0; attempt <= maxRetries; attempt++) {
+    try {
+      return await fn();
+    } catch (err) {
+      // Only retry on transient failures: network errors + 5xx server errors
+      const isRetryable = err instanceof RetryableError ||
+        err instanceof TypeError; // network failure from fetch()
+      if (!isRetryable || attempt === maxRetries) throw err;
+      await new Promise((r) => setTimeout(r, 500 * (attempt + 1)));
+    }
+  }
+  throw new Error('unreachable');
+}
+
+export async function apiRequest<T>(path: string, options?: RequestInit, returnFullBody?: boolean): Promise<T> {
   const accessToken = getAccessToken();
   const headers: Record<string, string> = {
     'Content-Type': 'application/json',
@@ -66,8 +85,15 @@ export async function apiRequest<T>(path: string, options?: RequestInit): Promis
 
   if (!response.ok) {
     const apiError = body.error || { code: 'UNKNOWN', message: 'Request failed' };
+    if (response.status >= 500) {
+      throw new RetryableError(apiError.message);
+    }
     throw new Error(apiError.message);
   }
 
-  return body.data;
+  return (returnFullBody ? body : body.data) as T;
+}
+
+export async function apiGet<T>(path: string, returnFullBody?: boolean): Promise<T> {
+  return withRetry(() => apiRequest<T>(path, undefined, returnFullBody));
 }

@@ -1,6 +1,6 @@
 import { encryptMessage, decryptMessage } from './encryptionService';
 import { wsClient } from './wsClient';
-import { apiRequest } from './apiClient';
+import { apiGet } from './apiClient';
 import { WS_TYPES, MAX_MESSAGE_LENGTH } from 'discord-clone-shared';
 import type { TextSendPayload, TextReceivePayload } from 'discord-clone-shared';
 import useAuthStore from '../stores/useAuthStore';
@@ -58,19 +58,19 @@ const PAGE_LIMIT = 50;
 
 async function fetchAndDecryptMessages(
   channelId: string,
-  options?: { before?: string },
-): Promise<{ messages: DecryptedMessage[]; hasMore: boolean } | null> {
+  options?: { cursor?: string },
+): Promise<{ messages: DecryptedMessage[]; hasMore: boolean; cursor: string | null } | null> {
   let url = `/api/channels/${encodeURIComponent(channelId)}/messages?limit=${PAGE_LIMIT}`;
-  if (options?.before) {
-    url += `&before=${encodeURIComponent(options.before)}`;
+  if (options?.cursor) {
+    url += `&cursor=${encodeURIComponent(options.cursor)}`;
   }
 
-  const result = await apiRequest<TextReceivePayload[]>(url);
+  const result = await apiGet<{ data: TextReceivePayload[]; cursor: string | null; count: number }>(url, true);
 
   const groupKey = useAuthStore.getState().groupKey;
   if (!groupKey) return null;
 
-  const decrypted: DecryptedMessage[] = result.map((msg) => ({
+  const decrypted: DecryptedMessage[] = result.data.map((msg) => ({
     id: msg.messageId,
     channelId: msg.channelId,
     authorId: msg.authorId,
@@ -82,25 +82,22 @@ async function fetchAndDecryptMessages(
   // API returns newest first — reverse for chronological display
   decrypted.reverse();
 
-  return { messages: decrypted, hasMore: result.length === PAGE_LIMIT };
+  return { messages: decrypted, hasMore: result.cursor !== null, cursor: result.cursor };
 }
 
-export async function fetchMessages(
-  channelId: string,
-  options?: { before?: string },
-): Promise<void> {
+export async function fetchMessages(channelId: string): Promise<void> {
   useMessageStore.getState().setLoading(true);
   useMessageStore.getState().setError(null);
 
   try {
-    const data = await fetchAndDecryptMessages(channelId, options);
+    const data = await fetchAndDecryptMessages(channelId);
     if (!data) {
       useMessageStore.getState().setLoading(false);
       useMessageStore.getState().setError('Encryption key not available');
       return;
     }
 
-    useMessageStore.getState().setMessages(channelId, data.messages, data.hasMore);
+    useMessageStore.getState().setMessages(channelId, data.messages, data.hasMore, data.cursor);
     useMessageStore.getState().setLoading(false);
   } catch (err) {
     useMessageStore.getState().setLoading(false);
@@ -112,19 +109,19 @@ export async function fetchMessages(
 
 export async function fetchOlderMessages(channelId: string): Promise<void> {
   const store = useMessageStore.getState();
-  const oldestId = store.getOldestMessageId(channelId);
-  if (!oldestId) return;
+  const cursor = store.getCursor(channelId);
+  if (!cursor) return; // no more pages
 
   store.setLoadingMore(true);
 
   try {
-    const data = await fetchAndDecryptMessages(channelId, { before: oldestId });
+    const data = await fetchAndDecryptMessages(channelId, { cursor });
     if (!data) {
       useMessageStore.getState().setLoadingMore(false);
       return;
     }
 
-    useMessageStore.getState().prependMessages(channelId, data.messages, data.hasMore);
+    useMessageStore.getState().prependMessages(channelId, data.messages, data.hasMore, data.cursor);
     useMessageStore.getState().setLoadingMore(false);
   } catch {
     useMessageStore.getState().setLoadingMore(false);

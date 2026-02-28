@@ -1,70 +1,74 @@
-import crypto from 'node:crypto';
-import { sql } from 'drizzle-orm';
-import { sqliteTable, text, integer, index } from 'drizzle-orm/sqlite-core';
+import { pgTable, pgEnum, text, uuid, timestamp, boolean, index } from 'drizzle-orm/pg-core';
 import type { InferSelectModel, InferInsertModel } from 'drizzle-orm';
 
+// --- Enums ---
+export const roleEnum = pgEnum('role', ['owner', 'user']);
+export const channelTypeEnum = pgEnum('channel_type', ['text', 'voice']);
+
 // --- Users ---
-export const users = sqliteTable('users', {
-  id: text('id').primaryKey().$defaultFn(() => crypto.randomUUID()),
+export const users = pgTable('users', {
+  id: uuid('id').primaryKey().defaultRandom(),
   username: text('username').notNull().unique(),
   password_hash: text('password_hash').notNull(),
-  role: text('role', { enum: ['owner', 'user'] }).notNull().default('user'),
+  role: roleEnum('role').notNull().default('user'),
   public_key: text('public_key'),
   encrypted_group_key: text('encrypted_group_key'),
-  created_at: integer('created_at', { mode: 'timestamp' }).notNull().$defaultFn(() => new Date()),
+  created_at: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
 });
 
 // --- Sessions ---
-export const sessions = sqliteTable('sessions', {
-  id: text('id').primaryKey().$defaultFn(() => crypto.randomUUID()),
-  user_id: text('user_id').notNull().references(() => users.id),
+export const sessions = pgTable('sessions', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  user_id: uuid('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
   refresh_token_hash: text('refresh_token_hash').notNull(),
-  expires_at: integer('expires_at', { mode: 'timestamp' }).notNull(),
-  created_at: integer('created_at', { mode: 'timestamp' }).notNull().$defaultFn(() => new Date()),
+  expires_at: timestamp('expires_at', { withTimezone: true }).notNull(),
+  created_at: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
 }, (table) => [
   index('idx_sessions_user_id').on(table.user_id),
+  index('idx_sessions_token_hash').on(table.refresh_token_hash),
 ]);
 
 // --- Invites ---
-export const invites = sqliteTable('invites', {
-  id: text('id').primaryKey().$defaultFn(() => crypto.randomUUID()),
+export const invites = pgTable('invites', {
+  id: uuid('id').primaryKey().defaultRandom(),
   token: text('token').notNull().unique(),
-  created_by: text('created_by').notNull().references(() => users.id),
-  revoked: integer('revoked', { mode: 'boolean' }).notNull().default(false),
-  created_at: integer('created_at', { mode: 'timestamp' }).notNull().$defaultFn(() => new Date()),
+  created_by: uuid('created_by').notNull().references(() => users.id, { onDelete: 'cascade' }),
+  revoked: boolean('revoked').notNull().default(false),
+  created_at: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
 });
 
 // --- Bans ---
-export const bans = sqliteTable('bans', {
-  id: text('id').primaryKey().$defaultFn(() => crypto.randomUUID()),
-  user_id: text('user_id').notNull().references(() => users.id),
-  banned_by: text('banned_by').notNull().references(() => users.id),
-  created_at: integer('created_at', { mode: 'timestamp' }).notNull().$defaultFn(() => new Date()),
+export const bans = pgTable('bans', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  user_id: uuid('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+  banned_by: uuid('banned_by').notNull().references(() => users.id, { onDelete: 'cascade' }),
+  created_at: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
 }, (table) => [
   index('idx_bans_user_id').on(table.user_id),
 ]);
 
 // --- Channels ---
-export const channels = sqliteTable('channels', {
-  id: text('id').primaryKey().$defaultFn(() => crypto.randomUUID()),
+export const channels = pgTable('channels', {
+  id: uuid('id').primaryKey().defaultRandom(),
   name: text('name').notNull().unique(),
-  type: text('type', { enum: ['text', 'voice'] }).notNull(),
-  created_at: integer('created_at', { mode: 'timestamp' }).notNull().$defaultFn(() => new Date()),
+  type: channelTypeEnum('type').notNull(),
+  created_at: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
 }, (table) => [
   index('idx_channels_type').on(table.type),
 ]);
 
 // --- Messages ---
-export const messages = sqliteTable('messages', {
-  id: text('id').primaryKey().$defaultFn(() => crypto.randomUUID()),
-  channel_id: text('channel_id').notNull().references(() => channels.id),
-  user_id: text('user_id').notNull().references(() => users.id),
+export const messages = pgTable('messages', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  channel_id: uuid('channel_id').notNull().references(() => channels.id, { onDelete: 'cascade' }),
+  user_id: uuid('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
   encrypted_content: text('encrypted_content').notNull(),
   nonce: text('nonce').notNull(),
-  created_at: integer('created_at', { mode: 'timestamp' }).notNull().default(sql`(unixepoch())`),
+  created_at: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
 }, (table) => [
   index('idx_messages_channel_id').on(table.channel_id),
   index('idx_messages_created_at').on(table.created_at),
+  index('messages_channel_created_idx').on(table.channel_id, table.created_at, table.id),
 ]);
 
 // --- Inferred Types ---

@@ -58,7 +58,7 @@ export async function buildApp(): Promise<FastifyInstance> {
 
   app.get('/api/health', async (_request, reply) => {
     try {
-      app.db.get(sql`SELECT 1 as result`);
+      await app.db.execute(sql`SELECT 1 as result`);
       return { data: { status: 'ok', database: 'connected' } };
     } catch {
       return reply.status(503).send({

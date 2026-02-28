@@ -1,8 +1,8 @@
----
+dockeasdf ---
 title: 'Supabase Migration — SQLite to PostgreSQL'
 slug: 'supabase-migration'
 created: '2026-02-27'
-status: 'ready-for-dev'
+status: 'implementation-complete'
 stepsCompleted: [1, 2, 3, 4]
 tech_stack: ['postgres (postgres.js)', 'drizzle-orm/pg-core', 'drizzle-orm/postgres-js', 'drizzle-orm/pglite', '@electric-sql/pglite', 'Supabase (managed Postgres)', 'Fastify v5.7.x', 'TypeScript 5.x strict', 'Vitest']
 files_to_modify: ['server/src/db/schema.ts', 'server/src/db/connection.ts', 'server/src/db/migrate.ts', 'server/src/db/seed.ts', 'server/drizzle.config.ts', 'server/src/plugins/db.ts', 'server/src/index.ts', 'server/src/plugins/auth/authRoutes.ts', 'server/src/plugins/auth/sessionService.ts', 'server/src/plugins/channels/channelRoutes.ts', 'server/src/plugins/channels/channelService.ts', 'server/src/plugins/messages/messageRoutes.ts', 'server/src/plugins/messages/messageService.ts', 'server/src/plugins/messages/messageWsHandler.ts', 'server/src/plugins/invites/inviteService.ts', 'server/src/plugins/users/userService.ts', 'server/src/plugins/admin/adminRoutes.ts', 'server/src/plugins/admin/adminService.ts', 'server/src/plugins/voice/voiceWsHandler.ts', 'server/src/ws/wsRouter.ts', 'server/src/test/helpers.ts', 'server/src/plugins/auth/sessionService.test.ts', 'server/src/plugins/channels/channelService.test.ts', 'server/src/plugins/messages/messageRoutes.test.ts', 'server/src/plugins/admin/adminService.test.ts', 'server/package.json', 'docker-compose.yml', 'docker-compose.dev.yml', '.env.example', 'shared/src/ws-messages.ts', 'shared/src/types.ts', 'shared/src/index.ts', 'client/src/renderer/src/services/messageService.ts', 'client/src/renderer/src/services/apiClient.ts', 'client/src/renderer/src/services/wsClient.ts', 'client/src/renderer/src/stores/useMessageStore.ts']
@@ -268,12 +268,12 @@ Database layer swap — rewrite Drizzle schema from `sqliteTable` to `pgTable`, 
 
 #### Phase 1: Dependencies & Schema Foundation
 
-- [ ] Task 1: Swap database driver dependencies
+- [x] Task 1: Swap database driver dependencies
   - File: `server/package.json`
   - Action: `npm install postgres` and `npm install -D @electric-sql/pglite`. Then `npm uninstall better-sqlite3 @types/better-sqlite3`.
   - Notes: `drizzle-orm/pglite` and `drizzle-orm/postgres-js` are sub-paths of `drizzle-orm` (already installed) — no separate install needed.
 
-- [ ] Task 2: Rewrite schema definitions from SQLite to PostgreSQL
+- [x] Task 2: Rewrite schema definitions from SQLite to PostgreSQL
   - File: `server/src/db/schema.ts`
   - Action: Full rewrite. Replace all imports from `drizzle-orm/sqlite-core` with `drizzle-orm/pg-core`. Apply these changes:
     - Add `import { pgTable, pgEnum, text, uuid, timestamp, boolean, index } from 'drizzle-orm/pg-core';`
@@ -314,7 +314,7 @@ Database layer swap — rewrite Drizzle schema from `sqliteTable` to `pgTable`, 
       ```
   - Notes: See architecture doc section "Detailed Schema Translation" for the complete target schema code. The inferred TypeScript types will change slightly: `created_at` stays `Date`, `id` stays `string`, `revoked` stays `boolean`. Net impact on consuming code: minimal. The composite index supports the opaque cursor pagination query. The `refresh_token_hash` index supports `findSessionByTokenHash` which is called on every token refresh.
 
-- [ ] Task 3: Rewrite database connection layer with dual-mode support
+- [x] Task 3: Rewrite database connection layer with dual-mode support
   - File: `server/src/db/connection.ts`
   - Action: Full rewrite. Create a dual-mode connection function:
     - Remove all `better-sqlite3` imports, `fs` imports, `path` imports
@@ -364,12 +364,12 @@ Database layer swap — rewrite Drizzle schema from `sqliteTable` to `pgTable`, 
     - Remove `fs.mkdirSync` for data directory
   - Notes: The dual-mode approach means tests automatically get PGlite (no DATABASE_URL set) while production gets postgres.js (DATABASE_URL from .env). The `migrate` function in the return value ensures the correct migrator is always paired with the correct driver — callers never need to know which driver is active. Unified `{ db, close, migrate }` return type simplifies plugin and test code.
 
-- [ ] Task 4: Update Drizzle Kit configuration
+- [x] Task 4: Update Drizzle Kit configuration
   - File: `server/drizzle.config.ts`
   - Action: Change `dialect: 'sqlite'` -> `dialect: 'postgresql'`. Change `dbCredentials.url` from `process.env.DATABASE_PATH || './data/discord_clone.db'` to `process.env.DATABASE_URL || ''`.
   - Notes: The `schema` and `out` paths remain unchanged.
 
-- [ ] Task 5: Rewrite migration runner to use dual-mode migrate function
+- [x] Task 5: Rewrite migration runner to use dual-mode migrate function
   - File: `server/src/db/migrate.ts`
   - Action: Full rewrite. Remove the `drizzle-orm/better-sqlite3/migrator` import. The function now accepts a `migrate` function (from `createDatabase()` return) instead of a `db` instance:
     ```typescript
@@ -380,7 +380,7 @@ Database layer swap — rewrite Drizzle schema from `sqliteTable` to `pgTable`, 
     The `migrationsFolder` path resolution stays the same. Alternatively, accept `{ db, migrate }` and call `migrate(migrationsFolder)` — choose whichever is cleaner for call sites.
   - Notes: This approach ensures PGlite tests use `drizzle-orm/pglite/migrator` and production uses `drizzle-orm/postgres-js/migrator` without the migration runner needing to know which driver is active. The migrator selection is co-located with driver selection in `connection.ts`.
 
-- [ ] Task 6: Backup old migrations, generate fresh Postgres migrations, secure RLS
+- [x] Task 6: Backup old migrations, generate fresh Postgres migrations, secure RLS
   - Action:
     1. Copy `server/drizzle/` to `server/drizzle-sqlite-backup/` (add to `.gitignore`)
     2. Delete all files in `server/drizzle/` directory
@@ -409,7 +409,7 @@ Database layer swap — rewrite Drizzle schema from `sqliteTable` to `pgTable`, 
        ```
   - Notes: Supabase enables RLS by default on new tables but exposes all `public` schema tables via its auto-generated PostgREST API. The `anon` key is public by Supabase's design — without RLS, anyone with the project URL and anon key can bypass our entire auth system and directly query all tables. Enabling RLS with **zero policies** means the anon and authenticated roles get zero access, while our Fastify server (connecting as the `postgres` role with `BYPASSRLS`) is completely unaffected. The `REVOKE` statement provides defense-in-depth. The SQLite migration backup is kept until the migration is verified in production, then removed.
 
-- [ ] Task 6b: Validate generated migration against real Supabase **(MANDATORY GATE — must pass before Tasks 13+)**
+- [ ] Task 6b: Validate generated migration against real Supabase **(MANDATORY GATE — must pass before Tasks 13+)** — SQL ready, awaiting manual validation
   - Action:
     1. After `drizzle-kit generate`, review the generated SQL for any `CREATE SCHEMA`, `SET` commands, or extension references that may conflict with Supabase's managed environment
     2. **Inventory pre-installed extensions** on the Supabase instance: `SELECT extname, extversion FROM pg_extension;` — document any that could interfere with DDL (common: `pg_net`, `pgsodium`, `supautils`, `pgcrypto`, `pgjwt`)
@@ -423,7 +423,7 @@ Database layer swap — rewrite Drizzle schema from `sqliteTable` to `pgTable`, 
     10. **Verify no Supabase webhooks or pg_cron jobs are triggered** by the migration DDL
   - Notes: This is a **hard gate** — no service-layer code changes (Tasks 13+) should begin until this validation passes. PGlite may accept SQL that real Supabase rejects due to pre-installed extensions (`pg_net`, `pgsodium`, `supautils`), permission restrictions on the `postgres` role, or managed-Postgres constraints. If the migration fails, fix the generated SQL before proceeding. The Supabase connection role for migrations must be `postgres` (not a restricted role).
 
-- [ ] Task 7: Update seed file to use async DB calls
+- [x] Task 7: Update seed file to use async DB calls
   - File: `server/src/db/seed.ts`
   - Action: Add `await` to both DB calls and coerce the `count()` result:
     - `db.select({ value: count() }).from(channels).get()` -> `const [channelCount] = await db.select({ value: count() }).from(channels);` then check `Number(channelCount.value) > 0` (PGlite may return `string` or `bigint` for aggregates — `Number()` coercion handles all cases)
@@ -432,7 +432,7 @@ Database layer swap — rewrite Drizzle schema from `sqliteTable` to `pgTable`, 
 
 #### Phase 2: Fastify Infrastructure & Shared Types
 
-- [ ] Task 8: Update database Fastify plugin with health check
+- [x] Task 8: Update database Fastify plugin with health check
   - File: `server/src/plugins/db.ts`
   - Action:
     - Update import: `AppDatabase` type from new `connection.ts`
@@ -477,7 +477,7 @@ Database layer swap — rewrite Drizzle schema from `sqliteTable` to `pgTable`, 
     - Update type augmentation: `FastifyInstance.db` stays `AppDatabase` (type is re-exported from connection.ts)
   - Notes: The `onReady` health check catches misconfigurations at startup instead of on first user request (single attempt, fail-fast). The periodic check uses a **consecutive failure threshold** (3 failures = ~3 minutes at 60s intervals) to tolerate brief Supabase maintenance windows before exiting. Successful checks reset the counter. The `createDatabase()` call with no args will auto-detect mode (PGlite in tests, postgres.js in production when DATABASE_URL is set). The health timer should only be started when `DATABASE_URL` is set (skip for PGlite in tests).
 
-- [ ] Task 9: Make startup sequence fully async with migration error handling
+- [x] Task 9: Make startup sequence fully async with migration error handling
   - File: `server/src/index.ts`
   - Action: Replace the bare `runMigrations(app.db)` call with a guarded migration block:
     ```typescript
@@ -492,7 +492,7 @@ Database layer swap — rewrite Drizzle schema from `sqliteTable` to `pgTable`, 
     The `await runSeed(app.db, app.log)` call already has `await` — no change needed.
   - Notes: Migration failure is fatal — the server cannot serve requests with an inconsistent schema. The `process.exit(1)` ensures container orchestrators restart the process.
 
-- [ ] Task 10: Update shared WebSocket types for TEXT_ERROR
+- [x] Task 10: Update shared WebSocket types for TEXT_ERROR
   - File: `shared/src/ws-messages.ts`
   - Action:
     - Add `TextErrorPayload` interface (includes `tempId` so the client can match the failure to the specific optimistic message):
@@ -508,7 +508,7 @@ Database layer swap — rewrite Drizzle schema from `sqliteTable` to `pgTable`, 
       ```
   - Notes: Place `TextErrorPayload` next to the existing `TextSendPayload` and `TextReceivePayload`. The `TEXT_ERROR` constant goes after `TEXT_RECEIVE` in `WS_TYPES`. The `tempId` is included in the payload (not the envelope `id` field) because the envelope `id` is optional in `WsMessage` and may not be set by all clients. Putting `tempId` in the typed payload ensures the field is always present and type-checked.
 
-- [ ] Task 11: Update shared API types for cursor pagination
+- [x] Task 11: Update shared API types for cursor pagination
   - File: `shared/src/types.ts`
   - Action: Add `ApiPaginatedList<T>` interface:
     ```typescript
@@ -520,7 +520,7 @@ Database layer swap — rewrite Drizzle schema from `sqliteTable` to `pgTable`, 
     ```
   - Notes: The existing `ApiList<T>` (`{ data: T[]; count: number }`) remains for non-paginated list endpoints. `ApiPaginatedList<T>` is used only by the message list endpoint.
 
-- [ ] Task 12: Update shared package exports
+- [x] Task 12: Update shared package exports
   - File: `shared/src/index.ts`
   - Action:
     - Add `TextErrorPayload` to the ws-messages type exports
@@ -528,7 +528,7 @@ Database layer swap — rewrite Drizzle schema from `sqliteTable` to `pgTable`, 
 
 #### Phase 3: Auth Domain
 
-- [ ] Task 13: Convert session service to async
+- [x] Task 13: Convert session service to async
   - File: `server/src/plugins/auth/sessionService.ts`
   - Action: Make all 5 functions `async` and add `await` to all DB calls:
     - `createSession`: `async`, `const [session] = await db.insert(sessions).values({...}).returning();`
@@ -538,7 +538,7 @@ Database layer swap — rewrite Drizzle schema from `sqliteTable` to `pgTable`, 
     - `cleanExpiredSessions`: `async`, `const deleted = await db.delete(sessions).where(...).returning();` (returns array directly, remove `.all()`)
   - Notes: All callers of these functions already use them in async contexts (route handlers). Just need to add `await` at call sites in authRoutes.ts (Task 14).
 
-- [ ] Task 14: Convert auth routes to async DB operations
+- [x] Task 14: Convert auth routes to async DB operations
   - File: `server/src/plugins/auth/authRoutes.ts`
   - Action: Add `await` to every DB call and service call that now returns a Promise:
     - `onReady` hook: `await cleanExpiredSessions(fastify.db)` — make hook function `async` if not already
@@ -566,7 +566,7 @@ Database layer swap — rewrite Drizzle schema from `sqliteTable` to `pgTable`, 
 
 #### Phase 4: Channel Domain
 
-- [ ] Task 15: Convert channel service to async
+- [x] Task 15: Convert channel service to async
   - File: `server/src/plugins/channels/channelService.ts`
   - Action: Make all functions `async` and add `await`:
     - `getAllChannels`: `async`, `return await db.select({...}).from(channels);` (remove `.all()`)
@@ -575,7 +575,7 @@ Database layer swap — rewrite Drizzle schema from `sqliteTable` to `pgTable`, 
     - `deleteChannel`: `async`, add `await` to existence check. Convert transaction: `await db.transaction(async (tx) => { await tx.delete(messages).where(...); await tx.delete(channels).where(...); })`
   - Notes: The `deleteChannel` transaction callback must become `async`.
 
-- [ ] Task 16: Add await to channel route handler service calls
+- [x] Task 16: Add await to channel route handler service calls
   - File: `server/src/plugins/channels/channelRoutes.ts`
   - Action: Add `await` before all service function calls:
     - `await getAllChannels(fastify.db)`
@@ -585,7 +585,7 @@ Database layer swap — rewrite Drizzle schema from `sqliteTable` to `pgTable`, 
 
 #### Phase 5: Message Domain
 
-- [ ] Task 17: Convert message service to async with opaque cursor pagination
+- [x] Task 17: Convert message service to async with opaque cursor pagination
   - File: `server/src/plugins/messages/messageService.ts`
   - Action: Full rewrite of pagination logic and timestamp handling:
     - **Delete `toISOTimestamp` function entirely.** Postgres `timestamp with time zone` returns native `Date` objects through Drizzle — no conversion workaround needed. All call sites (in this file and `messageRoutes.ts`) replace `toISOTimestamp(row.created_at)` with `row.created_at.toISOString()`.
@@ -654,7 +654,7 @@ Database layer swap — rewrite Drizzle schema from `sqliteTable` to `pgTable`, 
     - Update imports: add `and`, `or`, `lt`, `desc` from `drizzle-orm`
   - Notes: The `(created_at, id)` composite cursor provides deterministic ordering even when multiple messages share the same timestamp — strictly superior to both the old `rowid` approach and a timestamp-only approach. The composite index from Task 2 (`messages_channel_created_idx`) supports this query efficiently. The return type changes to `{ rows, nextCursor }` — callers must adapt.
 
-- [ ] Task 18: Convert message routes to async with cursor response
+- [x] Task 18: Convert message routes to async with cursor response
   - File: `server/src/plugins/messages/messageRoutes.ts`
   - Action:
     - Remove import of `toISOTimestamp` — no longer exists
@@ -694,7 +694,7 @@ Database layer swap — rewrite Drizzle schema from `sqliteTable` to `pgTable`, 
       ```
   - Notes: This changes the API contract. The `before` query param (message ID) is replaced by `cursor` (opaque string). The response gains a `cursor` field. Client updates in Phase 9 consume this new contract. Invalid or tampered cursors return a 400 instead of crashing with a 500.
 
-- [ ] Task 19: Convert message WebSocket handler to async with TEXT_ERROR
+- [x] Task 19: Convert message WebSocket handler to async with TEXT_ERROR
   - File: `server/src/plugins/messages/messageWsHandler.ts`
   - Action:
     - Change the `TEXT_SEND` handler callback to `async`:
@@ -758,7 +758,7 @@ Database layer swap — rewrite Drizzle schema from `sqliteTable` to `pgTable`, 
       ```
   - Notes: This keeps the WebSocket connection alive when a single message fails to persist — the client can retry or show the user an error. The `withDbRetry` wrapper gives one retry (200ms delay) for transient Postgres connection errors (e.g., Supabase maintenance windows). Constraint violations and other non-transient errors are never retried. The `tempId` is extracted from the `TEXT_SEND` payload (where the client always sets it) — **not** from the envelope `id` field, which is optional in `WsMessage` and may be undefined. Putting `tempId` in the typed `TextErrorPayload` ensures it is always present and type-checked via `satisfies`.
 
-- [ ] Task 20: Update WebSocket router to support async handlers
+- [x] Task 20: Update WebSocket router to support async handlers
   - File: `server/src/ws/wsRouter.ts`
   - Action:
     - Update `WsHandler` type: `export type WsHandler = (ws: WebSocket, message: WsMessage, userId: string) => void | Promise<void>;`
@@ -785,7 +785,7 @@ Database layer swap — rewrite Drizzle schema from `sqliteTable` to `pgTable`, 
 
 #### Phase 6: Other Domains
 
-- [ ] Task 21: Convert invite service to async
+- [x] Task 21: Convert invite service to async
   - File: `server/src/plugins/invites/inviteService.ts`
   - Action: Make DB-calling functions `async` with `await`:
     - `createInvite`: `async`, `const [invite] = await db.insert(invites).values({...}).returning();`
@@ -794,12 +794,12 @@ Database layer swap — rewrite Drizzle schema from `sqliteTable` to `pgTable`, 
     - `getInvites`: `async`, `return await db.select().from(invites);` (remove `.all()`)
   - Notes: `generateInviteToken` has no DB calls — leave as sync.
 
-- [ ] Task 22: Convert user service to async
+- [x] Task 22: Convert user service to async
   - File: `server/src/plugins/users/userService.ts`
   - Action: `getAllUsers`: make `async`, `return await db.select({...}).from(users);` (remove `.all()`)
   - Notes: Single function, minimal change.
 
-- [ ] Task 23: Convert admin service to async
+- [x] Task 23: Convert admin service to async
   - File: `server/src/plugins/admin/adminService.ts`
   - Action: Make all functions `async` (or keep async where already async) and add `await` to all DB calls:
     - `kickUser`: `async`, `const [user] = await db.select().from(users).where(...);`
@@ -809,7 +809,7 @@ Database layer swap — rewrite Drizzle schema from `sqliteTable` to `pgTable`, 
     - `getBannedUsers`: `async`, `return await db.select({...}).from(bans).innerJoin(...);` (remove `.all()`)
   - Notes: `resetPassword` already has `await` for `hashPassword()` — just needs `await` on its DB calls too.
 
-- [ ] Task 24: Add await to admin route handler service calls
+- [x] Task 24: Add await to admin route handler service calls
   - File: `server/src/plugins/admin/adminRoutes.ts`
   - Action: Add `await` before all service calls that are now async:
     - `await kickUser(fastify.db, ...)`
@@ -819,7 +819,7 @@ Database layer swap — rewrite Drizzle schema from `sqliteTable` to `pgTable`, 
     - `await getBannedUsers(fastify.db)`
   - Notes: Route handlers are already `async`. `resetPassword` already has `await` in the route — verify the others.
 
-- [ ] Task 25: Convert voice WebSocket handler to async where needed
+- [x] Task 25: Convert voice WebSocket handler to async where needed
   - File: `server/src/plugins/voice/voiceWsHandler.ts`
   - Action: The `handleVoiceJoin` function calls `getChannelById(db, channelId)` which is now `async`. Make `handleVoiceJoin` `async` and add `await` before `getChannelById(...)`. Wrap the DB call in try/catch:
     ```typescript
@@ -836,7 +836,7 @@ Database layer swap — rewrite Drizzle schema from `sqliteTable` to `pgTable`, 
 
 #### Phase 7: Test Infrastructure
 
-- [ ] Task 26: Rewrite test helpers for PGlite with explicit cleanup
+- [x] Task 26: Rewrite test helpers for PGlite with explicit cleanup
   - File: `server/src/test/helpers.ts`
   - Action:
     - Remove `vi.stubEnv('DATABASE_PATH', ':memory:')` if present in helpers (it's in test files — but check)
@@ -872,7 +872,7 @@ Database layer swap — rewrite Drizzle schema from `sqliteTable` to `pgTable`, 
     - `seedInvite()`: Add `await` to invite insert: `await app.db.insert(invites).values({...});`. Make function `async`, return type changes to `Promise<string>`.
   - Notes: All callers of seed functions are in `beforeEach` hooks which are already `async`. The `seedInvite` sync -> async change requires updating its callers to add `await`. Test files should use `beforeAll` → `setupApp()`, `beforeEach` → `truncateAll(app.db)` + seed, `afterAll` → `teardownApp()`. This pattern gives per-test isolation via truncation while only paying the PGlite startup cost once per file.
 
-- [ ] Task 27: Update session service tests for PGlite with cleanup
+- [x] Task 27: Update session service tests for PGlite with cleanup
   - File: `server/src/plugins/auth/sessionService.test.ts`
   - Action:
     - Replace the local `setupTestDb()` function: instead of `createDatabase(':memory:')`, call `createDatabase()` with no args (auto-detects PGlite). Create PGlite once per file using `beforeAll`:
@@ -900,7 +900,7 @@ Database layer swap — rewrite Drizzle schema from `sqliteTable` to `pgTable`, 
     - All direct DB calls in test bodies: add `await` and use destructure pattern
   - Notes: This file bypasses Fastify entirely — tests the service against a raw DB instance. The PGlite swap is transparent since it speaks Postgres. Single instance per file with truncation in `beforeEach` avoids the ~200-500ms PGlite startup cost per test. Explicit `close()` in `afterAll` prevents resource leaks.
 
-- [ ] Task 28: Update channel service tests for async DB calls with cleanup
+- [x] Task 28: Update channel service tests for async DB calls with cleanup
   - File: `server/src/plugins/channels/channelService.test.ts`
   - Action: Add `await` to all direct DB calls in test bodies:
     - `await app.db.insert(channels).values({...});` (remove `.run()`)
@@ -917,7 +917,7 @@ Database layer swap — rewrite Drizzle schema from `sqliteTable` to `pgTable`, 
       ```
   - Notes: Service calls like `createChannel()` and `deleteChannel()` are tested through the service functions (already `await`-ed by the test since they're called directly). Single PGlite instance per file with table truncation in `beforeEach` for per-test isolation.
 
-- [ ] Task 29: Update message routes tests for async DB calls and opaque cursors
+- [x] Task 29: Update message routes tests for async DB calls and opaque cursors
   - File: `server/src/plugins/messages/messageRoutes.test.ts`
   - Action:
     - `beforeEach`: `const [channel] = await app.db.insert(channels).values({...}).returning();` (remove `.get()`)
@@ -937,7 +937,7 @@ Database layer swap — rewrite Drizzle schema from `sqliteTable` to `pgTable`, 
     - **Add test for invalid cursor:** Verify `GET /:channelId/messages?cursor=garbage` returns 400 with `INVALID_CURSOR` error code.
   - Notes: HTTP inject tests (`app.inject()`) are already async — no changes to the inject calls themselves. The cursor value should be treated as opaque in tests — don't construct cursors manually, always use the value returned by the server. Single PGlite instance per file with table truncation for per-test isolation.
 
-- [ ] Task 30: Update admin service tests for async DB calls with cleanup
+- [x] Task 30: Update admin service tests for async DB calls with cleanup
   - File: `server/src/plugins/admin/adminService.test.ts`
   - Action: Add `await` to all direct DB assertions:
     - `const sessions = await app.db.select().from(sessions).where(...);` (remove `.all()`)
@@ -956,7 +956,7 @@ Database layer swap — rewrite Drizzle schema from `sqliteTable` to `pgTable`, 
 
 #### Phase 8: Deployment & Configuration
 
-- [ ] Task 31: Update environment variable example
+- [x] Task 31: Update environment variable example
   - File: `.env.example`
   - Action:
     - Replace `DATABASE_PATH=./data/discord_clone.db` with:
@@ -989,12 +989,12 @@ Database layer swap — rewrite Drizzle schema from `sqliteTable` to `pgTable`, 
       ```
   - Notes: Keep all other env vars unchanged. Option 1 (Supavisor session mode) is the default and recommended for the current single-instance deployment. Document all three options so operators can make informed choices if the deployment model changes.
 
-- [ ] Task 32: Remove SQLite volume from production Docker Compose
+- [x] Task 32: Remove SQLite volume from production Docker Compose
   - File: `docker-compose.yml`
   - Action: Remove `./data/sqlite:/app/data` volume from the `app` service. Add `DATABASE_URL` to the environment or `env_file` block if not already using `.env`.
   - Notes: No new containers needed — Supabase is external. The `env_file: .env` already exists in the current compose file, so `DATABASE_URL` will be picked up automatically from `.env`.
 
-- [ ] Task 33: Add local dev Postgres to dev Docker Compose
+- [x] Task 33: Add local dev Postgres to dev Docker Compose
   - File: `docker-compose.dev.yml`
   - Action: Add a `postgres` service with health check for local development:
     ```yaml
@@ -1029,7 +1029,7 @@ Database layer swap — rewrite Drizzle schema from `sqliteTable` to `pgTable`, 
 
 #### Phase 9: Client Updates
 
-- [ ] Task 34: Update client message store for cursor state
+- [x] Task 34: Update client message store for cursor state
   - File: `client/src/renderer/src/stores/useMessageStore.ts`
   - Action:
     - Add cursor state: `cursors: new Map<string, string | null>()` in the store initial state
@@ -1059,7 +1059,7 @@ Database layer swap — rewrite Drizzle schema from `sqliteTable` to `pgTable`, 
     - Update `prependMessages` similarly to accept and store a cursor
   - Notes: `getOldestMessageId` can remain for non-pagination uses but is no longer used for cursor construction. The cursor state is per-channel.
 
-- [ ] Task 35: Update client message service for opaque cursor pagination
+- [x] Task 35: Update client message service for opaque cursor pagination
   - File: `client/src/renderer/src/services/messageService.ts`
   - Action:
     - Update `fetchAndDecryptMessages` to use `cursor` parameter and return cursor:
@@ -1121,7 +1121,7 @@ Database layer swap — rewrite Drizzle schema from `sqliteTable` to `pgTable`, 
       ```
   - Notes: The `hasMore` check changes from `result.length === PAGE_LIMIT` (a heuristic that produces a redundant empty fetch when total messages are an exact multiple of page size) to `cursor !== null` (deterministic — the server knows if there are more pages).
 
-- [ ] Task 36: Add retry wrapper to API client for transient GET failures
+- [x] Task 36: Add retry wrapper to API client for transient GET failures
   - File: `client/src/renderer/src/services/apiClient.ts`
   - Action: Add a `RetryableError` class and `withRetry` utility that only retries transient failures:
     ```typescript
@@ -1163,7 +1163,7 @@ Database layer swap — rewrite Drizzle schema from `sqliteTable` to `pgTable`, 
     Update `messageService.ts` and any other GET-only callers to use `apiGet` instead of `apiRequest` for read operations.
   - Notes: Only idempotent GET requests are retried. Mutations (POST/PUT/DELETE) continue using `apiRequest` directly — no retry. **Only transient failures are retried** — network errors (`TypeError` from `fetch`) and 5xx server errors (`RetryableError`). Client errors (4xx) are never retried since they will not succeed on retry. The linear backoff (500ms, 1000ms) is deliberately simple. No exponential backoff or circuit breakers needed at this scale.
 
-- [ ] Task 37: Add TEXT_ERROR WebSocket handler on client
+- [x] Task 37: Add TEXT_ERROR WebSocket handler on client
   - File: `client/src/renderer/src/services/wsClient.ts`
   - Action: Add a case for `TEXT_ERROR` in the `handleMessage` method, after the `TEXT_RECEIVE` case. Read `tempId` from the **payload** (not the envelope `id` field):
     ```typescript
@@ -1200,11 +1200,11 @@ Database layer swap — rewrite Drizzle schema from `sqliteTable` to `pgTable`, 
 
 #### Phase 11: Validation
 
-- [ ] Task 41: TypeScript compilation check
+- [x] Task 41: TypeScript compilation check
   - Action: Run `cd server && npx tsc --noEmit` to verify zero type errors after all changes. Then run `cd shared && npx tsc --noEmit` and `cd client && npx tsc --noEmit`.
   - Notes: Fix any type errors before proceeding. Common issues: `AppDatabase` type mismatches, missing `await` causing type inference issues, PGlite vs postgres.js type compatibility, new shared type imports. Verify `PgDatabase<any, typeof schema>` compiles cleanly for both driver contexts.
 
-- [ ] Task 42: Run full test suite
+- [x] Task 42: Run full test suite
   - Action: Run `cd server && npm test` to execute all tests against PGlite.
   - Notes: All tests should pass. Specific things to verify:
     - Cursor pagination tests use opaque cursors from server responses, not manually constructed values

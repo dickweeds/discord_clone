@@ -3,40 +3,42 @@ import { MAX_CHANNELS_PER_SERVER } from 'discord-clone-shared';
 import { channels, messages } from '../../db/schema.js';
 import type { AppDatabase } from '../../db/connection.js';
 
-export function getAllChannels(db: AppDatabase) {
-  return db.select({
+export async function getAllChannels(db: AppDatabase) {
+  return await db.select({
     id: channels.id,
     name: channels.name,
     type: channels.type,
     createdAt: channels.created_at,
-  }).from(channels).all();
+  }).from(channels);
 }
 
-export function getChannelById(db: AppDatabase, channelId: string) {
-  return db.select({
+export async function getChannelById(db: AppDatabase, channelId: string) {
+  const [channel] = await db.select({
     id: channels.id,
     name: channels.name,
     type: channels.type,
-  }).from(channels).where(eq(channels.id, channelId)).get();
+  }).from(channels).where(eq(channels.id, channelId));
+
+  return channel ?? null;
 }
 
-export function createChannel(db: AppDatabase, name: string, type: 'text' | 'voice') {
+export async function createChannel(db: AppDatabase, name: string, type: 'text' | 'voice') {
   const trimmed = name.trim();
   if (!trimmed || trimmed.length > 50) {
     throw new ChannelValidationError('Channel name must be between 1 and 50 characters');
   }
 
-  const countResult = db.select({ count: sql<number>`count(*)` }).from(channels).get();
-  if (countResult && countResult.count >= MAX_CHANNELS_PER_SERVER) {
+  const [countResult] = await db.select({ count: sql<number>`count(*)` }).from(channels);
+  if (countResult && Number(countResult.count) >= MAX_CHANNELS_PER_SERVER) {
     throw new ChannelValidationError(`Channel limit reached (max ${MAX_CHANNELS_PER_SERVER})`);
   }
 
-  const existing = db.select({ id: channels.id }).from(channels).where(eq(channels.name, trimmed)).get();
+  const [existing] = await db.select({ id: channels.id }).from(channels).where(eq(channels.name, trimmed));
   if (existing) {
     throw new ChannelValidationError('A channel with this name already exists');
   }
 
-  return db.insert(channels).values({
+  const [channel] = await db.insert(channels).values({
     name: trimmed,
     type,
   }).returning({
@@ -44,18 +46,20 @@ export function createChannel(db: AppDatabase, name: string, type: 'text' | 'voi
     name: channels.name,
     type: channels.type,
     createdAt: channels.created_at,
-  }).get();
+  });
+
+  return channel;
 }
 
-export function deleteChannel(db: AppDatabase, channelId: string) {
-  const channel = db.select({ id: channels.id }).from(channels).where(eq(channels.id, channelId)).get();
+export async function deleteChannel(db: AppDatabase, channelId: string) {
+  const [channel] = await db.select({ id: channels.id }).from(channels).where(eq(channels.id, channelId));
   if (!channel) {
     throw new ChannelNotFoundError('Channel not found');
   }
 
-  db.transaction((tx) => {
-    tx.delete(messages).where(eq(messages.channel_id, channelId)).run();
-    tx.delete(channels).where(eq(channels.id, channelId)).run();
+  await db.transaction(async (tx) => {
+    await tx.delete(messages).where(eq(messages.channel_id, channelId));
+    await tx.delete(channels).where(eq(channels.id, channelId));
   });
 }
 

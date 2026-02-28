@@ -35,56 +35,56 @@ export interface BannedUser {
   createdAt: Date;
 }
 
-export function kickUser(db: AppDatabase, userId: string): User {
-  const user = db.select().from(users).where(eq(users.id, userId)).get();
+export async function kickUser(db: AppDatabase, userId: string): Promise<User> {
+  const [user] = await db.select().from(users).where(eq(users.id, userId));
   if (!user) {
     throw new UserNotFoundError();
   }
-  deleteUserSessions(db, userId);
+  await deleteUserSessions(db, userId);
   removePresence(userId);
   return user;
 }
 
-export function banUser(db: AppDatabase, userId: string, bannedBy: string): Ban {
-  const user = db.select().from(users).where(eq(users.id, userId)).get();
+export async function banUser(db: AppDatabase, userId: string, bannedBy: string): Promise<Ban> {
+  const [user] = await db.select().from(users).where(eq(users.id, userId));
   if (!user) {
     throw new UserNotFoundError();
   }
-  const existingBan = db.select().from(bans).where(eq(bans.user_id, userId)).get();
+  const [existingBan] = await db.select().from(bans).where(eq(bans.user_id, userId));
   if (existingBan) {
     throw new UserAlreadyBannedError();
   }
-  const ban = db.insert(bans).values({
+  const [ban] = await db.insert(bans).values({
     user_id: userId,
     banned_by: bannedBy,
-  }).returning().get();
-  deleteUserSessions(db, userId);
+  }).returning();
+  await deleteUserSessions(db, userId);
   removePresence(userId);
   return ban;
 }
 
-export function unbanUser(db: AppDatabase, userId: string): void {
-  const ban = db.select().from(bans).where(eq(bans.user_id, userId)).get();
+export async function unbanUser(db: AppDatabase, userId: string): Promise<void> {
+  const [ban] = await db.select().from(bans).where(eq(bans.user_id, userId));
   if (!ban) {
     throw new BanNotFoundError();
   }
-  db.delete(bans).where(eq(bans.user_id, userId)).run();
+  await db.delete(bans).where(eq(bans.user_id, userId));
 }
 
 export async function resetPassword(db: AppDatabase, userId: string): Promise<string> {
-  const user = db.select().from(users).where(eq(users.id, userId)).get();
+  const [user] = await db.select().from(users).where(eq(users.id, userId));
   if (!user) {
     throw new UserNotFoundError();
   }
   const temporaryPassword = crypto.randomBytes(16).toString('base64url');
   const newHash = await hashPassword(temporaryPassword);
-  db.update(users).set({ password_hash: newHash }).where(eq(users.id, userId)).run();
-  deleteUserSessions(db, userId);
+  await db.update(users).set({ password_hash: newHash }).where(eq(users.id, userId));
+  await deleteUserSessions(db, userId);
   return temporaryPassword;
 }
 
-export function getBannedUsers(db: AppDatabase): BannedUser[] {
-  const rows = db
+export async function getBannedUsers(db: AppDatabase): Promise<BannedUser[]> {
+  return await db
     .select({
       id: bans.id,
       userId: bans.user_id,
@@ -93,7 +93,5 @@ export function getBannedUsers(db: AppDatabase): BannedUser[] {
       createdAt: bans.created_at,
     })
     .from(bans)
-    .innerJoin(users, eq(bans.user_id, users.id))
-    .all();
-  return rows;
+    .innerJoin(users, eq(bans.user_id, users.id));
 }

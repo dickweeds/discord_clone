@@ -1,17 +1,37 @@
 import type { WebSocket } from 'ws';
 import type { FastifyBaseLogger } from 'fastify';
 import { WS_TYPES, MAX_MESSAGE_LENGTH } from 'discord-clone-shared';
-import type { WsMessage, TextSendPayload, TextReceivePayload } from 'discord-clone-shared';
+import type { WsMessage, TextSendPayload, TextReceivePayload, TextErrorPayload } from 'discord-clone-shared';
 import { registerHandler } from '../../ws/wsRouter.js';
 import { createMessage } from './messageService.js';
 import type { AppDatabase } from '../../db/connection.js';
+
+async function withDbRetry<T>(
+  fn: () => Promise<T>,
+  { maxRetries = 1, delayMs = 200 } = {},
+): Promise<T> {
+  for (let attempt = 0; attempt <= maxRetries; attempt++) {
+    try {
+      return await fn();
+    } catch (err: unknown) {
+      const pgErr = err as { code?: string };
+      // Only retry on transient connection errors, not constraint violations
+      const isTransient = pgErr.code === '08006' || // connection_failure
+                          pgErr.code === '08001' || // sqlclient_unable_to_establish
+                          pgErr.code === '57P01';    // admin_shutdown (Supabase maintenance)
+      if (!isTransient || attempt === maxRetries) throw err;
+      await new Promise(r => setTimeout(r, delayMs * (attempt + 1)));
+    }
+  }
+  throw new Error('unreachable');
+}
 
 export function registerMessageHandlers(
   clients: Map<string, WebSocket>,
   db: AppDatabase,
   log: FastifyBaseLogger,
 ): void {
-  registerHandler(WS_TYPES.TEXT_SEND, (ws, message, userId) => {
+  registerHandler(WS_TYPES.TEXT_SEND, async (ws, message, userId) => {
     const payload = message.payload as TextSendPayload;
 
     // Validate required fields
@@ -32,13 +52,25 @@ export function registerMessageHandlers(
       return;
     }
 
-    // Store encrypted message
+    // Store encrypted message with transient retry
     let stored;
     try {
-      stored = createMessage(db, payload.channelId, userId, payload.content, payload.nonce);
+      stored = await withDbRetry(() => createMessage(db, {
+        channelId: payload.channelId,
+        userId,
+        encryptedContent: payload.content,
+        nonce: payload.nonce,
+      }));
     } catch (err) {
       log.error({ error: (err as Error).message, channelId: payload.channelId }, 'Failed to store message');
-      ws.close(4003, 'Failed to store message');
+      try {
+        ws.send(JSON.stringify({
+          type: WS_TYPES.TEXT_ERROR,
+          payload: { error: 'MESSAGE_STORE_FAILED', tempId: message.id ?? '' } satisfies TextErrorPayload,
+        }));
+      } catch {
+        // WS send failed — connection is dead, nothing to do
+      }
       return;
     }
 

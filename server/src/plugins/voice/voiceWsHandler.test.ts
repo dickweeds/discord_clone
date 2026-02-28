@@ -123,10 +123,10 @@ describe('voiceWsHandler', () => {
   });
 
   describe('voice:join', () => {
-    it('responds with router capabilities and existing peers', () => {
+    it('responds with router capabilities and existing peers', async () => {
       const ws = createMockWs();
       const handler = registeredHandlers.get(WS_TYPES.VOICE_JOIN)!;
-      handler(ws, { type: WS_TYPES.VOICE_JOIN, payload: { channelId: 'voice-channel-1' }, id: 'req-1' }, 'user-1');
+      await handler(ws, { type: WS_TYPES.VOICE_JOIN, payload: { channelId: 'voice-channel-1' }, id: 'req-1' }, 'user-1');
 
       expect(ws.send).toHaveBeenCalled();
       const sent = JSON.parse(ws.send.mock.calls[0][0]);
@@ -136,38 +136,38 @@ describe('voiceWsHandler', () => {
       expect(sent.payload.existingPeers).toEqual([]);
     });
 
-    it('returns existing peers when others already in channel', () => {
+    it('returns existing peers when others already in channel', async () => {
       joinVoiceChannel('user-1', 'voice-channel-1', null);
 
       const ws = createMockWs();
       const handler = registeredHandlers.get(WS_TYPES.VOICE_JOIN)!;
-      handler(ws, { type: WS_TYPES.VOICE_JOIN, payload: { channelId: 'voice-channel-1' }, id: 'req-2' }, 'user-2');
+      await handler(ws, { type: WS_TYPES.VOICE_JOIN, payload: { channelId: 'voice-channel-1' }, id: 'req-2' }, 'user-2');
 
       const sent = JSON.parse(ws.send.mock.calls[0][0]);
       expect(sent.payload.existingPeers).toEqual(['user-1']);
     });
 
-    it('rejects joining a text channel', () => {
+    it('rejects joining a text channel', async () => {
       const ws = createMockWs();
       const handler = registeredHandlers.get(WS_TYPES.VOICE_JOIN)!;
-      handler(ws, { type: WS_TYPES.VOICE_JOIN, payload: { channelId: 'text-channel-1' }, id: 'req-3' }, 'user-1');
+      await handler(ws, { type: WS_TYPES.VOICE_JOIN, payload: { channelId: 'text-channel-1' }, id: 'req-3' }, 'user-1');
 
       const sent = JSON.parse(ws.send.mock.calls[0][0]);
       expect(sent.type).toBe('error');
       expect(sent.payload.error).toContain('text channel');
     });
 
-    it('rejects non-existent channel', () => {
+    it('rejects non-existent channel', async () => {
       const ws = createMockWs();
       const handler = registeredHandlers.get(WS_TYPES.VOICE_JOIN)!;
-      handler(ws, { type: WS_TYPES.VOICE_JOIN, payload: { channelId: 'nonexistent' }, id: 'req-4' }, 'user-1');
+      await handler(ws, { type: WS_TYPES.VOICE_JOIN, payload: { channelId: 'nonexistent' }, id: 'req-4' }, 'user-1');
 
       const sent = JSON.parse(ws.send.mock.calls[0][0]);
       expect(sent.type).toBe('error');
       expect(sent.payload.error).toContain('not found');
     });
 
-    it('rejects when voice channel is full', () => {
+    it('rejects when voice channel is full', async () => {
       // Fill channel to MAX_PARTICIPANTS
       for (let i = 0; i < MAX_PARTICIPANTS; i++) {
         joinVoiceChannel(`fill-user-${i}`, 'voice-channel-1', null);
@@ -175,21 +175,21 @@ describe('voiceWsHandler', () => {
 
       const ws = createMockWs();
       const handler = registeredHandlers.get(WS_TYPES.VOICE_JOIN)!;
-      handler(ws, { type: WS_TYPES.VOICE_JOIN, payload: { channelId: 'voice-channel-1' }, id: 'req-full' }, 'overflow-user');
+      await handler(ws, { type: WS_TYPES.VOICE_JOIN, payload: { channelId: 'voice-channel-1' }, id: 'req-full' }, 'overflow-user');
 
       const sent = JSON.parse(ws.send.mock.calls[0][0]);
       expect(sent.type).toBe('error');
       expect(sent.payload.error).toContain('full');
     });
 
-    it('broadcasts peer-joined to other peers', () => {
+    it('broadcasts peer-joined to other peers', async () => {
       joinVoiceChannel('user-1', 'voice-channel-1', null);
       const otherWs = createMockWs();
       mockClients.set('user-1', otherWs);
 
       const ws = createMockWs();
       const handler = registeredHandlers.get(WS_TYPES.VOICE_JOIN)!;
-      handler(ws, { type: WS_TYPES.VOICE_JOIN, payload: { channelId: 'voice-channel-1' }, id: 'req-5' }, 'user-2');
+      await handler(ws, { type: WS_TYPES.VOICE_JOIN, payload: { channelId: 'voice-channel-1' }, id: 'req-5' }, 'user-2');
 
       // Other peer should receive peer-joined broadcast
       expect(otherWs.send).toHaveBeenCalled();

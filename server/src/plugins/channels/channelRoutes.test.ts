@@ -6,8 +6,6 @@ vi.hoisted(() => {
   process.env.JWT_REFRESH_SECRET = 'test-refresh-secret-key-for-testing';
   process.env.GROUP_ENCRYPTION_KEY = 'rSxlHxEjeJC7RY079zu0Kg9fHWEIdAtGE4s76zAI9Rw';
 });
-vi.stubEnv('DATABASE_PATH', ':memory:');
-
 vi.mock('../../ws/wsServer.js', async (importOriginal) => {
   const original = await importOriginal<typeof import('../../ws/wsServer.js')>();
   return {
@@ -27,10 +25,10 @@ describe('GET /api/channels', () => {
 
   beforeEach(async () => {
     app = await setupApp();
-    app.db.insert(channels).values([
+    await app.db.insert(channels).values([
       { name: 'general', type: 'text' },
       { name: 'gaming', type: 'voice' },
-    ]).run();
+    ]);
     mockBroadcast.mockClear();
   });
 
@@ -248,7 +246,7 @@ describe('DELETE /api/channels/:channelId', () => {
 
   it('deletes a channel with valid owner token', async () => {
     const { token } = await seedOwner(app);
-    const channel = app.db.insert(channels).values({ name: 'to-delete', type: 'text' }).returning().get();
+    const [channel] = await app.db.insert(channels).values({ name: 'to-delete', type: 'text' }).returning();
 
     const response = await app.inject({
       method: 'DELETE',
@@ -259,13 +257,13 @@ describe('DELETE /api/channels/:channelId', () => {
     expect(response.statusCode).toBe(204);
 
     // Verify channel is gone
-    const remaining = app.db.select().from(channels).all();
+    const remaining = await app.db.select().from(channels);
     expect(remaining).toHaveLength(0);
   });
 
   it('broadcasts channel:deleted WS message on success', async () => {
     const { token } = await seedOwner(app);
-    const channel = app.db.insert(channels).values({ name: 'to-broadcast-delete', type: 'text' }).returning().get();
+    const [channel] = await app.db.insert(channels).values({ name: 'to-broadcast-delete', type: 'text' }).returning();
 
     const response = await app.inject({
       method: 'DELETE',
@@ -286,7 +284,7 @@ describe('DELETE /api/channels/:channelId', () => {
 
   it('returns 403 with non-owner token', async () => {
     const { token } = await seedRegularUser(app);
-    const channel = app.db.insert(channels).values({ name: 'test', type: 'text' }).returning().get();
+    const [channel] = await app.db.insert(channels).values({ name: 'test', type: 'text' }).returning();
 
     const response = await app.inject({
       method: 'DELETE',
@@ -304,7 +302,7 @@ describe('DELETE /api/channels/:channelId', () => {
 
     const response = await app.inject({
       method: 'DELETE',
-      url: '/api/channels/non-existent-id',
+      url: '/api/channels/00000000-0000-0000-0000-000000000099',
       headers: { authorization: `Bearer ${token}` },
     });
 
@@ -315,13 +313,13 @@ describe('DELETE /api/channels/:channelId', () => {
 
   it('cascades: deletes messages when channel is deleted', async () => {
     const { token, id: ownerId } = await seedOwner(app);
-    const channel = app.db.insert(channels).values({ name: 'with-messages', type: 'text' }).returning().get();
+    const [channel] = await app.db.insert(channels).values({ name: 'with-messages', type: 'text' }).returning();
 
     // Seed messages
-    app.db.insert(messages).values([
+    await app.db.insert(messages).values([
       { channel_id: channel.id, user_id: ownerId, encrypted_content: 'msg1', nonce: 'n1' },
       { channel_id: channel.id, user_id: ownerId, encrypted_content: 'msg2', nonce: 'n2' },
-    ]).run();
+    ]);
 
     const response = await app.inject({
       method: 'DELETE',
@@ -332,7 +330,7 @@ describe('DELETE /api/channels/:channelId', () => {
     expect(response.statusCode).toBe(204);
 
     // Verify messages are gone
-    const remainingMessages = app.db.select().from(messages).all();
+    const remainingMessages = await app.db.select().from(messages);
     expect(remainingMessages).toHaveLength(0);
   });
 });

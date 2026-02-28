@@ -29,7 +29,7 @@ _This file contains critical rules and patterns that AI agents must follow when 
 | Tailwind CSS | — | Utility-first styling (warm earthy theme) |
 | Radix UI | — | Accessible component primitives |
 | Drizzle ORM | v0.45.x | TypeScript-first ORM |
-| better-sqlite3 | v12.6.x | SQLite driver (embedded, zero-config) |
+| postgres (postgres.js) | v3.x | PostgreSQL driver (Supabase managed Postgres in production) |
 | mediasoup | v3.19.x server / v3.18.x client | WebRTC SFU for group voice/video |
 | libsodium-wrappers | v0.8.2 | E2E encryption (isomorphic — Node.js + Chromium) |
 | jsonwebtoken | — | JWT access + refresh tokens |
@@ -38,6 +38,7 @@ _This file contains critical rules and patterns that AI agents must follow when 
 | electron-updater | — | Auto-update mechanism |
 | coturn | — (self-hosted) | TURN/STUN for WebRTC NAT traversal |
 | Vitest | — | Vite-native testing framework |
+| @electric-sql/pglite | — | Embedded PGlite for test database (replaces SQLite :memory:) |
 | React Testing Library | — | Component testing |
 
 **Critical Version Constraints:**
@@ -54,7 +55,7 @@ _This file contains critical rules and patterns that AI agents must follow when 
 - TypeScript strict mode enabled across all packages — no `any` types unless absolutely unavoidable (must include a `// why:` comment)
 - Explicit `null` for absent values in API payloads — never `undefined`
 - IDs: string UUIDs generated server-side
-- Dates: ISO 8601 strings in JSON payloads, Unix timestamps in SQLite storage
+- Dates: ISO 8601 strings in JSON payloads, Postgres `timestamp with time zone` in storage (native Date objects in TypeScript)
 - Booleans: `true`/`false` (never `1`/`0`)
 
 **Cross-Layer Casing Rules (never mix within the same layer):**
@@ -143,7 +144,14 @@ _This file contains critical rules and patterns that AI agents must follow when 
 **API Response Envelope (mandatory on ALL REST responses):**
 - Success: `{ "data": { ... } }`
 - Error: `{ "error": { "code": "CHANNEL_NOT_FOUND", "message": "Channel does not exist" } }`
-- List: `{ "data": [{ ... }], "count": 2 }`
+- Paginated list: `ApiPaginatedList<T>` — `{ "data": [{ ... }], "nextCursor": "<opaque>" | null }`
+- Non-paginated list: `{ "data": [{ ... }], "count": 2 }`
+
+**Cursor Pagination Pattern:**
+- Opaque base64url-encoded cursors (not raw IDs or offsets) — `nextCursor` is returned in `ApiPaginatedList<T>` responses
+- Client passes `?cursor=<opaque>&limit=N` — never constructs cursors manually
+- Server decodes cursor to determine position; clients treat cursors as opaque strings
+- `nextCursor: null` signals end of results
 
 **HTTP Status Codes:**
 - `200` success (GET, PUT) · `201` created (POST) · `204` no content (DELETE)
@@ -178,7 +186,7 @@ _This file contains critical rules and patterns that AI agents must follow when 
 - `coturn` — TURN/STUN server
 - `nginx` — Reverse proxy + TLS termination (Let's Encrypt)
 - All containers: `restart: unless-stopped`
-- Volumes: `./data/sqlite:/app/data` (DB), `./data/certs:/etc/letsencrypt` (TLS), `./data/coturn:/etc/coturn`
+- Volumes: `./data/certs:/etc/letsencrypt` (TLS), `./data/coturn:/etc/coturn` — database is external (Supabase managed Postgres)
 
 **Deployment (single AWS EC2):**
 - Nginx terminates TLS, proxies `/api/*` and `/ws` to Fastify, serves static invite landing page for all other paths
@@ -208,12 +216,15 @@ _This file contains critical rules and patterns that AI agents must follow when 
 - Never log message content, user activity, or encryption keys — operational events only
 - Zero telemetry: no analytics, no usage tracking, no server-side content logging
 - Passwords: bcrypt hashed, never plaintext
-- JWT access tokens ~15min expiry + refresh token rotation; refresh tokens stored hashed in SQLite
+- JWT access tokens ~15min expiry + refresh token rotation; refresh tokens stored hashed in Postgres
 - Invite links: cryptographically random, non-guessable
 
 **Connection & Resilience:**
 - WebSocket: exponential backoff reconnection (1s, 2s, 4s, 8s, max 30s), auto-reconnect on disconnect
-- REST API: no retry — fail fast, show error to user
+- WebSocket `TEXT_ERROR` frame: server sends `{ type: "text:error", payload: { message } }` for transient DB failures instead of closing the connection
+- REST API: `withRetry()` wrapper on client for idempotent GET requests (retries on transient failures)
+- REST API: non-GET requests fail fast, show error to user
+- Server: `withDbRetry()` wrapper for transient Postgres errors (connection resets, serialization failures)
 - WebRTC voice/video: no auto-reconnect — user manually rejoins voice channel
 - Connection state communicated via banner in content area
 

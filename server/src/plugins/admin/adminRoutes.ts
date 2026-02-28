@@ -35,7 +35,7 @@ export default async function adminRoutes(fastify: FastifyInstance) {
     }
 
     try {
-      kickUser(fastify.db, userId);
+      await kickUser(fastify.db, userId);
     } catch (err) {
       if (err instanceof UserNotFoundError) {
         return reply.status(404).send({ error: { code: 'NOT_FOUND', message: 'User not found' } });
@@ -71,7 +71,7 @@ export default async function adminRoutes(fastify: FastifyInstance) {
     }
 
     try {
-      banUser(fastify.db, userId, request.user!.userId);
+      await banUser(fastify.db, userId, request.user!.userId);
     } catch (err) {
       if (err instanceof UserNotFoundError) {
         return reply.status(404).send({ error: { code: 'NOT_FOUND', message: 'User not found' } });
@@ -105,7 +105,7 @@ export default async function adminRoutes(fastify: FastifyInstance) {
     const { userId } = request.params;
 
     try {
-      unbanUser(fastify.db, userId);
+      await unbanUser(fastify.db, userId);
     } catch (err) {
       if (err instanceof BanNotFoundError) {
         return reply.status(404).send({ error: { code: 'NOT_FOUND', message: 'Ban not found' } });
@@ -142,7 +142,7 @@ export default async function adminRoutes(fastify: FastifyInstance) {
 
   // GET /bans
   fastify.get('/bans', async (_request: FastifyRequest, reply: FastifyReply) => {
-    const bannedUsers = getBannedUsers(fastify.db);
+    const bannedUsers = await getBannedUsers(fastify.db);
     return reply.send({ data: bannedUsers, count: bannedUsers.length });
   });
 }

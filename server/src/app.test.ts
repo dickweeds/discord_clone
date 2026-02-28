@@ -6,7 +6,6 @@ vi.hoisted(() => {
   process.env.JWT_REFRESH_SECRET = 'test-refresh-secret-key-for-testing';
   process.env.GROUP_ENCRYPTION_KEY = 'rSxlHxEjeJC7RY079zu0Kg9fHWEIdAtGE4s76zAI9Rw';
 });
-vi.stubEnv('DATABASE_PATH', ':memory:');
 
 import { buildApp } from './app.js';
 
@@ -32,9 +31,12 @@ describe('Server App', () => {
   it('should return 503 when database is unreachable', async () => {
     app = await buildApp();
 
-    // Replace db.get with a function that throws to simulate DB failure
-    const originalGet = app.db.get;
-    app.db.get = (() => { throw new Error('DB connection lost'); }) as typeof originalGet;
+    // Trigger onReady hooks (including SELECT 1 health check) before mocking
+    await app.ready();
+
+    // Replace db.execute with a function that throws to simulate DB failure
+    const originalExecute = app.db.execute;
+    app.db.execute = (() => { throw new Error('DB connection lost'); }) as unknown as typeof originalExecute;
 
     const response = await app.inject({
       method: 'GET',
@@ -46,6 +48,6 @@ describe('Server App', () => {
       error: { code: 'DATABASE_UNAVAILABLE', message: 'Database is unreachable' },
     });
 
-    app.db.get = originalGet;
+    app.db.execute = originalExecute;
   });
 });

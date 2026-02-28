@@ -1,55 +1,75 @@
 import type { FastifyInstance } from 'fastify';
+import { sql } from 'drizzle-orm';
 import { buildApp } from '../app.js';
 import { runMigrations } from '../db/migrate.js';
 import { hashPassword, generateAccessToken, generateRefreshToken } from '../plugins/auth/authService.js';
 import { createSession } from '../plugins/auth/sessionService.js';
 import { users, invites } from '../db/schema.js';
+import type { AppDatabase } from '../db/connection.js';
+
+let currentApp: FastifyInstance | null = null;
 
 export async function setupApp(): Promise<FastifyInstance> {
   const app = await buildApp();
-  runMigrations(app.db);
+  await runMigrations(app.migrate);
+  currentApp = app;
   return app;
+}
+
+export async function teardownApp(): Promise<void> {
+  if (currentApp) {
+    await currentApp.close();
+    currentApp = null;
+  }
+}
+
+/** Truncate all tables for per-test isolation (faster than new PGlite instance).
+ *  Uses TRUNCATE CASCADE — instant metadata-only operation, auto-handles FK ordering. */
+export async function truncateAll(db: AppDatabase): Promise<void> {
+  await db.execute(
+    sql`TRUNCATE TABLE messages, sessions, bans, invites, channels, users CASCADE`
+  );
 }
 
 export async function seedOwner(app: FastifyInstance): Promise<{ id: string; token: string }> {
   const passwordHash = await hashPassword('ownerPass123');
-  const owner = app.db.insert(users).values({
+  const [owner] = await app.db.insert(users).values({
     username: 'owner',
     password_hash: passwordHash,
     role: 'owner',
-  }).returning().get();
+  }).returning();
   const token = generateAccessToken({ userId: owner.id, role: 'owner', username: 'owner' });
   return { id: owner.id, token };
 }
 
 export async function seedRegularUser(app: FastifyInstance, username = 'regular'): Promise<{ id: string; token: string }> {
   const passwordHash = await hashPassword('userPass123');
-  const user = app.db.insert(users).values({
+  const [user] = await app.db.insert(users).values({
     username,
     password_hash: passwordHash,
     role: 'user',
-  }).returning().get();
+  }).returning();
   const token = generateAccessToken({ userId: user.id, role: 'user', username });
   return { id: user.id, token };
 }
 
 export async function seedUserWithSession(app: FastifyInstance, username = 'sessionuser'): Promise<{ id: string; accessToken: string; refreshToken: string }> {
   const passwordHash = await hashPassword('sessionPass123');
-  const user = app.db.insert(users).values({
+  const [user] = await app.db.insert(users).values({
     username,
     password_hash: passwordHash,
     role: 'user',
-  }).returning().get();
+  }).returning();
   const accessToken = generateAccessToken({ userId: user.id, role: 'user', username });
   const refreshToken = generateRefreshToken({ userId: user.id, role: 'user', username });
-  createSession(app.db, user.id, refreshToken);
+  await createSession(app.db, user.id, refreshToken);
   return { id: user.id, accessToken, refreshToken };
 }
 
-export function seedInvite(app: FastifyInstance, createdBy: string, tokenValue = 'valid-invite-token'): string {
-  app.db.insert(invites).values({
+export async function seedInvite(app: FastifyInstance, createdBy: string, tokenValue = 'valid-invite-token'): Promise<string> {
+  await app.db.insert(invites).values({
     token: tokenValue,
     created_by: createdBy,
-  }).run();
+  });
   return tokenValue;
 }

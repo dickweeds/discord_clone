@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, vi } from 'vitest';
+import { describe, it, expect, beforeAll, beforeEach, afterAll, vi } from 'vitest';
 import type { FastifyInstance, FastifyBaseLogger } from 'fastify';
 
 vi.hoisted(() => {
@@ -6,9 +6,8 @@ vi.hoisted(() => {
   process.env.JWT_REFRESH_SECRET = 'test-refresh-secret-key-for-testing';
   process.env.GROUP_ENCRYPTION_KEY = 'rSxlHxEjeJC7RY079zu0Kg9fHWEIdAtGE4s76zAI9Rw';
 });
-vi.stubEnv('DATABASE_PATH', ':memory:');
 
-import { setupApp, seedRegularUser } from '../../test/helpers.js';
+import { setupApp, teardownApp, truncateAll, seedRegularUser } from '../../test/helpers.js';
 import { channels, messages } from '../../db/schema.js';
 import { clearHandlers, routeMessage } from '../../ws/wsRouter.js';
 import { registerMessageHandlers } from './messageWsHandler.js';
@@ -44,10 +43,18 @@ describe('messageWsHandler', () => {
   let clients: Map<string, import('ws').WebSocket>;
   let mockLog: FastifyBaseLogger;
 
+  beforeAll(async () => {
+    app = await setupApp();
+  });
+
+  afterAll(async () => {
+    await teardownApp();
+  });
+
   beforeEach(async () => {
     clearHandlers();
-    app = await setupApp();
-    const channel = app.db.insert(channels).values({ name: 'general', type: 'text' }).returning().get();
+    await truncateAll(app.db);
+    const [channel] = await app.db.insert(channels).values({ name: 'general', type: 'text' }).returning();
     channelId = channel.id;
     const user = await seedRegularUser(app, 'sender');
     userId = user.id;
@@ -57,7 +64,7 @@ describe('messageWsHandler', () => {
     registerMessageHandlers(clients, app.db, mockLog);
   });
 
-  it('stores message and broadcasts text:receive on valid text:send', () => {
+  it('stores message and broadcasts text:receive on valid text:send', async () => {
     const senderWs = createMockSocket();
     const receiverWs = createMockSocket();
     clients.set(userId, senderWs);
@@ -70,9 +77,10 @@ describe('messageWsHandler', () => {
     });
 
     routeMessage(senderWs, raw, userId, mockLog);
+    await new Promise(resolve => setTimeout(resolve, 100));
 
     // Message stored in DB
-    const stored = app.db.select().from(messages).where(eq(messages.channel_id, channelId)).all();
+    const stored = await app.db.select().from(messages).where(eq(messages.channel_id, channelId));
     expect(stored).toHaveLength(1);
     expect(stored[0].encrypted_content).toBe('encrypted-blob');
     expect(stored[0].nonce).toBe('nonce-value');
@@ -148,7 +156,7 @@ describe('messageWsHandler', () => {
     expect(ws.close).toHaveBeenCalledWith(4002, 'Message content exceeds maximum length');
   });
 
-  it('does not send to clients with closed connections', () => {
+  it('does not send to clients with closed connections', async () => {
     const senderWs = createMockSocket();
     const closedWs = createMockSocket(3); // CLOSED
     clients.set(userId, senderWs);
@@ -160,12 +168,13 @@ describe('messageWsHandler', () => {
     });
 
     routeMessage(senderWs, raw, userId, mockLog);
+    await new Promise(resolve => setTimeout(resolve, 100));
 
     expect(senderWs.send).toHaveBeenCalledOnce();
     expect(closedWs.send).not.toHaveBeenCalled();
   });
 
-  it('sender receives confirmation with tempId', () => {
+  it('sender receives confirmation with tempId', async () => {
     const senderWs = createMockSocket();
     clients.set(userId, senderWs);
 
@@ -176,6 +185,7 @@ describe('messageWsHandler', () => {
     });
 
     routeMessage(senderWs, raw, userId, mockLog);
+    await new Promise(resolve => setTimeout(resolve, 100));
 
     expect(senderWs.send).toHaveBeenCalledOnce();
     const sent = JSON.parse((senderWs.send as ReturnType<typeof vi.fn>).mock.calls[0][0] as string);
@@ -183,22 +193,26 @@ describe('messageWsHandler', () => {
     expect(sent.payload.authorId).toBe(userId);
   });
 
-  it('closes connection on DB error (e.g., invalid channelId)', () => {
+  it('sends text:error on DB error (e.g., invalid channelId)', async () => {
     const ws = createMockSocket();
     clients.set(userId, ws);
 
     const raw = JSON.stringify({
       type: 'text:send',
-      payload: { channelId: 'non-existent-channel', content: 'blob', nonce: 'nonce' },
+      payload: { channelId: '00000000-0000-0000-0000-000000000099', content: 'blob', nonce: 'nonce' },
     });
 
     routeMessage(ws, raw, userId, mockLog);
+    await new Promise(resolve => setTimeout(resolve, 100));
 
-    expect(ws.close).toHaveBeenCalledWith(4003, 'Failed to store message');
+    expect(ws.send).toHaveBeenCalled();
+    const sent = JSON.parse((ws.send as ReturnType<typeof vi.fn>).mock.calls[0][0] as string);
+    expect(sent.type).toBe('text:error');
+    expect(sent.payload.error).toBe('MESSAGE_STORE_FAILED');
     expect((mockLog.error as ReturnType<typeof vi.fn>)).toHaveBeenCalled();
   });
 
-  it('logs warning when broadcast send fails', () => {
+  it('logs warning when broadcast send fails', async () => {
     const senderWs = createMockSocket();
     const failingWs = createMockSocket();
     (failingWs.send as ReturnType<typeof vi.fn>).mockImplementation(() => { throw new Error('Send failed'); });
@@ -211,6 +225,7 @@ describe('messageWsHandler', () => {
     });
 
     routeMessage(senderWs, raw, userId, mockLog);
+    await new Promise(resolve => setTimeout(resolve, 100));
 
     expect((mockLog.warn as ReturnType<typeof vi.fn>)).toHaveBeenCalled();
     // Sender still receives (broadcast continues despite one client failing)

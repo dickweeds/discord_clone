@@ -1,4 +1,7 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
+import { describe, it, expect, vi, beforeAll, beforeEach, afterAll } from 'vitest';
+import { sql } from 'drizzle-orm';
 
 vi.hoisted(() => {
   process.env.JWT_ACCESS_SECRET = 'test-secret-key-for-testing';
@@ -6,32 +9,40 @@ vi.hoisted(() => {
 });
 
 import { createDatabase } from './connection.js';
-import { runMigrations } from './migrate.js';
 import { runSeed } from './seed.js';
 import { channels } from './schema.js';
 import type { AppDatabase } from './connection.js';
 
-function setupTestDb(): AppDatabase {
-  const { db } = createDatabase(':memory:');
-  runMigrations(db);
-  return db;
-}
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+const migrationsFolder = path.resolve(__dirname, '../../drizzle');
 
 describe('runSeed', () => {
   let db: AppDatabase;
+  let closeDb: () => Promise<void>;
 
-  beforeEach(() => {
-    db = setupTestDb();
+  beforeAll(async () => {
+    const conn = createDatabase();
+    await conn.migrate(migrationsFolder);
+    db = conn.db;
+    closeDb = conn.close;
+  });
+
+  afterAll(async () => {
+    await closeDb();
+  });
+
+  beforeEach(async () => {
+    await db.execute(sql`TRUNCATE TABLE messages, sessions, bans, invites, channels, users CASCADE`);
   });
 
   it('should seed default channels on empty database', async () => {
     await runSeed(db);
 
-    const allChannels = db.select().from(channels).all();
+    const allChannels = await db.select().from(channels);
     expect(allChannels).toHaveLength(2);
 
-    const general = allChannels.find(c => c.name === 'general');
-    const gaming = allChannels.find(c => c.name === 'Gaming');
+    const general = allChannels.find((c: typeof allChannels[0]) => c.name === 'general');
+    const gaming = allChannels.find((c: typeof allChannels[0]) => c.name === 'Gaming');
 
     expect(general).toBeDefined();
     expect(general!.type).toBe('text');
@@ -43,13 +54,13 @@ describe('runSeed', () => {
     await runSeed(db);
     await runSeed(db);
 
-    const allChannels = db.select().from(channels).all();
+    const allChannels = await db.select().from(channels);
     expect(allChannels).toHaveLength(2);
   });
 
   it('should skip seeding when channels already exist', async () => {
     // Manually insert a channel
-    db.insert(channels).values({ name: 'existing', type: 'text' }).run();
+    await db.insert(channels).values({ name: 'existing', type: 'text' });
 
     const infoMessages: string[] = [];
     const logger = {
@@ -60,7 +71,7 @@ describe('runSeed', () => {
     await runSeed(db, logger);
 
     // Should not have added default channels
-    const allChannels = db.select().from(channels).all();
+    const allChannels = await db.select().from(channels);
     expect(allChannels).toHaveLength(1);
     expect(allChannels[0].name).toBe('existing');
     expect(infoMessages).toContain('Seeding skipped — channels already exist');

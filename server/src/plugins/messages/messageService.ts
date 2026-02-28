@@ -1,4 +1,4 @@
-import { eq, sql } from 'drizzle-orm';
+import { eq, and, or, lt, desc } from 'drizzle-orm';
 import { messages } from '../../db/schema.js';
 import type { AppDatabase } from '../../db/connection.js';
 
@@ -11,25 +11,45 @@ export interface CreateMessageResult {
   createdAt: string;
 }
 
-export function toISOTimestamp(created_at: Date | unknown): string {
-  return created_at instanceof Date
-    ? created_at.toISOString()
-    : new Date((created_at as number) * 1000).toISOString();
+interface Cursor { t: string; id: string; }
+
+export class InvalidCursorError extends Error {
+  constructor(message: string) { super(message); this.name = 'InvalidCursorError'; }
 }
 
-export function createMessage(
+function encodeCursor(msg: { created_at: Date; id: string }): string {
+  return Buffer.from(JSON.stringify({
+    t: msg.created_at.toISOString(),
+    id: msg.id,
+  })).toString('base64url');
+}
+
+function decodeCursor(cursor: string): Cursor {
+  try {
+    const parsed = JSON.parse(Buffer.from(cursor, 'base64url').toString());
+    if (!parsed.t || !parsed.id) throw new Error('missing fields');
+    if (isNaN(new Date(parsed.t).getTime())) throw new Error('invalid timestamp');
+    return parsed;
+  } catch {
+    throw new InvalidCursorError('Invalid pagination cursor');
+  }
+}
+
+export async function createMessage(
   db: AppDatabase,
-  channelId: string,
-  userId: string,
-  encryptedContent: string,
-  nonce: string,
-): CreateMessageResult {
-  const row = db.insert(messages).values({
-    channel_id: channelId,
-    user_id: userId,
-    encrypted_content: encryptedContent,
-    nonce,
-  }).returning().get();
+  params: {
+    channelId: string;
+    userId: string;
+    encryptedContent: string;
+    nonce: string;
+  },
+): Promise<CreateMessageResult> {
+  const [row] = await db.insert(messages).values({
+    channel_id: params.channelId,
+    user_id: params.userId,
+    encrypted_content: params.encryptedContent,
+    nonce: params.nonce,
+  }).returning();
 
   return {
     id: row.id,
@@ -37,30 +57,37 @@ export function createMessage(
     userId: row.user_id,
     encryptedContent: row.encrypted_content,
     nonce: row.nonce,
-    createdAt: toISOTimestamp(row.created_at),
+    createdAt: row.created_at.toISOString(),
   };
 }
 
-export function getMessagesByChannel(
+export async function getMessagesByChannel(
   db: AppDatabase,
   channelId: string,
   limit = 50,
-  before?: string,
-) {
-  // Use rowid for stable ordering (handles same-second timestamps)
-  if (before) {
-    return db.select()
-      .from(messages)
-      .where(sql`${messages.channel_id} = ${channelId} AND rowid < (SELECT rowid FROM messages WHERE id = ${before})`)
-      .orderBy(sql`rowid DESC`)
-      .limit(limit)
-      .all();
+  cursor?: string,
+): Promise<{ rows: (typeof messages.$inferSelect)[]; nextCursor: string | null }> {
+  const conditions = [eq(messages.channel_id, channelId)];
+
+  if (cursor) {
+    const { t, id } = decodeCursor(cursor);
+    const ts = new Date(t);
+    conditions.push(
+      or(
+        lt(messages.created_at, ts),
+        and(eq(messages.created_at, ts), lt(messages.id, id))
+      )!
+    );
   }
 
-  return db.select()
-    .from(messages)
-    .where(eq(messages.channel_id, channelId))
-    .orderBy(sql`rowid DESC`)
-    .limit(limit)
-    .all();
+  const rows = await db.select().from(messages)
+    .where(and(...conditions))
+    .orderBy(desc(messages.created_at), desc(messages.id))
+    .limit(limit);
+
+  const nextCursor = rows.length === limit
+    ? encodeCursor(rows[rows.length - 1])
+    : null;
+
+  return { rows, nextCursor };
 }

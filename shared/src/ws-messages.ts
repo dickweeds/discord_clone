@@ -20,6 +20,11 @@ export interface TextReceivePayload {
   createdAt: string;
 }
 
+export interface TextErrorPayload {
+  error: string;
+  tempId: string;
+}
+
 // Voice
 export interface VoiceJoinPayload {
   channelId: string;
@@ -161,6 +166,7 @@ export interface MemberRemovedPayload {
 export const WS_TYPES = {
   TEXT_SEND: 'text:send',
   TEXT_RECEIVE: 'text:receive',
+  TEXT_ERROR: 'text:error',
   TEXT_TYPING: 'text:typing',
   VOICE_JOIN: 'voice:join',
   VOICE_LEAVE: 'voice:leave',

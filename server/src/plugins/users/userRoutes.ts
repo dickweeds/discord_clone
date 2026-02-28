@@ -28,7 +28,7 @@ export default async function userRoutes(fastify: FastifyInstance) {
       },
     },
   }, async (_request, reply) => {
-    const userList = getAllUsers(fastify.db);
+    const userList = await getAllUsers(fastify.db);
     return reply.send({ data: userList, count: userList.length });
   });
 }

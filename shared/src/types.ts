@@ -73,6 +73,12 @@ export interface ApiList<T> {
   count: number;
 }
 
+export interface ApiPaginatedList<T> {
+  data: T[];
+  cursor: string | null;
+  count: number;
+}
+
 export interface ApiError {
   error: {
     code: string;

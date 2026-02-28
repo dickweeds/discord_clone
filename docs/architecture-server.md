@@ -4,7 +4,7 @@
 
 ## Executive Summary
 
-The server is a Fastify 5 Node.js application providing REST API, WebSocket, and WebRTC media services. It uses a plugin-based domain architecture where each feature (auth, channels, messages, voice, admin) is an isolated Fastify plugin with its own routes and service layer. Data is persisted in SQLite via Drizzle ORM. Authentication uses JWT token pairs with bcrypt password hashing. Voice/video is handled by a mediasoup SFU (Selective Forwarding Unit) with coturn for NAT traversal. The server enforces zero-telemetry privacy and never sees plaintext message content.
+The server is a Fastify 5 Node.js application providing REST API, WebSocket, and WebRTC media services. It uses a plugin-based domain architecture where each feature (auth, channels, messages, voice, admin) is an isolated Fastify plugin with its own routes and service layer. Data is persisted in PostgreSQL (Supabase managed Postgres in production) via Drizzle ORM with a dual-mode connection layer (postgres.js for production, PGlite for tests). Authentication uses JWT token pairs with bcrypt password hashing. Voice/video is handled by a mediasoup SFU (Selective Forwarding Unit) with coturn for NAT traversal. The server enforces zero-telemetry privacy and never sees plaintext message content.
 
 ## Architecture Overview
 
@@ -47,8 +47,9 @@ The server is a Fastify 5 Node.js application providing REST API, WebSocket, and
             └──────────────────────────────────────────┘
                          │              │
                          ▼              ▼
-                   SQLite (WAL)    mediasoup Worker
-                   (better-sqlite3)  (C++ subprocess)
+                   PostgreSQL       mediasoup Worker
+                   (Supabase /       (C++ subprocess)
+                    PGlite)
                                         │
                                         ▼
                                   coturn (TURN/STUN)
@@ -153,26 +154,48 @@ plugins/{domain}/
 
 ### Connection (`db/connection.ts`)
 
-- SQLite via `better-sqlite3` (synchronous, no connection pool)
-- WAL mode for file-based databases (concurrent reads during writes)
-- Foreign keys enabled via `PRAGMA foreign_keys = ON`
-- `:memory:` support for testing
+Dual-mode connection layer — the same `AppDatabase` type is used throughout the application regardless of which driver is active:
+
+- **Production (postgres.js):** When `DATABASE_URL` is set. Connection pool with configurable size (`DB_POOL_MAX`, default 10), idle timeout, connect timeout, and 30-minute `max_lifetime` for Supabase connection rotation. Statement timeout of 30s on application connections. Supabase URLs validated for `sslmode=require`.
+- **Testing (PGlite):** When `DATABASE_URL` is not set. @electric-sql/pglite provides an embedded in-memory Postgres instance — full Postgres compatibility with no external dependencies.
+- All database operations are **async** (`await`) — both drivers are async, unlike the previous better-sqlite3 which was synchronous.
+- `withDbRetry()` wrapper available for retrying transient Postgres errors (connection resets, serialization failures) on the server side.
 
 ### Schema (`db/schema.ts`)
 
-6 tables, 33 columns. See [Data Models](./data-models-server.md) for full schema.
+6 tables, 31 columns. Uses `pgTable`, `pgEnum`, `uuid()`, `timestamp()`, `boolean()`. See [Data Models](./data-models-server.md) for full schema.
 
 ```
-users ──┬── sessions (1:N, user_id)
-        ├── invites (1:N, created_by)
-        ├── bans (1:N, user_id + banned_by)
-        └── messages (1:N, user_id)
-               └── channels (N:1, channel_id)
+users ──┬── sessions (1:N, user_id, ON DELETE CASCADE)
+        ├── invites (1:N, created_by, ON DELETE CASCADE)
+        ├── bans (1:N, user_id + banned_by, ON DELETE CASCADE)
+        └── messages (1:N, user_id, ON DELETE CASCADE)
+               └── channels (N:1, channel_id, ON DELETE CASCADE)
 ```
+
+**pgEnums:** `role` (`'owner'`, `'user'`), `channel_type` (`'text'`, `'voice'`)
+
+**Key type mappings (SQLite → Postgres):**
+- `text()` + `crypto.randomUUID()` → `uuid().defaultRandom()`
+- `integer({ mode: 'boolean' })` → `boolean()`
+- `text({ enum: [...] })` → `pgEnum()`
+- `integer` (Unix timestamps) → `timestamp('...', { withTimezone: true })` (native Date objects)
 
 ### Migrations (`drizzle/`)
 
-4 sequential SQL migrations managed by drizzle-kit. Auto-applied on server startup via `runMigrations()`.
+1 consolidated SQL migration managed by drizzle-kit (previous 4 SQLite migrations replaced). Auto-applied on server startup via `runMigrations()`. Migration runner uses a separate connection without statement timeout to avoid DDL operations hitting the 30s limit.
+
+### Cursor Pagination
+
+Message retrieval uses opaque base64url-encoded cursors instead of raw rowid/offset:
+- Client sends `?cursor=<opaque>&limit=N`
+- Server decodes cursor to `(created_at, id)` tuple for keyset pagination against the `messages_channel_created_idx` composite index
+- Response uses `ApiPaginatedList<T>` type: `{ data: [...], nextCursor: string | null }`
+- `nextCursor: null` signals end of results
+
+### WebSocket Error Handling for DB Failures
+
+Transient database errors during WebSocket message handling (e.g., `text:send`) are communicated via a `TEXT_ERROR` frame (`{ type: "text:error", payload: { message } }`) instead of closing the WebSocket connection. This allows the client to display an error and retry without losing the WebSocket session.
 
 ## Authentication Architecture
 
@@ -360,17 +383,23 @@ server/src/index.ts:
 │  │  :80/443  │  │ :3000  │  │    :3478     │ │
 │  │           │  │        │  │ :49152-49252 │ │
 │  │ TLS term  │──│ API+WS │  │ TURN relay   │ │
-│  │ Rate limit│  │ SQLite │  │              │ │
+│  │ Rate limit│  │ Postgres│  │              │ │
 │  │ Landing pg│  │ mediasoup│ │              │ │
-│  └──────────┘  └────────┘  └──────────────┘ │
-│                                               │
-│  ┌──────────┐  ┌──────────────────────────┐  │
+│  └──────────┘  └───┬────┘  └──────────────┘ │
+│                     │                         │
+│  ┌──────────┐  ┌───┴──────────────────────┐  │
 │  │ certbot   │  │     Persistent Data      │  │
-│  │ (12h cron)│  │  ./data/sqlite/  (DB)    │  │
-│  └──────────┘  │  ./data/certs/   (TLS)   │  │
-│                 │  ./data/downloads/(apps) │  │
+│  │ (12h cron)│  │  ./data/certs/   (TLS)   │  │
+│  └──────────┘  │  ./data/downloads/(apps) │  │
 │                 └──────────────────────────┘  │
-└─────────────────────────────────────────────┘
+└──────────────────────┬──────────────────────┘
+                       │ DATABASE_URL
+                       ▼
+              ┌──────────────────┐
+              │  Supabase        │
+              │  Managed Postgres│
+              │  (external)      │
+              └──────────────────┘
 ```
 
 **Health check:** `GET /api/health` every 30s (Docker), 30 retries on deploy (release.yml).
@@ -381,13 +410,13 @@ server/src/index.ts:
 
 | Category | Count | Approach |
 |----------|-------|----------|
-| Route integration tests | 10 | Full Fastify instance with in-memory SQLite |
+| Route integration tests | 10 | Full Fastify instance with PGlite (in-memory Postgres) |
 | Service unit tests | 8 | Direct function testing with test helpers |
 | WebSocket tests | 4 | `injectWS()` for real WebSocket testing |
 | Privacy/security audits | 4 | CORS, telemetry, outbound requests, log redaction |
 | **Total** | **26** | |
 
 Test infrastructure:
-- In-memory SQLite (`:memory:`) for fast, isolated tests
+- PGlite (@electric-sql/pglite) for fast, isolated tests — full Postgres compatibility without an external database
 - Helpers: `setupApp()`, `seedOwner()`, `seedRegularUser()`, `seedUserWithSession()`, `seedInvite()`
 - mediasoup mocked in voice tests (C++ subprocess not started)

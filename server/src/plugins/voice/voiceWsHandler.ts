@@ -55,7 +55,7 @@ export function registerVoiceHandlers(appDb: AppDatabase, logger: FastifyBaseLog
   registerHandler(WS_TYPES.VOICE_STATE, handleVoiceState);
 }
 
-function handleVoiceJoin(ws: WebSocket, message: WsMessage, userId: string): void {
+async function handleVoiceJoin(ws: WebSocket, message: WsMessage, userId: string): Promise<void> {
   const { channelId, rtpCapabilities } = message.payload as { channelId: string; rtpCapabilities?: unknown };
   const requestId = message.id;
 
@@ -65,7 +65,14 @@ function handleVoiceJoin(ws: WebSocket, message: WsMessage, userId: string): voi
   }
 
   // Validate channel exists and is type 'voice'
-  const channel = getChannelById(db, channelId);
+  let channel;
+  try {
+    channel = await getChannelById(db, channelId);
+  } catch (err) {
+    log.error({ err, channelId }, 'Failed to look up voice channel');
+    ws.close(4003, 'Internal error');
+    return;
+  }
   if (!channel) {
     if (requestId) respondError(ws, requestId, 'Channel not found');
     return;

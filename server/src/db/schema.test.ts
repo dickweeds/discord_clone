@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { getTableConfig } from 'drizzle-orm/sqlite-core';
+import { getTableConfig } from 'drizzle-orm/pg-core';
 import { users, sessions, invites, bans, channels } from './schema.js';
 
 describe('Database Schema', () => {

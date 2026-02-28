@@ -1,8 +1,9 @@
 import type { FastifyBaseLogger } from 'fastify';
 import type { WebSocket } from 'ws';
 import type { WsMessage } from 'discord-clone-shared';
+import { WS_TYPES } from 'discord-clone-shared';
 
-export type WsHandler = (ws: WebSocket, message: WsMessage, userId: string) => void;
+export type WsHandler = (ws: WebSocket, message: WsMessage, userId: string) => void | Promise<void>;
 
 const handlers = new Map<string, WsHandler>();
 
@@ -38,7 +39,21 @@ export function routeMessage(ws: WebSocket, raw: string, userId: string, log: Fa
     return;
   }
 
-  handler(ws, message, userId);
+  const result = handler(ws, message, userId);
+  if (result instanceof Promise) {
+    result.catch((err) => {
+      log.error({ err, userId, type: message.type }, 'Unhandled async WS handler error');
+      // Last-resort error frame — ensures the client always gets feedback
+      try {
+        ws.send(JSON.stringify({
+          type: WS_TYPES.TEXT_ERROR,
+          payload: { error: 'INTERNAL_ERROR', tempId: '' },
+        }));
+      } catch {
+        // WS already dead
+      }
+    });
+  }
 }
 
 export function respond(ws: WebSocket, requestId: string, payload: unknown): void {

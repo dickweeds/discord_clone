@@ -45,7 +45,7 @@ export default async function channelRoutes(fastify: FastifyInstance) {
       },
     },
   }, async (_request, reply) => {
-    const channelList = getAllChannels(fastify.db);
+    const channelList = await getAllChannels(fastify.db);
     return reply.send({ data: channelList, count: channelList.length });
   });
 
@@ -82,7 +82,7 @@ export default async function channelRoutes(fastify: FastifyInstance) {
 
     let channel;
     try {
-      channel = createChannel(fastify.db, name.toLowerCase().replace(/\s+/g, '-'), type);
+      channel = await createChannel(fastify.db, name.toLowerCase().replace(/\s+/g, '-'), type);
     } catch (err) {
       if (err instanceof ChannelValidationError) {
         return reply.status(400).send({
@@ -120,7 +120,7 @@ export default async function channelRoutes(fastify: FastifyInstance) {
 
     const { channelId } = request.params as { channelId: string };
     try {
-      deleteChannel(fastify.db, channelId);
+      await deleteChannel(fastify.db, channelId);
     } catch (err) {
       if (err instanceof ChannelNotFoundError) {
         return reply.status(404).send({

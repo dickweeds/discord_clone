@@ -1,26 +1,32 @@
-import { describe, it, expect, afterEach, vi } from 'vitest';
+import { describe, it, expect, beforeAll, beforeEach, afterAll, vi } from 'vitest';
 import type { FastifyInstance } from 'fastify';
 
 vi.hoisted(() => {
   process.env.JWT_ACCESS_SECRET = 'test-secret-key-for-testing';
   process.env.JWT_REFRESH_SECRET = 'test-refresh-secret-key-for-testing';
   process.env.GROUP_ENCRYPTION_KEY = 'rSxlHxEjeJC7RY079zu0Kg9fHWEIdAtGE4s76zAI9Rw';
+  process.env.SERVER_NAME = 'Test Server';
 });
-vi.stubEnv('DATABASE_PATH', ':memory:');
-vi.stubEnv('SERVER_NAME', 'Test Server');
 
-import { setupApp, seedOwner, seedRegularUser } from '../../test/helpers.js';
+import { setupApp, teardownApp, truncateAll, seedOwner, seedRegularUser } from '../../test/helpers.js';
 
 describe('inviteRoutes', () => {
   let app: FastifyInstance;
 
-  afterEach(async () => {
-    if (app) await app.close();
+  beforeAll(async () => {
+    app = await setupApp();
+  });
+
+  afterAll(async () => {
+    await teardownApp();
+  });
+
+  beforeEach(async () => {
+    await truncateAll(app.db);
   });
 
   describe('POST /api/invites', () => {
     it('should create invite with owner token', async () => {
-      app = await setupApp();
       const { token: ownerToken } = await seedOwner(app);
 
       const response = await app.inject({
@@ -38,8 +44,6 @@ describe('inviteRoutes', () => {
     });
 
     it('should return 401 without auth', async () => {
-      app = await setupApp();
-
       const response = await app.inject({
         method: 'POST',
         url: '/api/invites',
@@ -50,7 +54,6 @@ describe('inviteRoutes', () => {
     });
 
     it('should return 403 with non-owner token', async () => {
-      app = await setupApp();
       await seedOwner(app);
       const { token: userToken } = await seedRegularUser(app);
 
@@ -67,7 +70,6 @@ describe('inviteRoutes', () => {
 
   describe('DELETE /api/invites/:id', () => {
     it('should revoke invite with owner token', async () => {
-      app = await setupApp();
       const { token: ownerToken } = await seedOwner(app);
 
       // Create invite first
@@ -88,12 +90,11 @@ describe('inviteRoutes', () => {
     });
 
     it('should return 404 for non-existent invite', async () => {
-      app = await setupApp();
       const { token: ownerToken } = await seedOwner(app);
 
       const response = await app.inject({
         method: 'DELETE',
-        url: '/api/invites/non-existent-id',
+        url: '/api/invites/00000000-0000-0000-0000-000000000099',
         headers: { authorization: `Bearer ${ownerToken}` },
       });
 
@@ -102,7 +103,6 @@ describe('inviteRoutes', () => {
     });
 
     it('should return 403 with non-owner token', async () => {
-      app = await setupApp();
       await seedOwner(app);
       const { token: userToken } = await seedRegularUser(app);
 
@@ -118,7 +118,6 @@ describe('inviteRoutes', () => {
 
   describe('GET /api/invites/:token/validate', () => {
     it('should validate a valid invite token', async () => {
-      app = await setupApp();
       const { token: ownerToken } = await seedOwner(app);
 
       // Create invite
@@ -141,8 +140,6 @@ describe('inviteRoutes', () => {
     });
 
     it('should return 400 for invalid token', async () => {
-      app = await setupApp();
-
       const response = await app.inject({
         method: 'GET',
         url: '/api/invites/nonexistent-token/validate',
@@ -153,7 +150,6 @@ describe('inviteRoutes', () => {
     });
 
     it('should return 400 for revoked invite', async () => {
-      app = await setupApp();
       const { token: ownerToken } = await seedOwner(app);
 
       // Create and revoke invite
@@ -183,7 +179,6 @@ describe('inviteRoutes', () => {
 
   describe('GET /api/invites', () => {
     it('should list all invites with owner token', async () => {
-      app = await setupApp();
       const { token: ownerToken } = await seedOwner(app);
 
       // Create two invites
@@ -211,8 +206,6 @@ describe('inviteRoutes', () => {
     });
 
     it('should return 401 without auth', async () => {
-      app = await setupApp();
-
       const response = await app.inject({
         method: 'GET',
         url: '/api/invites',

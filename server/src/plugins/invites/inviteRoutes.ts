@@ -9,7 +9,7 @@ export default fp(async (fastify: FastifyInstance) => {
     preHandler: [requireOwner],
   }, async (request, reply) => {
     const user = getAuthenticatedUser(request);
-    const invite = createInvite(fastify.db, user.userId);
+    const invite = await createInvite(fastify.db, user.userId);
     return reply.status(201).send({
       data: {
         id: invite.id,
@@ -32,8 +32,8 @@ export default fp(async (fastify: FastifyInstance) => {
     },
     preHandler: [requireOwner],
   }, async (request, reply) => {
-    const revoked = revokeInvite(fastify.db, request.params.id);
-    if (!revoked) {
+    const found = await revokeInvite(fastify.db, request.params.id);
+    if (!found) {
       return reply.status(404).send({
         error: { code: 'INVITE_NOT_FOUND', message: 'Invite not found' },
       });
@@ -51,7 +51,7 @@ export default fp(async (fastify: FastifyInstance) => {
       },
     },
   }, async (request, reply) => {
-    const result = validateInvite(fastify.db, request.params.token);
+    const result = await validateInvite(fastify.db, request.params.token);
     if (!result.valid) {
       return reply.status(400).send({
         error: {
@@ -69,7 +69,7 @@ export default fp(async (fastify: FastifyInstance) => {
   fastify.get('/api/invites', {
     preHandler: [requireOwner],
   }, async (_request, reply) => {
-    const allInvites = getInvites(fastify.db);
+    const allInvites = await getInvites(fastify.db);
     return reply.status(200).send({
       data: allInvites.map(inv => ({
         id: inv.id,
