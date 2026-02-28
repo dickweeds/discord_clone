@@ -1,5 +1,5 @@
 # Stage 1: Build — compile native deps (mediasoup) + TypeScript
-FROM node:22-alpine AS builder
+FROM node:25-alpine AS builder
 RUN apk add --no-cache python3 py3-pip make g++ linux-headers
 
 WORKDIR /app
@@ -28,7 +28,7 @@ RUN npm run build -w shared && npm run build -w server
 RUN npm prune --omit=dev
 
 # Stage 2: Production — minimal runtime image
-FROM node:22-alpine
+FROM node:25-alpine
 
 # mediasoup worker requires python3 at runtime
 # Remove npm (not needed at runtime) to eliminate bundled vulnerable deps

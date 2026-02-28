@@ -26,6 +26,7 @@ export default [
   },
   {
     files: ['server/src/**/*.ts'],
+    ignores: ['server/src/scripts/**'],
     rules: {
       'no-console': 'error',
     },

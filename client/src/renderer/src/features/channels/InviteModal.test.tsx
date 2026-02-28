@@ -86,7 +86,7 @@ describe('InviteModal', () => {
     expect(mockGenerateInvite).toHaveBeenCalledOnce();
     await waitFor(() => {
       expect(clipSpy).toHaveBeenCalledWith(
-        expect.stringContaining('/#/register/new-token'),
+        'discord-clone://invite/new-token',
       );
     });
   });

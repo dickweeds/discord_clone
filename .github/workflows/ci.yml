@@ -6,6 +6,7 @@ on:
 
 permissions:
   contents: read
+  pull-requests: read
 
 jobs:
   check-paths:
@@ -13,7 +14,7 @@ jobs:
     outputs:
       infra: ${{ steps.filter.outputs.infra }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       - uses: dorny/paths-filter@v3
         id: filter
         with:
@@ -24,11 +25,11 @@ jobs:
   test-and-lint:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v6
         with:
-          node-version: 22
+          node-version: 25
           cache: 'npm'
 
       - name: Install dependencies
@@ -67,8 +68,8 @@ jobs:
     needs: [check-paths]
     if: needs.check-paths.outputs.infra == 'true'
     steps:
-      - uses: actions/checkout@v4
-      - uses: hashicorp/setup-terraform@v3
+      - uses: actions/checkout@v6
+      - uses: hashicorp/setup-terraform@v4
       - name: Terraform Init (no backend)
         run: cd infrastructure && terraform init -backend=false
       - name: Terraform Validate
