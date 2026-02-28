@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.99.122](https://github.com/AidenWoodside/discord_clone/compare/v0.99.121...v0.99.122) (2026-02-28)
+
+
+### Bug Fixes
+
+* allow Docker Compose major versions above 2 in deploy script ([feff74c](https://github.com/AidenWoodside/discord_clone/commit/feff74c572b4a7ef1b57a42397a5dc6d2743f4b8))
+* allow Docker Compose major versions above 2 in deploy script ([aee7e40](https://github.com/AidenWoodside/discord_clone/commit/aee7e401453c31ccd0ecb258439f0ca2faa5e3d8))
+
 ## [0.99.121](https://github.com/AidenWoodside/discord_clone/compare/v0.99.120...v0.99.121) (2026-02-28)
 
 
