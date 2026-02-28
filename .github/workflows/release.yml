@@ -305,7 +305,7 @@ jobs:
             --instance-ids "${{ secrets.EC2_INSTANCE_ID }}" \
             --document-name "AWS-RunShellScript" \
             --timeout-seconds 60 \
-            --parameters 'commands=["export HOME=/root && export PATH=$PATH:/usr/local/bin:/usr/bin && git config --global --add safe.directory /home/ubuntu/discord_clone && cd /home/ubuntu/discord_clone && git fetch origin main && git checkout origin/main -- docker-compose.yml docker/ scripts/ && aws s3 sync s3://discord-clone-assets-966917019849/ data/downloads/"]' \
+            --parameters 'commands=["export HOME=/root && export PATH=$PATH:/usr/local/bin:/usr/bin:/usr/local/aws-cli/v2/current/bin && git config --global --add safe.directory /home/ubuntu/discord_clone && cd /home/ubuntu/discord_clone && git fetch origin main && git checkout origin/main -- docker-compose.yml docker/ scripts/ && aws s3 sync s3://discord-clone-assets-966917019849/ data/downloads/"]' \
             --query "Command.CommandId" --output text)
 
           for i in $(seq 1 15); do
@@ -329,7 +329,7 @@ jobs:
             --instance-ids "${{ secrets.EC2_INSTANCE_ID }}" \
             --document-name "AWS-RunShellScript" \
             --timeout-seconds 300 \
-            --parameters 'commands=["export HOME=/root && export PATH=$PATH:/usr/local/bin:/usr/bin && bash /home/ubuntu/discord_clone/scripts/deploy.sh ${{ github.ref_name }}"]' \
+            --parameters 'commands=["export HOME=/root && export PATH=$PATH:/usr/local/bin:/usr/bin:/usr/local/aws-cli/v2/current/bin && bash /home/ubuntu/discord_clone/scripts/deploy.sh ${{ github.ref_name }}"]' \
             --query "Command.CommandId" --output text)
 
           # Poll with structured status parsing — never grep mixed output
@@ -362,7 +362,7 @@ jobs:
           done
 
       - name: Notify on failure
-        if: failure()
+        if: failure() && secrets.DEPLOY_WEBHOOK_URL != ''
         run: |
           curl -H "Content-Type: application/json" \
             -d '{"content": "**Deploy FAILED:** `${{ github.ref_name }}` — [View logs](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})"}' \
