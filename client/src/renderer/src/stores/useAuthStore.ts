@@ -26,6 +26,8 @@ interface AuthState {
   clearError: () => void;
 }
 
+let restoreInFlight = false;
+
 const useAuthStore = create<AuthState>((set, get) => {
   // Configure the API client to integrate with this store
   configureApiClient({
@@ -314,6 +316,10 @@ const useAuthStore = create<AuthState>((set, get) => {
     },
 
     restoreSession: async () => {
+      // Guard against React StrictMode double-invocation racing two refresh calls
+      if (restoreInFlight) return;
+      restoreInFlight = true;
+
       set({ isLoading: true });
 
       try {
@@ -375,6 +381,8 @@ const useAuthStore = create<AuthState>((set, get) => {
       } catch (err) {
         console.warn('safeStorage unavailable:', err instanceof Error ? err.message : err);
         set({ isLoading: false });
+      } finally {
+        restoreInFlight = false;
       }
     },
 
