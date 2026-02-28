@@ -5,6 +5,9 @@
 # 4. Push: git push && git push --tags
 # Everything else happens automatically.
 #
+# Conditional builds: only client or server jobs run based on what changed
+# since the previous tag. shared/ changes trigger both sides.
+#
 # Deployment Secrets:
 #   AWS_DEPLOY_ROLE_ARN — IAM role ARN for OIDC-federated deploy
 #   EC2_INSTANCE_ID     — Target EC2 instance ID
@@ -41,8 +44,65 @@ jobs:
           fi
           echo "Version validated: $TAG matches $PKG_VERSION"
 
-  build-electron:
+  detect-changes:
     needs: [validate-version]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    outputs:
+      client_changed: ${{ steps.changes.outputs.client_changed }}
+      server_changed: ${{ steps.changes.outputs.server_changed }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - name: Detect changed paths since previous tag
+        id: changes
+        run: |
+          CURRENT_TAG="${{ github.ref_name }}"
+
+          # Find previous tag (version-sorted, pick the one after current)
+          PREV_TAG=$(git tag --sort=-version:refname | grep -A1 "^${CURRENT_TAG}$" | tail -1)
+
+          # First tag ever, or only one tag — build everything
+          if [ -z "$PREV_TAG" ] || [ "$PREV_TAG" = "$CURRENT_TAG" ]; then
+            echo "No previous tag — full build"
+            echo "client_changed=true" >> "$GITHUB_OUTPUT"
+            echo "server_changed=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          echo "Comparing $PREV_TAG..$CURRENT_TAG"
+          CHANGED_FILES=$(git diff --name-only "$PREV_TAG".."$CURRENT_TAG")
+          echo "Changed files:"
+          echo "$CHANGED_FILES"
+
+          CLIENT=false
+          SERVER=false
+
+          while IFS= read -r file; do
+            case "$file" in
+              client/*)                         CLIENT=true ;;
+              server/*)                         SERVER=true ;;
+              shared/*)                         CLIENT=true; SERVER=true ;;
+              package-lock.json)                CLIENT=true; SERVER=true ;;
+              tsconfig.base.json)               CLIENT=true; SERVER=true ;;
+              .github/workflows/release.yml)    CLIENT=true; SERVER=true ;;
+              .dockerignore)                    SERVER=true ;;
+              docker-compose.yml)               SERVER=true ;;
+              docker/*)                         SERVER=true ;;
+              scripts/*)                        SERVER=true ;;
+            esac
+          done <<< "$CHANGED_FILES"
+
+          echo "client_changed=$CLIENT" >> "$GITHUB_OUTPUT"
+          echo "server_changed=$SERVER" >> "$GITHUB_OUTPUT"
+          echo "Results: client_changed=$CLIENT, server_changed=$SERVER"
+
+  build-electron:
+    needs: [validate-version, detect-changes]
+    if: needs.detect-changes.outputs.client_changed == 'true'
     strategy:
       fail-fast: false
       matrix:
@@ -76,7 +136,8 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
   build-server-image:
-    needs: [validate-version]
+    needs: [validate-version, detect-changes]
+    if: needs.detect-changes.outputs.server_changed == 'true'
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -116,11 +177,15 @@ jobs:
           exit-code: '1'
 
   publish-release:
-    needs: [build-electron]
-    if: needs.build-electron.result == 'success'
+    needs: [detect-changes, build-electron]
+    if: |
+      always() &&
+      needs.detect-changes.outputs.client_changed == 'true' &&
+      needs.build-electron.result == 'success'
     runs-on: ubuntu-latest
     permissions:
       contents: write
+      id-token: write
     steps:
       - uses: actions/checkout@v6
 
@@ -147,22 +212,6 @@ jobs:
               exit 1
             fi
           fi
-
-  deploy-server:
-    needs: [publish-release, build-server-image]
-    if: needs.publish-release.result == 'success'
-    runs-on: ubuntu-latest
-    timeout-minutes: 30
-    environment:
-      name: production
-    concurrency:
-      group: deploy-production
-      cancel-in-progress: false
-    permissions:
-      id-token: write
-      contents: read
-    steps:
-      - uses: actions/checkout@v6
 
       - name: Configure AWS credentials via OIDC
         uses: aws-actions/configure-aws-credentials@v4
@@ -208,6 +257,32 @@ jobs:
 
       - name: Upload download assets to S3
         run: aws s3 cp downloads/ s3://discord-clone-assets-966917019849/ --recursive
+
+  deploy-server:
+    needs: [detect-changes, build-server-image, publish-release]
+    if: |
+      always() &&
+      needs.detect-changes.outputs.server_changed == 'true' &&
+      needs.build-server-image.result == 'success' &&
+      (needs.publish-release.result == 'success' || needs.publish-release.result == 'skipped')
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    environment:
+      name: production
+    concurrency:
+      group: deploy-production
+      cancel-in-progress: false
+    permissions:
+      id-token: write
+      contents: read
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Configure AWS credentials via OIDC
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_DEPLOY_ROLE_ARN }}
+          aws-region: us-east-1
 
       - name: Sync config files via SSM
         run: |
