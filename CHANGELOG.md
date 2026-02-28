@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.99.121](https://github.com/AidenWoodside/discord_clone/compare/v0.99.120...v0.99.121) (2026-02-28)
+
+
+### Bug Fixes
+
+* use env var to guard webhook URL in deploy step ([631cfc5](https://github.com/AidenWoodside/discord_clone/commit/631cfc53ea0d89714445c84fe14e37dbfb7d68ae))
+* use env var to guard webhook URL instead of secrets context ([5bc645f](https://github.com/AidenWoodside/discord_clone/commit/5bc645f475950c5cbf915420b9c48cd36793468c))
+
 ## [0.99.120](https://github.com/AidenWoodside/discord_clone/compare/v0.99.119...v0.99.120) (2026-02-28)
 
 
