@@ -14,7 +14,7 @@ COPY shared/package.json shared/
 # This is intentional — the lockfile pins patched versions of transitive deps,
 # and mediasoup C++ compilation dominates build time regardless of package count.
 # Docker layer caching (GHA cache) skips this step when lockfile is unchanged.
-RUN npm ci
+RUN --mount=type=cache,target=/root/.npm npm ci
 
 # Copy source and compile TypeScript
 COPY shared/src/ shared/src/
