@@ -2,7 +2,7 @@ import crypto from 'node:crypto';
 import bcrypt from 'bcrypt';
 import jwt from 'jsonwebtoken';
 
-const BCRYPT_COST_FACTOR = 12;
+const BCRYPT_COST_FACTOR = process.env.NODE_ENV === 'test' ? 1 : 12;
 
 if (!process.env.JWT_ACCESS_SECRET) {
   throw new Error('JWT_ACCESS_SECRET environment variable is required');

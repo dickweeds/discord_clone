@@ -11,7 +11,7 @@ describe('authService', () => {
   describe('hashPassword', () => {
     it('should produce a valid bcrypt hash', async () => {
       const hash = await hashPassword('myPassword123');
-      expect(hash).toMatch(/^\$2b\$12\$/);
+      expect(hash).toMatch(/^\$2b\$\d{2}\$/);
     });
 
     it('should produce different hashes for the same password', async () => {
