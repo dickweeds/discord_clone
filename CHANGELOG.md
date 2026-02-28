@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.99.118](https://github.com/AidenWoodside/discord_clone/compare/v0.99.117...v0.99.118) (2026-02-28)
+
+
+### Performance Improvements
+
+* switch to Debian slim base image for prebuilt mediasoup worker ([6e948e9](https://github.com/AidenWoodside/discord_clone/commit/6e948e9994fdb5c16be5267a9ce42082670a128a))
+* switch to Debian slim for prebuilt mediasoup worker ([25e2c8c](https://github.com/AidenWoodside/discord_clone/commit/25e2c8cad2762d85dda920eb5170d7a18742a68e))
+
 ## [0.99.117](https://github.com/AidenWoodside/discord_clone/compare/v0.99.116...v0.99.117) (2026-02-28)
 
 
