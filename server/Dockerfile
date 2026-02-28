@@ -31,7 +31,9 @@ RUN npm prune --omit=dev
 FROM node:20-alpine
 
 # mediasoup worker requires python3 at runtime
-RUN apk add --no-cache python3
+# Remove npm (not needed at runtime) to eliminate bundled vulnerable deps
+RUN apk add --no-cache python3 \
+ && rm -rf /usr/local/lib/node_modules/npm /usr/local/bin/npm /usr/local/bin/npx
 
 # Non-root user for security
 RUN addgroup -S appgroup && adduser -S appuser -G appgroup
