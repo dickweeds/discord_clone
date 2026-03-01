@@ -24,6 +24,14 @@ export async function joinVoiceChannel(channelId: string): Promise<JoinVoiceResu
   // 2. Initialize mediasoup Device
   await mediaService.initDevice(routerRtpCapabilities as Parameters<typeof mediaService.initDevice>[0]);
 
+  // 2b. Send device rtpCapabilities to server so it can validate consume requests
+  const device = mediaService.getDevice();
+  if (device) {
+    await wsClient.request<void>('voice:set-rtp-capabilities', {
+      rtpCapabilities: device.rtpCapabilities,
+    });
+  }
+
   // 3. Create send transport
   const sendTransportResponse = await wsClient.request<VoiceCreateTransportResponse>(
     'voice:create-transport',
@@ -43,6 +51,9 @@ export async function joinVoiceChannel(channelId: string): Promise<JoinVoiceResu
     recvTransportResponse.transportParams as Parameters<typeof mediaService.createRecvTransport>[0],
     recvTransportResponse.iceServers as RTCIceServer[],
   );
+
+  // 4b. Consume any producers that arrived before recv transport was ready
+  wsClient.flushPendingProducers();
 
   // 5. Read selected device from store (if user has a preference)
   const { useVoiceStore } = await import('../stores/useVoiceStore');

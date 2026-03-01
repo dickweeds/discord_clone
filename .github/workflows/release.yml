@@ -143,6 +143,8 @@ jobs:
             client/dist/*.AppImage
             client/dist/*.dmg
             client/dist/*Setup*.exe
+            client/dist/*.yml
+            client/dist/*.blockmap
           if-no-files-found: error
 
   build-server-image:

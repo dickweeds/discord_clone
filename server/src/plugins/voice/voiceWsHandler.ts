@@ -21,6 +21,7 @@ import {
   setPeerTransport,
   setPeerProducer,
   setPeerVideoProducer,
+  setPeerRtpCapabilities,
   addPeerConsumer,
   removePeer,
   clearAllVoiceState,
@@ -38,7 +39,7 @@ export function registerVoiceHandlers(appDb: AppDatabase, logger: FastifyBaseLog
   onWorkerDied(() => {
     const peers = getAllPeers();
     for (const [userId, peer] of peers) {
-      broadcastToChannel(peer.channelId, userId, WS_TYPES.VOICE_PEER_LEFT, { userId, channelId: peer.channelId });
+      broadcastToServer(userId, WS_TYPES.VOICE_PEER_LEFT, { userId, channelId: peer.channelId });
     }
     clearAllVoiceState();
     log.warn('All voice sessions cleared due to mediasoup Worker death');
@@ -52,10 +53,12 @@ export function registerVoiceHandlers(appDb: AppDatabase, logger: FastifyBaseLog
   registerHandler(WS_TYPES.VOICE_CONSUME, handleConsume);
   registerHandler(WS_TYPES.VOICE_CONSUMER_RESUME, handleConsumerResume);
   registerHandler(WS_TYPES.VOICE_STATE, handleVoiceState);
+  registerHandler(WS_TYPES.VOICE_PRESENCE_SYNC, handleVoicePresenceSync);
+  registerHandler(WS_TYPES.VOICE_SET_RTP_CAPABILITIES, handleSetRtpCapabilities);
 }
 
 async function handleVoiceJoin(ws: WebSocket, message: WsMessage, userId: string): Promise<void> {
-  const { channelId, rtpCapabilities } = message.payload as { channelId: string; rtpCapabilities?: unknown };
+  const { channelId } = message.payload as { channelId: string };
   const requestId = message.id;
 
   if (!channelId) {
@@ -81,7 +84,7 @@ async function handleVoiceJoin(ws: WebSocket, message: WsMessage, userId: string
     return;
   }
 
-  const existingPeers = joinVoiceChannel(userId, channelId, rtpCapabilities);
+  const existingPeers = joinVoiceChannel(userId, channelId);
   if (existingPeers === null) {
     if (requestId) respondError(ws, requestId, 'Voice channel is full');
     return;
@@ -92,8 +95,34 @@ async function handleVoiceJoin(ws: WebSocket, message: WsMessage, userId: string
     respond(ws, requestId, { routerRtpCapabilities, existingPeers });
   }
 
-  // Broadcast peer-joined to others in channel
-  broadcastToChannel(channelId, userId, WS_TYPES.VOICE_PEER_JOINED, { userId, channelId });
+  // Broadcast peer-joined to all connected clients
+  broadcastToServer(userId, WS_TYPES.VOICE_PEER_JOINED, { userId, channelId });
+
+  // Send existing producers to the newly-joined peer
+  for (const peerId of existingPeers) {
+    const existingPeer = getPeer(peerId);
+    if (!existingPeer) continue;
+    if (existingPeer.producer) {
+      try {
+        ws.send(JSON.stringify({
+          type: WS_TYPES.VOICE_NEW_PRODUCER,
+          payload: { producerId: existingPeer.producer.id, peerId, kind: 'audio' },
+        }));
+      } catch {
+        log.debug({ userId, peerId }, 'Failed to send existing audio producer');
+      }
+    }
+    if (existingPeer.videoProducer) {
+      try {
+        ws.send(JSON.stringify({
+          type: WS_TYPES.VOICE_NEW_PRODUCER,
+          payload: { producerId: existingPeer.videoProducer.id, peerId, kind: 'video' },
+        }));
+      } catch {
+        log.debug({ userId, peerId }, 'Failed to send existing video producer');
+      }
+    }
+  }
 
   log.info({ userId, channelId }, 'User joined voice channel');
 }
@@ -108,7 +137,7 @@ function handleVoiceLeave(ws: WebSocket, message: WsMessage, userId: string): vo
   }
 
   if (channelId) {
-    broadcastToChannel(channelId, userId, WS_TYPES.VOICE_PEER_LEFT, { userId, channelId });
+    broadcastToServer(userId, WS_TYPES.VOICE_PEER_LEFT, { userId, channelId });
     log.info({ userId, channelId }, 'User left voice channel');
   }
 }
@@ -262,13 +291,13 @@ async function handleConsume(ws: WebSocket, message: WsMessage, userId: string):
     return;
   }
 
-  const router = getRouter();
-  if (!router.canConsume({ producerId, rtpCapabilities: peer.rtpCapabilities as Parameters<typeof router.canConsume>[0]['rtpCapabilities'] })) {
-    if (requestId) respondError(ws, requestId, 'Cannot consume this producer');
-    return;
-  }
-
   try {
+    const router = getRouter();
+    if (!router.canConsume({ producerId, rtpCapabilities: peer.rtpCapabilities as Parameters<typeof router.canConsume>[0]['rtpCapabilities'] })) {
+      if (requestId) respondError(ws, requestId, 'Cannot consume this producer');
+      return;
+    }
+
     const consumer = await peer.recvTransport.consume({
       producerId,
       rtpCapabilities: peer.rtpCapabilities as Parameters<typeof peer.recvTransport.consume>[0]['rtpCapabilities'],
@@ -358,8 +387,53 @@ function handleVoiceState(_ws: WebSocket, message: WsMessage, userId: string): v
 export function handleVoiceDisconnect(userId: string): void {
   const channelId = removePeer(userId);
   if (channelId) {
-    broadcastToChannel(channelId, userId, WS_TYPES.VOICE_PEER_LEFT, { userId, channelId });
+    broadcastToServer(userId, WS_TYPES.VOICE_PEER_LEFT, { userId, channelId });
     log.info({ userId, channelId }, 'Voice cleanup on disconnect');
+  }
+}
+
+function handleVoicePresenceSync(ws: WebSocket, message: WsMessage, _userId: string): void {
+  const requestId = message.id;
+  const allPeers = getAllPeers();
+  const participants: { userId: string; channelId: string }[] = [];
+  for (const [, peer] of allPeers) {
+    participants.push({ userId: peer.userId, channelId: peer.channelId });
+  }
+  if (requestId) {
+    respond(ws, requestId, { participants });
+  }
+}
+
+function handleSetRtpCapabilities(ws: WebSocket, message: WsMessage, userId: string): void {
+  const { rtpCapabilities } = message.payload as { rtpCapabilities: unknown };
+  const requestId = message.id;
+
+  if (!rtpCapabilities || typeof rtpCapabilities !== 'object') {
+    if (requestId) respondError(ws, requestId, 'rtpCapabilities must be a non-null object');
+    return;
+  }
+
+  const peer = getPeer(userId);
+  if (!peer) {
+    if (requestId) respondError(ws, requestId, 'Not in a voice channel');
+    return;
+  }
+
+  setPeerRtpCapabilities(userId, rtpCapabilities);
+  if (requestId) respond(ws, requestId, {});
+}
+
+function broadcastToServer(excludeUserId: string, type: string, payload: unknown): void {
+  const clients = getClients();
+  for (const [userId, ws] of clients) {
+    if (userId === excludeUserId) continue;
+    if (ws && ws.readyState === ws.OPEN) {
+      try {
+        ws.send(JSON.stringify({ type, payload }));
+      } catch {
+        log.debug({ userId, type }, 'Failed to broadcast to client');
+      }
+    }
   }
 }
 

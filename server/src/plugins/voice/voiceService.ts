@@ -17,7 +17,6 @@ const voicePeers = new Map<string, VoicePeer>();
 export function joinVoiceChannel(
   userId: string,
   channelId: string,
-  rtpCapabilities: unknown,
 ): string[] | null {
   // If already in a voice channel, leave it first
   if (voicePeers.has(userId)) {
@@ -33,7 +32,7 @@ export function joinVoiceChannel(
   const peer: VoicePeer = {
     userId,
     channelId,
-    rtpCapabilities,
+    rtpCapabilities: null,
     sendTransport: null,
     recvTransport: null,
     producer: null,
@@ -101,6 +100,12 @@ export function setPeerVideoProducer(userId: string, producer: Producer): void {
   const peer = voicePeers.get(userId);
   if (!peer) throw new Error(`Voice peer not found: ${userId}`);
   peer.videoProducer = producer;
+}
+
+export function setPeerRtpCapabilities(userId: string, rtpCapabilities: unknown): void {
+  const peer = voicePeers.get(userId);
+  if (!peer) throw new Error(`Voice peer not found: ${userId}`);
+  peer.rtpCapabilities = rtpCapabilities;
 }
 
 export function addPeerConsumer(userId: string, consumer: Consumer): void {
