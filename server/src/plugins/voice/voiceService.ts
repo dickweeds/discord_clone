@@ -103,6 +103,12 @@ export function setPeerVideoProducer(userId: string, producer: Producer): void {
   peer.videoProducer = producer;
 }
 
+export function setPeerRtpCapabilities(userId: string, rtpCapabilities: unknown): void {
+  const peer = voicePeers.get(userId);
+  if (!peer) throw new Error(`Voice peer not found: ${userId}`);
+  peer.rtpCapabilities = rtpCapabilities;
+}
+
 export function addPeerConsumer(userId: string, consumer: Consumer): void {
   const peer = voicePeers.get(userId);
   if (!peer) throw new Error(`Voice peer not found: ${userId}`);

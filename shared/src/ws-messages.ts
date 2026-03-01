@@ -119,6 +119,10 @@ export interface VoiceChannelPresencePayload {
   participants: { userId: string; channelId: string }[];
 }
 
+export interface VoiceSetRtpCapabilitiesPayload {
+  rtpCapabilities: unknown;
+}
+
 // Presence
 export interface PresenceUpdatePayload {
   userId: string;
@@ -183,6 +187,7 @@ export const WS_TYPES = {
   VOICE_PEER_JOINED: 'voice:peer-joined',
   VOICE_PEER_LEFT: 'voice:peer-left',
   VOICE_PRESENCE_SYNC: 'voice:presence-sync',
+  VOICE_SET_RTP_CAPABILITIES: 'voice:set-rtp-capabilities',
   PRESENCE_UPDATE: 'presence:update',
   PRESENCE_SYNC: 'presence:sync',
   CHANNEL_UPDATE: 'channel:update',

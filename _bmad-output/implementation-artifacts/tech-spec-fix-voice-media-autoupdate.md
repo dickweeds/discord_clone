@@ -2,7 +2,7 @@
 title: 'Fix Voice Presence, Audio/Video Consumption, and Auto-Update'
 slug: 'fix-voice-media-autoupdate'
 created: '2026-03-01'
-status: 'ready-for-dev'
+status: 'implementation-complete'
 stepsCompleted: [1, 2, 3, 4]
 tech_stack: ['mediasoup v3.19.x server / v3.18.x client', 'Fastify WebSocket (ws)', 'Zustand v5.0.x', 'React 18+', 'TypeScript 5.x strict', 'electron-updater', 'electron-builder', 'GitHub Actions', 'Vitest']
 files_to_modify: ['server/src/plugins/voice/voiceWsHandler.ts', 'server/src/plugins/voice/voiceService.ts', 'server/src/plugins/voice/voiceWsHandler.test.ts', 'client/src/renderer/src/services/voiceService.ts', 'client/src/renderer/src/services/wsClient.ts', 'shared/src/ws-messages.ts', '.github/workflows/release.yml']
@@ -102,7 +102,7 @@ Four production bugs degrade the voice/video and auto-update experience:
 
 Tasks are ordered by dependency — shared types first, then server state, then server handlers, then client, then CI/CD.
 
-- [ ] Task 1: Add shared WS types for `voice:set-rtp-capabilities`
+- [x] Task 1: Add shared WS types for `voice:set-rtp-capabilities`
   - File: `shared/src/ws-messages.ts`
   - Action: Add `VOICE_SET_RTP_CAPABILITIES: 'voice:set-rtp-capabilities'` to the `WS_TYPES` constant object (after line 185, alongside other voice types). Add a new payload interface:
     ```typescript
@@ -112,7 +112,7 @@ Tasks are ordered by dependency — shared types first, then server state, then 
     ```
   - Notes: The `rtpCapabilities` type is `unknown` to match the existing convention used by `VoiceJoinPayload.rtpCapabilities` and `VoicePeer.rtpCapabilities`.
 
-- [ ] Task 2: Add `setPeerRtpCapabilities()` to server voice service
+- [x] Task 2: Add `setPeerRtpCapabilities()` to server voice service
   - File: `server/src/plugins/voice/voiceService.ts`
   - Action: Add a new exported function after `setPeerVideoProducer()` (after line 104):
     ```typescript
@@ -124,7 +124,7 @@ Tasks are ordered by dependency — shared types first, then server state, then 
     ```
   - Notes: Follows the same pattern as `setPeerTransport()`, `setPeerProducer()`, etc.
 
-- [ ] Task 3: Add `broadcastToServer()` function to voice WS handler
+- [x] Task 3: Add `broadcastToServer()` function to voice WS handler
   - File: `server/src/plugins/voice/voiceWsHandler.ts`
   - Action: Add a new function after `broadcastToChannel()` (after line 381):
     ```typescript
@@ -144,7 +144,7 @@ Tasks are ordered by dependency — shared types first, then server state, then 
     ```
   - Notes: Same signature and error handling pattern as `broadcastToChannel` but iterates all WS clients instead of just voice peers.
 
-- [ ] Task 4: Switch voice presence events to use `broadcastToServer()`
+- [x] Task 4: Switch voice presence events to use `broadcastToServer()`
   - File: `server/src/plugins/voice/voiceWsHandler.ts`
   - Action: Replace `broadcastToChannel` with `broadcastToServer` at these 4 call sites where `VOICE_PEER_JOINED` or `VOICE_PEER_LEFT` is the event type:
     - Line 41 (Worker death): `broadcastToServer(userId, WS_TYPES.VOICE_PEER_LEFT, { userId, channelId: peer.channelId });`
@@ -153,7 +153,7 @@ Tasks are ordered by dependency — shared types first, then server state, then 
     - Line 361 (disconnect): `broadcastToServer(userId, WS_TYPES.VOICE_PEER_LEFT, { userId, channelId });`
   - Notes: `broadcastToServer` takes `(excludeUserId, type, payload)` — no `channelId` first param since it broadcasts to all. `broadcastToChannel` remains unchanged for media signaling events (`VOICE_NEW_PRODUCER`, `VOICE_STATE`, etc.).
 
-- [ ] Task 5: Implement `voice:presence-sync` server handler
+- [x] Task 5: Implement `voice:presence-sync` server handler
   - File: `server/src/plugins/voice/voiceWsHandler.ts`
   - Action:
     1. Add import for `setPeerRtpCapabilities` from `./voiceService.js` (line 8 import block)
@@ -174,7 +174,7 @@ Tasks are ordered by dependency — shared types first, then server state, then 
        ```
   - Notes: Returns `VoiceChannelPresencePayload` shape which the client already handles at `wsClient.ts:353-359` via `useVoiceStore.syncParticipants()`. The `requestId` check follows the existing handler pattern.
 
-- [ ] Task 6: Implement `voice:set-rtp-capabilities` server handler
+- [x] Task 6: Implement `voice:set-rtp-capabilities` server handler
   - File: `server/src/plugins/voice/voiceWsHandler.ts`
   - Action:
     1. Register handler in `registerVoiceHandlers()` (after the presence-sync registration): `registerHandler(WS_TYPES.VOICE_SET_RTP_CAPABILITIES, handleSetRtpCapabilities);`
@@ -196,7 +196,7 @@ Tasks are ordered by dependency — shared types first, then server state, then 
        ```
   - Notes: Must complete before any `voice:consume` call. The client orchestrates this ordering in the join flow.
 
-- [ ] Task 7: Notify newly-joined peers of existing producers
+- [x] Task 7: Notify newly-joined peers of existing producers
   - File: `server/src/plugins/voice/voiceWsHandler.ts`
   - Action: In `handleVoiceJoin()`, after the `broadcastToServer` call at line 96 (now broadcasting `VOICE_PEER_JOINED`), add logic to send `VOICE_NEW_PRODUCER` for each existing producer directly to the joining peer's WS:
     ```typescript
@@ -228,7 +228,7 @@ Tasks are ordered by dependency — shared types first, then server state, then 
     ```
   - Notes: These are sent directly to the joining peer's `ws` (not broadcast). The client's existing `handleNewProducer` at `wsClient.ts:155-206` will process them. The client will attempt `voice:consume` for each, which will succeed once `voice:set-rtp-capabilities` has been sent (Task 9 ensures correct ordering). Even if consume is called before rtpCapabilities are set, the `canConsume` check in Task 8 will now return a proper error instead of crashing.
 
-- [ ] Task 8: Move `canConsume()` inside try/catch in `handleConsume`
+- [x] Task 8: Move `canConsume()` inside try/catch in `handleConsume`
   - File: `server/src/plugins/voice/voiceWsHandler.ts`
   - Action: In `handleConsume()`, move the `canConsume` check (lines 265-269) inside the existing try/catch block (line 271). The restructured code:
     ```typescript
@@ -250,7 +250,7 @@ Tasks are ordered by dependency — shared types first, then server state, then 
     ```
   - Notes: This ensures that if `canConsume` throws (e.g., when `rtpCapabilities` is undefined/malformed), the error is caught and a proper error response with the matching `requestId` is sent. Previously, the throw escaped the try/catch, became an unhandled rejection caught by `wsRouter.ts`, which sent a `TEXT_ERROR` without the request ID — causing a 5-second client timeout.
 
-- [ ] Task 9: Client — send `device.rtpCapabilities` after init
+- [x] Task 9: Client — send `device.rtpCapabilities` after init
   - File: `client/src/renderer/src/services/voiceService.ts`
   - Action: After `mediaService.initDevice()` on line 25, add:
     ```typescript
@@ -265,7 +265,7 @@ Tasks are ordered by dependency — shared types first, then server state, then 
     This goes between line 25 (initDevice) and line 28 (create send transport). The `await` ensures rtpCapabilities are set on the server before any transport creation or produce/consume happens.
   - Notes: Uses the existing `wsClient.request()` pattern. The `VoiceSetRtpCapabilitiesPayload` type from Task 1 matches this shape. No import changes needed — `wsClient` and `mediaService` are already imported.
 
-- [ ] Task 10: Client — request voice presence sync on initial connect
+- [x] Task 10: Client — request voice presence sync on initial connect
   - File: `client/src/renderer/src/services/wsClient.ts`
   - Action: In the `onopen` handler at line 52-55, add a call to `requestVoicePresenceSync()` after the connection state is set:
     ```typescript
@@ -277,7 +277,7 @@ Tasks are ordered by dependency — shared types first, then server state, then 
     ```
   - Notes: `requestVoicePresenceSync()` already exists as a private method at line 460. It's already called on reconnect (line 426). This adds it to the initial connect path too. The method's `.catch(() => {})` means failure is non-blocking.
 
-- [ ] Task 11: Add `*.yml` and `*.blockmap` to CI/CD artifact upload
+- [x] Task 11: Add `*.yml` and `*.blockmap` to CI/CD artifact upload
   - File: `.github/workflows/release.yml`
   - Action: Update the upload-artifact step at lines 142-145 to include metadata files:
     ```yaml
@@ -290,7 +290,7 @@ Tasks are ordered by dependency — shared types first, then server state, then 
     ```
   - Notes: `electron-builder --publish never` still generates `latest.yml`, `latest-mac.yml`, `latest-linux.yml`, and `*.blockmap` in `client/dist/`. The existing `gh release upload "$TAG" artifacts/* --clobber` at line 239 will upload them to the GitHub Release automatically.
 
-- [ ] Task 12: Update tests for all server-side changes
+- [x] Task 12: Update tests for all server-side changes
   - File: `server/src/plugins/voice/voiceWsHandler.test.ts`
   - Action: Add the following test cases:
     1. **Handler registration** — Update the existing `'registers all voice handlers'` test (line 114) to also assert:
@@ -322,23 +322,23 @@ Tasks are ordered by dependency — shared types first, then server state, then 
 
 **Bug 1: Voice Presence Visibility**
 
-- [ ] AC-1: Given user-A is in voice-channel-1, when user-B connects to the WebSocket (not in any voice channel), then user-B's `channelParticipants` map contains user-A under voice-channel-1's entry.
-- [ ] AC-2: Given user-B is connected but not in a voice channel, when user-A joins voice-channel-1, then user-B receives `VOICE_PEER_JOINED` with `{ userId: user-A, channelId: voice-channel-1 }`.
-- [ ] AC-3: Given user-B is connected but not in a voice channel, when user-A leaves voice-channel-1, then user-B receives `VOICE_PEER_LEFT` with `{ userId: user-A, channelId: voice-channel-1 }`.
-- [ ] AC-4: Given user-B reconnects to the WebSocket, when the connection is established, then user-B receives a `voice:presence-sync` response containing all currently active voice participants across all channels.
+- [x] AC-1: Given user-A is in voice-channel-1, when user-B connects to the WebSocket (not in any voice channel), then user-B's `channelParticipants` map contains user-A under voice-channel-1's entry.
+- [x] AC-2: Given user-B is connected but not in a voice channel, when user-A joins voice-channel-1, then user-B receives `VOICE_PEER_JOINED` with `{ userId: user-A, channelId: voice-channel-1 }`.
+- [x] AC-3: Given user-B is connected but not in a voice channel, when user-A leaves voice-channel-1, then user-B receives `VOICE_PEER_LEFT` with `{ userId: user-A, channelId: voice-channel-1 }`.
+- [x] AC-4: Given user-B reconnects to the WebSocket, when the connection is established, then user-B receives a `voice:presence-sync` response containing all currently active voice participants across all channels.
 
 **Bug 2 & 3: Audio/Video Consumption**
 
-- [ ] AC-5: Given user-A is in voice-channel-1 producing audio, when user-B joins voice-channel-1, then user-B receives `VOICE_NEW_PRODUCER` for user-A's audio producer and successfully consumes it (audio is audible).
-- [ ] AC-6: Given user-A is in voice-channel-1 producing video, when user-B joins voice-channel-1, then user-B receives `VOICE_NEW_PRODUCER` for user-A's video producer and successfully consumes it (video is visible in the grid).
-- [ ] AC-7: Given user-B joins voice-channel-1, when user-B's mediasoup Device is initialized, then user-B sends `voice:set-rtp-capabilities` with `device.rtpCapabilities` to the server, and the server stores them on the peer record.
-- [ ] AC-8: Given user-B's `rtpCapabilities` are set on the server, when user-A produces audio and user-B attempts to consume, then `router.canConsume()` succeeds and the consumer is created.
-- [ ] AC-9: Given user-B's `rtpCapabilities` are NOT set (undefined), when user-B attempts `voice:consume`, then the server responds with an error message (not a 5-second timeout).
+- [x] AC-5: Given user-A is in voice-channel-1 producing audio, when user-B joins voice-channel-1, then user-B receives `VOICE_NEW_PRODUCER` for user-A's audio producer and successfully consumes it (audio is audible).
+- [x] AC-6: Given user-A is in voice-channel-1 producing video, when user-B joins voice-channel-1, then user-B receives `VOICE_NEW_PRODUCER` for user-A's video producer and successfully consumes it (video is visible in the grid).
+- [x] AC-7: Given user-B joins voice-channel-1, when user-B's mediasoup Device is initialized, then user-B sends `voice:set-rtp-capabilities` with `device.rtpCapabilities` to the server, and the server stores them on the peer record.
+- [x] AC-8: Given user-B's `rtpCapabilities` are set on the server, when user-A produces audio and user-B attempts to consume, then `router.canConsume()` succeeds and the consumer is created.
+- [x] AC-9: Given user-B's `rtpCapabilities` are NOT set (undefined), when user-B attempts `voice:consume`, then the server responds with an error message (not a 5-second timeout).
 
 **Bug 4: Auto-Update**
 
-- [ ] AC-10: Given a new release is created via the GitHub Actions release workflow, when the workflow completes, then the GitHub Release assets include `latest.yml` (Windows), `latest-mac.yml` (macOS), and `latest-linux.yml` (Linux) alongside the installer files.
-- [ ] AC-11: Given the release assets include the `*.yml` metadata files, when a user launches the app and `autoUpdater.checkForUpdates()` runs, then the update check succeeds (no error banner) and either reports "no update available" or shows the update notification.
+- [x] AC-10: Given a new release is created via the GitHub Actions release workflow, when the workflow completes, then the GitHub Release assets include `latest.yml` (Windows), `latest-mac.yml` (macOS), and `latest-linux.yml` (Linux) alongside the installer files.
+- [x] AC-11: Given the release assets include the `*.yml` metadata files, when a user launches the app and `autoUpdater.checkForUpdates()` runs, then the update check succeeds (no error banner) and either reports "no update available" or shows the update notification.
 
 ## Additional Context
 

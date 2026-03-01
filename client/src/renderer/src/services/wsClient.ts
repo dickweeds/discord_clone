@@ -52,6 +52,7 @@ class WsClient {
     this.socket.onopen = () => {
       this.reconnectDelay = WS_RECONNECT_DELAY;
       usePresenceStore.getState().setConnectionState('connected');
+      this.requestVoicePresenceSync();
     };
 
     this.socket.onmessage = (event: MessageEvent) => {
