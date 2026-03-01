@@ -35,6 +35,7 @@ class WsClient {
   private socket: WebSocket | null = null;
   private handlers = new Map<string, Set<MessageCallback>>();
   private pendingRequests = new Map<string, PendingRequest>();
+  private pendingProducers: VoiceNewProducerPayload[] = [];
   private reconnectTimer: ReturnType<typeof setTimeout> | null = null;
   private reconnectDelay = WS_RECONNECT_DELAY;
   private accessToken: string | null = null;
@@ -155,7 +156,10 @@ class WsClient {
 
   private async handleNewProducer(payload: VoiceNewProducerPayload): Promise<void> {
     const recvTransport = mediaService.getRecvTransport();
-    if (!recvTransport) return;
+    if (!recvTransport) {
+      this.pendingProducers.push(payload);
+      return;
+    }
 
     try {
       const consumeResponse = await this.request<VoiceConsumeResponse>(
@@ -351,13 +355,6 @@ class WsClient {
         vadService.stopRemoteVAD(payload.peerId);
         mediaService.removeConsumerByProducerId(payload.producerId);
       }
-    } else if (message.type === WS_TYPES.VOICE_PRESENCE_SYNC) {
-      const payload = message.payload as VoiceChannelPresencePayload;
-      import('../stores/useVoiceStore').then(({ useVoiceStore }) => {
-        useVoiceStore.getState().syncParticipants(payload.participants);
-      }).catch((err) => {
-        console.warn('[wsClient] Failed to sync voice presence:', err);
-      });
     } else if (message.type === WS_TYPES.VOICE_STATE) {
       const payload = message.payload as VoiceStatePayload;
       import('../stores/useVoiceStore').then(({ useVoiceStore }) => {
@@ -451,7 +448,15 @@ class WsClient {
     }, this.reconnectDelay);
   }
 
+  flushPendingProducers(): void {
+    const pending = this.pendingProducers.splice(0);
+    for (const payload of pending) {
+      this.handleNewProducer(payload);
+    }
+  }
+
   private cleanupVoiceOnDisconnect(): void {
+    this.pendingProducers = [];
     // Local cleanup only — skip sending voice:leave since WS is already down
     import('../stores/useVoiceStore').then(({ useVoiceStore }) => {
       useVoiceStore.getState().localCleanup();
@@ -459,7 +464,11 @@ class WsClient {
   }
 
   private requestVoicePresenceSync(): void {
-    this.request<void>('voice:presence-sync', {}).catch(() => {
+    this.request<VoiceChannelPresencePayload>('voice:presence-sync', {}).then((data) => {
+      import('../stores/useVoiceStore').then(({ useVoiceStore }) => {
+        useVoiceStore.getState().syncParticipants(data.participants);
+      });
+    }).catch(() => {
       // Server may not support presence-sync yet — non-critical
     });
   }

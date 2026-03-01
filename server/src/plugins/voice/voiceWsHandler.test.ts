@@ -139,7 +139,7 @@ describe('voiceWsHandler', () => {
     });
 
     it('returns existing peers when others already in channel', async () => {
-      joinVoiceChannel('user-1', 'voice-channel-1', null);
+      joinVoiceChannel('user-1', 'voice-channel-1');
 
       const ws = createMockWs();
       const handler = registeredHandlers.get(WS_TYPES.VOICE_JOIN)!;
@@ -172,7 +172,7 @@ describe('voiceWsHandler', () => {
     it('rejects when voice channel is full', async () => {
       // Fill channel to MAX_PARTICIPANTS
       for (let i = 0; i < MAX_PARTICIPANTS; i++) {
-        joinVoiceChannel(`fill-user-${i}`, 'voice-channel-1', null);
+        joinVoiceChannel(`fill-user-${i}`, 'voice-channel-1');
       }
 
       const ws = createMockWs();
@@ -185,7 +185,7 @@ describe('voiceWsHandler', () => {
     });
 
     it('broadcasts peer-joined to other peers and non-voice-channel clients', async () => {
-      joinVoiceChannel('user-1', 'voice-channel-1', null);
+      joinVoiceChannel('user-1', 'voice-channel-1');
       const otherWs = createMockWs();
       mockClients.set('user-1', otherWs);
 
@@ -213,7 +213,7 @@ describe('voiceWsHandler', () => {
 
     it('sends VOICE_NEW_PRODUCER for existing audio and video producers to newly-joined peer', async () => {
       // user-1 is already in channel with producers
-      joinVoiceChannel('user-1', 'voice-channel-1', null);
+      joinVoiceChannel('user-1', 'voice-channel-1');
       const mockAudioProducer = { id: 'audio-prod-1', on: vi.fn(), close: vi.fn(), kind: 'audio' as const };
       const mockVideoProducer = { id: 'video-prod-1', on: vi.fn(), close: vi.fn(), kind: 'video' as const };
       setPeerProducer('user-1', mockAudioProducer as never);
@@ -246,7 +246,7 @@ describe('voiceWsHandler', () => {
 
   describe('voice:create-transport', () => {
     it('responds with transport params and ICE servers', async () => {
-      joinVoiceChannel('user-1', 'voice-channel-1', null);
+      joinVoiceChannel('user-1', 'voice-channel-1');
 
       const mockTransport = createMockTransport();
       mockCreateWebRtcTransport.mockResolvedValue({
@@ -281,7 +281,7 @@ describe('voiceWsHandler', () => {
     });
 
     it('rejects duplicate transport for same direction', () => {
-      joinVoiceChannel('user-1', 'voice-channel-1', null);
+      joinVoiceChannel('user-1', 'voice-channel-1');
       const mockTransport = createMockTransport('existing-transport');
       setPeerTransport('user-1', 'send', mockTransport as never);
 
@@ -295,7 +295,7 @@ describe('voiceWsHandler', () => {
     });
 
     it('rejects invalid direction', () => {
-      joinVoiceChannel('user-1', 'voice-channel-1', null);
+      joinVoiceChannel('user-1', 'voice-channel-1');
       const ws = createMockWs();
       const handler = registeredHandlers.get(WS_TYPES.VOICE_CREATE_TRANSPORT)!;
       handler(ws, { type: WS_TYPES.VOICE_CREATE_TRANSPORT, payload: { direction: 'invalid' }, id: 'req-8' }, 'user-1');
@@ -307,7 +307,7 @@ describe('voiceWsHandler', () => {
 
   describe('voice:connect-transport', () => {
     it('connects a transport with dtlsParameters', async () => {
-      joinVoiceChannel('user-1', 'voice-channel-1', null);
+      joinVoiceChannel('user-1', 'voice-channel-1');
       const mockTransport = createMockTransport('transport-send');
       setPeerTransport('user-1', 'send', mockTransport as never);
 
@@ -329,7 +329,7 @@ describe('voiceWsHandler', () => {
     });
 
     it('rejects unknown transport id', () => {
-      joinVoiceChannel('user-1', 'voice-channel-1', null);
+      joinVoiceChannel('user-1', 'voice-channel-1');
       const ws = createMockWs();
       const handler = registeredHandlers.get(WS_TYPES.VOICE_CONNECT_TRANSPORT)!;
       handler(ws, {
@@ -346,8 +346,8 @@ describe('voiceWsHandler', () => {
 
   describe('voice:produce', () => {
     it('responds with producerId and notifies peers', async () => {
-      joinVoiceChannel('user-1', 'voice-channel-1', null);
-      joinVoiceChannel('user-2', 'voice-channel-1', null);
+      joinVoiceChannel('user-1', 'voice-channel-1');
+      joinVoiceChannel('user-2', 'voice-channel-1');
 
       const mockTransport = createMockTransport('transport-send');
       setPeerTransport('user-1', 'send', mockTransport as never);
@@ -380,8 +380,8 @@ describe('voiceWsHandler', () => {
     });
 
     it('includes kind field in voice:new-producer broadcast', async () => {
-      joinVoiceChannel('user-1', 'voice-channel-1', null);
-      joinVoiceChannel('user-2', 'voice-channel-1', null);
+      joinVoiceChannel('user-1', 'voice-channel-1');
+      joinVoiceChannel('user-2', 'voice-channel-1');
 
       const mockTransport = createMockTransport('transport-send');
       setPeerTransport('user-1', 'send', mockTransport as never);
@@ -406,7 +406,7 @@ describe('voiceWsHandler', () => {
     });
 
     it('produces video and stores via setPeerVideoProducer', async () => {
-      joinVoiceChannel('user-1', 'voice-channel-1', null);
+      joinVoiceChannel('user-1', 'voice-channel-1');
 
       const mockVideoProducer = {
         id: 'video-producer-1',
@@ -437,8 +437,8 @@ describe('voiceWsHandler', () => {
     });
 
     it('broadcasts voice:new-producer with kind video for video produce', async () => {
-      joinVoiceChannel('user-1', 'voice-channel-1', null);
-      joinVoiceChannel('user-2', 'voice-channel-1', null);
+      joinVoiceChannel('user-1', 'voice-channel-1');
+      joinVoiceChannel('user-2', 'voice-channel-1');
 
       const mockVideoProducer = {
         id: 'video-producer-1',
@@ -471,7 +471,7 @@ describe('voiceWsHandler', () => {
     });
 
     it('rejects duplicate audio producer', async () => {
-      joinVoiceChannel('user-1', 'voice-channel-1', null);
+      joinVoiceChannel('user-1', 'voice-channel-1');
       const mockTransport = createMockTransport('transport-send');
       setPeerTransport('user-1', 'send', mockTransport as never);
 
@@ -502,7 +502,7 @@ describe('voiceWsHandler', () => {
     });
 
     it('rejects duplicate video producer', async () => {
-      joinVoiceChannel('user-1', 'voice-channel-1', null);
+      joinVoiceChannel('user-1', 'voice-channel-1');
       const mockTransport = createMockTransport('transport-send');
       setPeerTransport('user-1', 'send', mockTransport as never);
 
@@ -527,7 +527,8 @@ describe('voiceWsHandler', () => {
 
   describe('voice:consume', () => {
     it('responds with consumer params', async () => {
-      joinVoiceChannel('user-1', 'voice-channel-1', { codecs: [] });
+      joinVoiceChannel('user-1', 'voice-channel-1');
+      setPeerRtpCapabilities('user-1', { codecs: [] });
       const mockTransport = createMockTransport('transport-recv');
       setPeerTransport('user-1', 'recv', mockTransport as never);
 
@@ -555,7 +556,7 @@ describe('voiceWsHandler', () => {
     });
 
     it('responds with error when canConsume throws', async () => {
-      joinVoiceChannel('user-1', 'voice-channel-1', undefined);
+      joinVoiceChannel('user-1', 'voice-channel-1');
       const mockTransport = createMockTransport('transport-recv');
       setPeerTransport('user-1', 'recv', mockTransport as never);
 
@@ -584,7 +585,7 @@ describe('voiceWsHandler', () => {
 
   describe('voice:consumer-resume', () => {
     it('resumes a consumer', async () => {
-      joinVoiceChannel('user-1', 'voice-channel-1', null);
+      joinVoiceChannel('user-1', 'voice-channel-1');
       const mockConsumer = {
         id: 'consumer-1',
         close: vi.fn(),
@@ -615,8 +616,8 @@ describe('voiceWsHandler', () => {
 
   describe('voice:leave', () => {
     it('cleans up and notifies peers and non-voice-channel clients', () => {
-      joinVoiceChannel('user-1', 'voice-channel-1', null);
-      joinVoiceChannel('user-2', 'voice-channel-1', null);
+      joinVoiceChannel('user-1', 'voice-channel-1');
+      joinVoiceChannel('user-2', 'voice-channel-1');
 
       const otherWs = createMockWs();
       mockClients.set('user-2', otherWs);
@@ -648,13 +649,17 @@ describe('voiceWsHandler', () => {
 
   describe('Worker death cleanup', () => {
     it('clears all voice state and broadcasts peer-left on Worker death', () => {
-      joinVoiceChannel('user-1', 'voice-channel-1', null);
-      joinVoiceChannel('user-2', 'voice-channel-1', null);
+      joinVoiceChannel('user-1', 'voice-channel-1');
+      joinVoiceChannel('user-2', 'voice-channel-1');
 
       const ws1 = createMockWs();
       const ws2 = createMockWs();
       mockClients.set('user-1', ws1);
       mockClients.set('user-2', ws2);
+
+      // user-3 is NOT in any voice channel but is connected via WS
+      const spectatorWs = createMockWs();
+      mockClients.set('user-3', spectatorWs);
 
       // Trigger Worker death callback
       expect(capturedWorkerDiedCallback).not.toBeNull();
@@ -670,13 +675,23 @@ describe('voiceWsHandler', () => {
       const broadcast2 = JSON.parse(ws2.send.mock.calls[0][0]);
       expect(broadcast2.type).toBe(WS_TYPES.VOICE_PEER_LEFT);
       expect(broadcast2.payload.userId).toBe('user-1');
+
+      // Non-voice-channel client should also receive peer-left broadcasts
+      expect(spectatorWs.send).toHaveBeenCalled();
+      const spectatorMessages = spectatorWs.send.mock.calls.map(
+        (call: unknown[]) => JSON.parse(call[0] as string),
+      );
+      const peerLeftMessages = spectatorMessages.filter(
+        (msg: { type: string }) => msg.type === WS_TYPES.VOICE_PEER_LEFT,
+      );
+      expect(peerLeftMessages.length).toBeGreaterThanOrEqual(1);
     });
   });
 
   describe('handleVoiceDisconnect', () => {
     it('cleans up voice state on WS disconnect', () => {
-      joinVoiceChannel('user-1', 'voice-channel-1', null);
-      joinVoiceChannel('user-2', 'voice-channel-1', null);
+      joinVoiceChannel('user-1', 'voice-channel-1');
+      joinVoiceChannel('user-2', 'voice-channel-1');
 
       const otherWs = createMockWs();
       mockClients.set('user-2', otherWs);
@@ -698,8 +713,8 @@ describe('voiceWsHandler', () => {
 
   describe('voice:presence-sync', () => {
     it('returns all active voice peers', () => {
-      joinVoiceChannel('user-1', 'voice-channel-1', null);
-      joinVoiceChannel('user-2', 'voice-channel-1', null);
+      joinVoiceChannel('user-1', 'voice-channel-1');
+      joinVoiceChannel('user-2', 'voice-channel-1');
 
       const ws = createMockWs();
       const handler = registeredHandlers.get(WS_TYPES.VOICE_PRESENCE_SYNC)!;
@@ -732,7 +747,7 @@ describe('voiceWsHandler', () => {
 
   describe('voice:set-rtp-capabilities', () => {
     it('updates peer rtpCapabilities', () => {
-      joinVoiceChannel('user-1', 'voice-channel-1', null);
+      joinVoiceChannel('user-1', 'voice-channel-1');
 
       const ws = createMockWs();
       const handler = registeredHandlers.get(WS_TYPES.VOICE_SET_RTP_CAPABILITIES)!;
@@ -762,12 +777,46 @@ describe('voiceWsHandler', () => {
       expect(sent.type).toBe('error');
       expect(sent.payload.error).toContain('Not in a voice channel');
     });
+
+    it('rejects null rtpCapabilities', () => {
+      joinVoiceChannel('user-1', 'voice-channel-1');
+
+      const ws = createMockWs();
+      const handler = registeredHandlers.get(WS_TYPES.VOICE_SET_RTP_CAPABILITIES)!;
+      handler(ws, {
+        type: WS_TYPES.VOICE_SET_RTP_CAPABILITIES,
+        payload: { rtpCapabilities: null },
+        id: 'req-rtp-null',
+      }, 'user-1');
+
+      expect(ws.send).toHaveBeenCalled();
+      const sent = JSON.parse(ws.send.mock.calls[0][0]);
+      expect(sent.type).toBe('error');
+      expect(sent.payload.error).toContain('non-null object');
+    });
+
+    it('rejects primitive rtpCapabilities', () => {
+      joinVoiceChannel('user-1', 'voice-channel-1');
+
+      const ws = createMockWs();
+      const handler = registeredHandlers.get(WS_TYPES.VOICE_SET_RTP_CAPABILITIES)!;
+      handler(ws, {
+        type: WS_TYPES.VOICE_SET_RTP_CAPABILITIES,
+        payload: { rtpCapabilities: 'not-an-object' },
+        id: 'req-rtp-string',
+      }, 'user-1');
+
+      expect(ws.send).toHaveBeenCalled();
+      const sent = JSON.parse(ws.send.mock.calls[0][0]);
+      expect(sent.type).toBe('error');
+      expect(sent.payload.error).toContain('non-null object');
+    });
   });
 
   describe('voice:state', () => {
     it('broadcasts to channel peers', () => {
-      joinVoiceChannel('user-1', 'voice-channel-1', null);
-      joinVoiceChannel('user-2', 'voice-channel-1', null);
+      joinVoiceChannel('user-1', 'voice-channel-1');
+      joinVoiceChannel('user-2', 'voice-channel-1');
 
       const otherWs = createMockWs();
       mockClients.set('user-2', otherWs);
@@ -787,8 +836,8 @@ describe('voiceWsHandler', () => {
     });
 
     it('validates userId matches authenticated user', () => {
-      joinVoiceChannel('user-1', 'voice-channel-1', null);
-      joinVoiceChannel('user-2', 'voice-channel-1', null);
+      joinVoiceChannel('user-1', 'voice-channel-1');
+      joinVoiceChannel('user-2', 'voice-channel-1');
 
       const otherWs = createMockWs();
       mockClients.set('user-2', otherWs);
@@ -806,8 +855,8 @@ describe('voiceWsHandler', () => {
     });
 
     it('excludes sender from broadcast', () => {
-      joinVoiceChannel('user-1', 'voice-channel-1', null);
-      joinVoiceChannel('user-2', 'voice-channel-1', null);
+      joinVoiceChannel('user-1', 'voice-channel-1');
+      joinVoiceChannel('user-2', 'voice-channel-1');
 
       const senderWs = createMockWs();
       const otherWs = createMockWs();

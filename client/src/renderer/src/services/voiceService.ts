@@ -52,6 +52,9 @@ export async function joinVoiceChannel(channelId: string): Promise<JoinVoiceResu
     recvTransportResponse.iceServers as RTCIceServer[],
   );
 
+  // 4b. Consume any producers that arrived before recv transport was ready
+  wsClient.flushPendingProducers();
+
   // 5. Read selected device from store (if user has a preference)
   const { useVoiceStore } = await import('../stores/useVoiceStore');
   const selectedDeviceId = useVoiceStore.getState().selectedAudioInputId;

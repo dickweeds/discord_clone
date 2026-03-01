@@ -58,7 +58,7 @@ export function registerVoiceHandlers(appDb: AppDatabase, logger: FastifyBaseLog
 }
 
 async function handleVoiceJoin(ws: WebSocket, message: WsMessage, userId: string): Promise<void> {
-  const { channelId, rtpCapabilities } = message.payload as { channelId: string; rtpCapabilities?: unknown };
+  const { channelId } = message.payload as { channelId: string };
   const requestId = message.id;
 
   if (!channelId) {
@@ -84,7 +84,7 @@ async function handleVoiceJoin(ws: WebSocket, message: WsMessage, userId: string
     return;
   }
 
-  const existingPeers = joinVoiceChannel(userId, channelId, rtpCapabilities);
+  const existingPeers = joinVoiceChannel(userId, channelId);
   if (existingPeers === null) {
     if (requestId) respondError(ws, requestId, 'Voice channel is full');
     return;
@@ -407,6 +407,11 @@ function handleVoicePresenceSync(ws: WebSocket, message: WsMessage, _userId: str
 function handleSetRtpCapabilities(ws: WebSocket, message: WsMessage, userId: string): void {
   const { rtpCapabilities } = message.payload as { rtpCapabilities: unknown };
   const requestId = message.id;
+
+  if (!rtpCapabilities || typeof rtpCapabilities !== 'object') {
+    if (requestId) respondError(ws, requestId, 'rtpCapabilities must be a non-null object');
+    return;
+  }
 
   const peer = getPeer(userId);
   if (!peer) {

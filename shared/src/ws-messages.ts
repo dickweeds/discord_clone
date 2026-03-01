@@ -29,7 +29,6 @@ export interface TextErrorPayload {
 // Voice
 export interface VoiceJoinPayload {
   channelId: string;
-  rtpCapabilities?: unknown;
 }
 
 export interface VoiceJoinResponse {

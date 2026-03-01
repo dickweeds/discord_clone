@@ -17,7 +17,6 @@ const voicePeers = new Map<string, VoicePeer>();
 export function joinVoiceChannel(
   userId: string,
   channelId: string,
-  rtpCapabilities: unknown,
 ): string[] | null {
   // If already in a voice channel, leave it first
   if (voicePeers.has(userId)) {
@@ -33,7 +32,7 @@ export function joinVoiceChannel(
   const peer: VoicePeer = {
     userId,
     channelId,
-    rtpCapabilities,
+    rtpCapabilities: null,
     sendTransport: null,
     recvTransport: null,
     producer: null,
