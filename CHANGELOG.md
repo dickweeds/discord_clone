@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.99.130](https://github.com/AidenWoodside/discord_clone/compare/v0.99.129...v0.99.130) (2026-03-01)
+
+
+### Bug Fixes
+
+* skip Trivy check update to avoid git clone failure in CI ([#58](https://github.com/AidenWoodside/discord_clone/issues/58)) ([bd2a6c4](https://github.com/AidenWoodside/discord_clone/commit/bd2a6c42cfcc3f5c7f5c93f196d2fcc4f6cb80de))
+
 ## [0.99.129](https://github.com/AidenWoodside/discord_clone/compare/v0.99.128...v0.99.129) (2026-03-01)
 
 
