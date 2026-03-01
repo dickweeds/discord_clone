@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.99.141](https://github.com/AidenWoodside/discord_clone/compare/v0.99.140...v0.99.141) (2026-03-01)
+
+
+### Bug Fixes
+
+* use short port syntax for UDP range in Swarm stack ([a336097](https://github.com/AidenWoodside/discord_clone/commit/a336097df2003afa59e0a910e9f408ed9b71ba8e))
+* use short port syntax for UDP range in Swarm stack ([51e9d74](https://github.com/AidenWoodside/discord_clone/commit/51e9d741402b4113f49bed3de42431ca28eb9ba9))
+
 ## [0.99.140](https://github.com/AidenWoodside/discord_clone/compare/v0.99.139...v0.99.140) (2026-03-01)
 
 
