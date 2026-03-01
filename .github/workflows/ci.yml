@@ -132,6 +132,36 @@ jobs:
           docker compose config --quiet
           rm .env
 
+  trivy-scan:
+    runs-on: ubuntu-latest
+    needs: [check-paths]
+    if: needs.check-paths.outputs.server == 'true' || needs.check-paths.outputs.shared == 'true'
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3.12.0
+
+      - name: Build server image for scanning
+        uses: docker/build-push-action@v6.19.2
+        with:
+          context: .
+          file: server/Dockerfile
+          push: false
+          load: true
+          tags: discord-clone-server:ci-scan
+
+      - name: Scan image for vulnerabilities
+        run: |
+          curl -sfL https://raw.githubusercontent.com/aquasecurity/trivy/main/contrib/install.sh | sh -s -- -b $HOME/.local/bin
+          export PATH="$HOME/.local/bin:$PATH"
+          trivy image \
+            --severity CRITICAL,HIGH \
+            --exit-code 1 \
+            --ignore-unfixed \
+            --format table \
+            discord-clone-server:ci-scan
+
   terraform-validate:
     runs-on: ubuntu-latest
     needs: [check-paths]
