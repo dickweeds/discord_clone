@@ -130,9 +130,9 @@ NGINX_TEMPLATE="$DEPLOY_DIR/docker/nginx/nginx.conf.template"
 cp "$NGINX_CONF" "$NGINX_CONF.bak"
 sed "s/{{UPSTREAM}}/app-$NEW:$NEW_PORT/" "$NGINX_TEMPLATE" > "$NGINX_CONF"
 
-# 7a. Start nginx if not already running (cold start)
+# 7a. Start nginx if not already running
 if ! docker compose ps nginx --status running -q 2>/dev/null | grep -q .; then
-  docker compose up -d nginx 2>&1 | tail -5
+  docker compose up -d --no-deps nginx 2>&1 | tail -5
   sleep 2
 fi
 
