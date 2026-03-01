@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.99.134](https://github.com/AidenWoodside/discord_clone/compare/v0.99.133...v0.99.134) (2026-03-01)
+
+
+### Bug Fixes
+
+* start nginx on cold start before config validation ([3a0c11c](https://github.com/AidenWoodside/discord_clone/commit/3a0c11c5841cb3a8349068f2f6f3473dff891967))
+* start nginx on cold start before config validation ([1c1d99b](https://github.com/AidenWoodside/discord_clone/commit/1c1d99b7cd062862230cad070eb056e638c0cfe9))
+
 ## [0.99.133](https://github.com/AidenWoodside/discord_clone/compare/v0.99.132...v0.99.133) (2026-03-01)
 
 
