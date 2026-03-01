@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.99.133](https://github.com/AidenWoodside/discord_clone/compare/v0.99.132...v0.99.133) (2026-03-01)
+
+
+### Bug Fixes
+
+* **ci:** make release workflow compatible with manual dispatch ([c571e6c](https://github.com/AidenWoodside/discord_clone/commit/c571e6cf63497ad379e9e605f852bf5d49cce1d3))
+* **ci:** make release workflow compatible with workflow_dispatch ([2d30b80](https://github.com/AidenWoodside/discord_clone/commit/2d30b80d4429bdd4f56a2e2dc371c44c6d079b32))
+
 ## [0.99.132](https://github.com/AidenWoodside/discord_clone/compare/v0.99.131...v0.99.132) (2026-03-01)
 
 
