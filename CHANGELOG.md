@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.99.129](https://github.com/AidenWoodside/discord_clone/compare/v0.99.128...v0.99.129) (2026-03-01)
+
+
+### Bug Fixes
+
+* quiet docker compose output to prevent SSM IPC timeout ([#56](https://github.com/AidenWoodside/discord_clone/issues/56)) ([b46cf8f](https://github.com/AidenWoodside/discord_clone/commit/b46cf8f0aa4f7911bf0ecad1461536e1866e0f86))
+
 ## [0.99.128](https://github.com/AidenWoodside/discord_clone/compare/v0.99.127...v0.99.128) (2026-02-28)
 
 
