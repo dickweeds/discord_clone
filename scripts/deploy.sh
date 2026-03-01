@@ -18,27 +18,33 @@ GHCR_TOKEN=$(aws ssm get-parameter --name "/discord-clone/prod/GHCR_TOKEN" --wit
 # 2. Authenticate with GHCR
 echo "$GHCR_TOKEN" | docker login ghcr.io -u AidenWoodside --password-stdin
 
-# 3. Export secrets as env vars for docker stack deploy
+# 3. Load .env vars for docker stack deploy variable substitution
+# Source first so SSM secrets (exported below) take precedence over .env values
+set -a
+source "$DEPLOY_DIR/.env"
+set +a
+
+# 4. Export SSM secrets (overrides .env values for these keys)
 export JWT_ACCESS_SECRET JWT_REFRESH_SECRET GROUP_ENCRYPTION_KEY DATABASE_URL
 
-# 4. Template coturn config with TURN_SECRET
+# 5. Template coturn config with TURN_SECRET
 COTURN_TEMPLATE="$DEPLOY_DIR/docker/coturn/turnserver.prod.conf.template"
 COTURN_CONF="$DEPLOY_DIR/docker/coturn/turnserver.prod.conf"
 if [ -f "$COTURN_TEMPLATE" ]; then
   sed "s|static-auth-secret=.*|static-auth-secret=$TURN_SECRET|" "$COTURN_TEMPLATE" > "$COTURN_CONF"
 fi
 
-# 5. Ensure coturn is running (outside Swarm — needs host networking)
+# 6. Ensure coturn is running (outside Swarm — needs host networking)
 docker compose -f docker-compose.coturn.yml up -d coturn
 
-# 6. Init Swarm (idempotent)
+# 7. Init Swarm (idempotent)
 docker swarm init 2>/dev/null || true
 
-# 7. Deploy stack
+# 8. Deploy stack
 echo "Deploying discord-clone stack with image tag: $IMAGE_TAG"
 docker stack deploy -c docker-compose.yml --with-registry-auth --prune discord-clone
 
-# 8. Wait for Swarm convergence (poll every 5s, up to 150s)
+# 9. Wait for Swarm convergence (poll every 5s, up to 150s)
 echo "Waiting for service convergence..."
 for i in $(seq 1 30); do
   STATE=$(docker service inspect discord-clone_app --format '{{.UpdateStatus.State}}' 2>/dev/null || echo "")
@@ -62,16 +68,41 @@ for i in $(seq 1 30); do
   sleep 5
 done
 
-# 9. Run migrations
-echo "Running database migrations..."
+# 10. Wait for container to be healthy before running migrations
 APP_CONTAINER=$(docker ps -q -f "name=discord-clone_app" --latest)
 if [ -z "$APP_CONTAINER" ]; then
   echo "FATAL: No app container found"
   exit 1
 fi
+
+echo "Waiting for container to be healthy..."
+for i in $(seq 1 30); do
+  HEALTH=$(docker inspect --format '{{.State.Health.Status}}' "$APP_CONTAINER" 2>/dev/null || echo "unknown")
+  case "$HEALTH" in
+    healthy) echo "Container is healthy"; break ;;
+    unhealthy)
+      echo "FATAL: Container is unhealthy"
+      docker logs --tail 20 "$APP_CONTAINER" 2>&1 || true
+      exit 1 ;;
+  esac
+  if [ "$i" -eq 30 ]; then
+    echo "FATAL: Timed out waiting for healthy container (state: $HEALTH)"
+    docker logs --tail 20 "$APP_CONTAINER" 2>&1 || true
+    exit 1
+  fi
+  sleep 5
+done
+
+# 11. Run migrations
+echo "Running database migrations..."
 docker exec "$APP_CONTAINER" node server/dist/scripts/migrate.js
 
-# 10. Prune old images (keep last 7 days)
+# 12. Verify app is healthy after migrations
+echo "Verifying post-migration health..."
+sleep 3
+docker exec "$APP_CONTAINER" wget --spider -q http://127.0.0.1:3001/api/health || echo "WARNING: Post-migration health check failed"
+
+# 13. Prune old images (keep last 7 days)
 docker image prune -af --filter "until=168h" 2>/dev/null || true
 
 echo "Deploy complete: $IMAGE_TAG"

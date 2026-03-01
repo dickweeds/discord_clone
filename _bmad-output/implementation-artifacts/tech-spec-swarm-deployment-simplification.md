@@ -61,7 +61,7 @@ Replace the hand-rolled blue-green orchestration with Docker Swarm's built-in se
 - Exposes `POST/GET /api/drain` with `X-Drain-Token` auth (validates against `JWT_ACCESS_SECRET`)
 - Sends `{ type: 'reconnect' }` to WebSocket clients — but client `wsClient.ts` has NO handler for this message type (it's effectively a no-op)
 - Blocks new WS upgrades via `onRequest` hook when `draining = true`
-- Only import consumer of `getClients()` from `ws/wsServer.ts`
+- `getClients()` from `ws/wsServer.ts` is also imported by `admin/adminRoutes.ts` and `voice/voiceWsHandler.ts`
 
 **Client reconnection (already handles server death):**
 - `wsClient.ts`: `onclose` triggers `startReconnection()` with exponential backoff (1s → 2s → 4s → 8s → max 30s)
@@ -109,7 +109,7 @@ Replace the hand-rolled blue-green orchestration with Docker Swarm's built-in se
 - **coturn outside Swarm**: Swarm doesn't support `network_mode: host`. coturn needs 100+ UDP ports for TURN relay. Stays on plain `docker compose` in a separate file.
 - **Remove drain endpoint entirely**: With `stop-first`, the old container is stopped before the new one starts. No overlap period = no drain needed. The drain plugin's reconnect signal was already a client-side no-op. SIGTERM handler in `index.ts` already provides graceful shutdown.
 - **Cert bootstrapping in setup.sh**: One-time operation on fresh EC2. Deploy script assumes certs exist. setup.sh already has most of this logic.
-- **Keep `getClients()` export**: Only drain.ts imports it, but removing it is unnecessary churn. It's a harmless utility.
+- **Keep `getClients()` export**: Still used by admin routes and voice signaling. Removing it would break those modules.
 - **Overlay network replaces bridge**: Swarm requires overlay driver instead of bridge. All inter-service communication (app ↔ nginx) works identically.
 - **`mode: host` for published ports**: App publishes HTTP 3001 and mediasoup UDP 40000-40049 in host mode. Nginx publishes 80/443 in host mode. This bypasses Swarm's ingress mesh (not needed for single-node).
 

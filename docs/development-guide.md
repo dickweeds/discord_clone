@@ -273,11 +273,14 @@ npm run test:watch -w client
 chmod +x scripts/setup.sh
 ./scripts/setup.sh
 
-# Start all services
-docker compose up -d
+# Start coturn (runs outside Swarm — needs host networking)
+docker compose -f docker-compose.coturn.yml up -d
+
+# Deploy the Swarm stack
+docker stack deploy -c docker-compose.yml --with-registry-auth discord-clone
 
 # Check logs
-docker compose logs -f app
+docker service logs -f discord-clone_app
 ```
 
 The `scripts/setup.sh` script:
