@@ -140,8 +140,10 @@ else
   sed "s/{{UPSTREAM}}/app-$NEW:$NEW_PORT/" "$NGINX_TEMPLATE" > "$NGINX_CONF"
 fi
 
-# 7a. Start nginx if not already running
+# 7a. Ensure nginx is running with the current config
 if ! docker compose ps nginx --status running -q 2>/dev/null | grep -q .; then
+  # Remove any crash-looping container so up creates a fresh one with new config
+  docker compose rm -sf nginx 2>/dev/null || true
   docker compose up -d --no-deps nginx 2>&1 | tail -5
   sleep 2
 fi
