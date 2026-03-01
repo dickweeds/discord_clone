@@ -101,27 +101,41 @@ fi
 # 6. Drain old slot — signal clients to reconnect
 if [ "$ACTIVE" != "none" ]; then
   echo "Draining app-$ACTIVE (${DRAIN_TIMEOUT}s window)..."
-  curl -sf -X POST -H "X-Drain-Token: $JWT_ACCESS_SECRET" \
-    "http://127.0.0.1:$ACTIVE_PORT/api/drain" > /dev/null 2>&1 || true
 
-  # Wait for connections to drain (poll every 2s, up to DRAIN_TIMEOUT)
-  DRAIN_START=$(date +%s)
-  while true; do
-    ELAPSED=$(( $(date +%s) - DRAIN_START ))
-    if [ "$ELAPSED" -ge "$DRAIN_TIMEOUT" ]; then
-      echo "Drain timeout reached — proceeding with switchover"
-      break
-    fi
-    CONNS=$(curl -sf -H "X-Drain-Token: $JWT_ACCESS_SECRET" \
-      "http://127.0.0.1:$ACTIVE_PORT/api/drain" 2>/dev/null \
-      | jq -r '.connections // "unknown"' 2>/dev/null || echo "unknown")
-    if [ "$CONNS" = "0" ]; then
-      echo "All connections drained"
-      break
-    fi
-    echo "  $CONNS connections remaining (${ELAPSED}s elapsed)"
-    sleep 2
-  done
+  # Trigger drain mode — check HTTP status to detect token mismatch
+  DRAIN_HTTP=$(curl -s -o /dev/null -w "%{http_code}" -X POST \
+    -H "X-Drain-Token: $JWT_ACCESS_SECRET" \
+    "http://127.0.0.1:$ACTIVE_PORT/api/drain" 2>/dev/null || echo "000")
+  if [ "$DRAIN_HTTP" = "403" ]; then
+    echo "WARNING: drain token rejected (old container may have stale secret) — skipping drain"
+  elif [ "$DRAIN_HTTP" = "000" ]; then
+    echo "WARNING: drain endpoint unreachable — skipping drain"
+  else
+    # Wait for connections to drain (poll every 2s, up to DRAIN_TIMEOUT)
+    DRAIN_START=$(date +%s)
+    while true; do
+      ELAPSED=$(( $(date +%s) - DRAIN_START ))
+      if [ "$ELAPSED" -ge "$DRAIN_TIMEOUT" ]; then
+        echo "Drain timeout reached — proceeding with switchover"
+        break
+      fi
+      DRAIN_RESP=$(curl -s -w "\n%{http_code}" -H "X-Drain-Token: $JWT_ACCESS_SECRET" \
+        "http://127.0.0.1:$ACTIVE_PORT/api/drain" 2>/dev/null || true)
+      DRAIN_CODE=$(echo "$DRAIN_RESP" | tail -1)
+      DRAIN_BODY=$(echo "$DRAIN_RESP" | sed '$d')
+      if [ "$DRAIN_CODE" != "200" ]; then
+        echo "WARNING: drain poll returned HTTP $DRAIN_CODE — skipping drain"
+        break
+      fi
+      CONNS=$(echo "$DRAIN_BODY" | jq -r '.connections // "unknown"')
+      if [ "$CONNS" = "0" ]; then
+        echo "All connections drained"
+        break
+      fi
+      echo "  $CONNS connections remaining (${ELAPSED}s elapsed)"
+      sleep 2
+    done
+  fi
 fi
 
 # 7. Switch nginx upstream via template (not in-place sed)
@@ -140,15 +154,43 @@ else
   sed "s/{{UPSTREAM}}/app-$NEW:$NEW_PORT/" "$NGINX_TEMPLATE" > "$NGINX_CONF"
 fi
 
-# 7a. Ensure nginx is running with the current config
-if ! docker compose ps nginx --status running -q 2>/dev/null | grep -q .; then
-  # Remove any crash-looping container so up creates a fresh one with new config
-  docker compose rm -sf nginx 2>/dev/null || true
-  docker compose up -d --no-deps nginx 2>&1 | tail -5
-  sleep 2
+# 7a. Validate new config in a throwaway container BEFORE touching running nginx.
+# This catches bad configs (missing certs, syntax errors) without crashing the live proxy.
+VALIDATE_VOLUMES="-v $NGINX_CONF:/etc/nginx/conf.d/default.conf:ro -v $DEPLOY_DIR/data/certs:/etc/letsencrypt:ro"
+if ! docker run --rm --network discord_clone_backend $VALIDATE_VOLUMES nginx:1.27-alpine nginx -t 2>&1; then
+  echo "FATAL: nginx config validation failed — not touching running nginx"
+  cp "$NGINX_CONF.bak" "$NGINX_CONF"
+  docker compose stop "app-$NEW"
+  exit 1
 fi
 
-# 7b. If certs were missing, obtain them via certbot then switch to HTTPS config
+# 7b. Ensure nginx is running
+NGINX_WAS_DOWN=false
+if ! docker compose ps nginx --status running -q 2>/dev/null | grep -q .; then
+  NGINX_WAS_DOWN=true
+  echo "nginx not running — starting fresh"
+  docker compose rm -sf nginx 2>/dev/null || true
+  docker compose up -d --no-deps nginx 2>&1 | tail -5
+
+  # Wait for nginx to stabilize (not just "Started" — actually running)
+  NGINX_UP=false
+  for i in $(seq 1 5); do
+    sleep 2
+    if docker compose ps nginx --status running -q 2>/dev/null | grep -q .; then
+      NGINX_UP=true
+      break
+    fi
+  done
+  if [ "$NGINX_UP" != "true" ]; then
+    echo "FATAL: nginx failed to start — container logs:"
+    docker compose logs --tail=30 nginx 2>&1 || true
+    cp "$NGINX_CONF.bak" "$NGINX_CONF"
+    docker compose stop "app-$NEW"
+    exit 1
+  fi
+fi
+
+# 7c. If certs were missing, obtain them via certbot then switch to HTTPS config
 if [ "$NEED_CERTS" = "true" ]; then
   echo "Requesting SSL certificate via certbot..."
   docker compose run --rm certbot certonly \
@@ -165,39 +207,43 @@ if [ "$NEED_CERTS" = "true" ]; then
 
   echo "SSL certs obtained — switching to HTTPS config"
   sed "s/{{UPSTREAM}}/app-$NEW:$NEW_PORT/" "$NGINX_TEMPLATE" > "$NGINX_CONF"
+
+  # Re-validate the HTTPS config before reload
+  if ! docker run --rm --network discord_clone_backend $VALIDATE_VOLUMES nginx:1.27-alpine nginx -t 2>&1; then
+    echo "FATAL: HTTPS nginx config validation failed"
+    cp "$NGINX_CONF.bak" "$NGINX_CONF"
+    docker compose stop "app-$NEW"
+    exit 1
+  fi
 fi
 
-# 8. Validate nginx config before reload
-if ! docker compose exec -T nginx nginx -t 2>&1; then
-  echo "FATAL: nginx config validation failed — restoring backup"
-  cp "$NGINX_CONF.bak" "$NGINX_CONF"
-  docker compose stop "app-$NEW"
-  exit 1
+# 8. Reload nginx with validated config (skip if nginx was just started with the new config)
+if [ "$NGINX_WAS_DOWN" != "true" ]; then
+  if ! docker compose exec -T nginx nginx -s reload 2>&1; then
+    echo "FATAL: nginx reload failed — capturing logs:"
+    docker compose logs --tail=30 nginx 2>&1 || true
+    echo "Restoring backup config..."
+    cp "$NGINX_CONF.bak" "$NGINX_CONF"
+    docker compose exec -T nginx nginx -s reload || true
+    docker compose stop "app-$NEW"
+    exit 1
+  fi
 fi
 
-# 9. Reload nginx
-if ! docker compose exec -T nginx nginx -s reload 2>&1; then
-  echo "FATAL: nginx reload failed — restoring backup"
-  cp "$NGINX_CONF.bak" "$NGINX_CONF"
-  docker compose exec -T nginx nginx -s reload || true
-  docker compose stop "app-$NEW"
-  exit 1
-fi
-
-# 10. Post-switchover verification — verify nginx can reach new slot via Docker DNS
+# 9. Post-switchover verification — verify nginx can reach new slot via Docker DNS
 sleep 2
 if ! docker compose exec -T nginx wget --spider -q "http://app-$NEW:$NEW_PORT/api/health" 2>&1; then
   echo "WARNING: post-switchover health check via nginx->app-$NEW failed — verify manually"
 fi
 
-# 11. Stop old slot
+# 10. Stop old slot
 if [ "$ACTIVE" != "none" ]; then
   docker compose stop "app-$ACTIVE"
 fi
 
-# 12. Prune old Docker images (keep last 7 days)
+# 11. Prune old Docker images (keep last 7 days)
 docker image prune -af --filter "until=168h" 2>/dev/null || true
 
-# 13. Cleanup
+# 12. Cleanup
 rm -f "$NGINX_CONF.bak"
 echo "Deploy complete: app-$NEW ($IMAGE_TAG)"
