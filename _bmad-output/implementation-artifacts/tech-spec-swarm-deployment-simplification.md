@@ -2,7 +2,7 @@
 title: 'Swarm Deployment Simplification'
 slug: 'swarm-deployment-simplification'
 created: '2026-02-28'
-status: 'ready-for-dev'
+status: 'implementation-complete'
 stepsCompleted: [1, 2, 3, 4]
 tech_stack: ['Docker Swarm', 'Docker Compose v3', 'Nginx 1.27-alpine', 'GHCR', 'AWS SSM', 'certbot/certbot:v3.1.0', 'coturn/coturn:4.6.3', 'GitHub Actions', 'Fastify v5.7.x', 'Terraform']
 files_to_modify: ['docker-compose.yml', 'scripts/deploy.sh', 'scripts/setup.sh', 'scripts/rollback-config.sh', 'docker/nginx/nginx.conf', 'docker/nginx/nginx.conf.template', 'docker/nginx/nginx.http-only.conf.template', 'server/src/plugins/drain.ts', 'server/src/app.ts', '.github/workflows/release.yml', 'infrastructure/main.tf', 'docker-compose.coturn.yml']
@@ -117,19 +117,19 @@ Replace the hand-rolled blue-green orchestration with Docker Swarm's built-in se
 
 ### Tasks
 
-- [ ] Task 1: Remove drain plugin from server
+- [x] Task 1: Remove drain plugin from server
   - File: `server/src/plugins/drain.ts`
   - Action: Delete the entire file
   - File: `server/src/app.ts`
   - Action: Remove `import drainPlugin from './plugins/drain.js';` (line 13) and `await app.register(drainPlugin);` (line 51)
   - Notes: No tests to update (drain.ts has no test file). `getClients()` export in `ws/wsServer.ts` stays — harmless, no churn.
 
-- [ ] Task 2: Create `docker-compose.coturn.yml` for standalone coturn
+- [x] Task 2: Create `docker-compose.coturn.yml` for standalone coturn
   - File: `docker-compose.coturn.yml` (new)
   - Action: Create a minimal compose file with just the coturn service extracted from current `docker-compose.yml`. Keep identical config: `coturn/coturn:4.6.3`, `network_mode: host`, volume mount for `turnserver.prod.conf:ro`, resource limits, json-file logging.
   - Notes: This runs outside Swarm via `docker compose -f docker-compose.coturn.yml up -d`. coturn rarely changes and has no rolling update needs.
 
-- [ ] Task 3: Rewrite `docker-compose.yml` as Swarm stack
+- [x] Task 3: Rewrite `docker-compose.yml` as Swarm stack
   - File: `docker-compose.yml`
   - Action: Replace the entire file with a Swarm-compatible stack definition containing:
     - **`app` service** (single, replaces app-blue + app-green):
@@ -151,7 +151,7 @@ Replace the hand-rolled blue-green orchestration with Docker Swarm's built-in se
     - Remove: `app-green` service entirely, `profiles` directive, all blue/green-specific config
   - Notes: `security_opt: no-new-privileges` is NOT supported in Swarm — `cap_drop: ALL` provides equivalent hardening. `env_file` works in Swarm stacks. Compose `deploy` section is now meaningful (ignored by plain `docker compose up`, used by `docker stack deploy`).
 
-- [ ] Task 4: Write static `nginx.conf`
+- [x] Task 4: Write static `nginx.conf`
   - File: `docker/nginx/nginx.conf`
   - Action: Replace with a static config (no `{{UPSTREAM}}` placeholders):
     - Add `resolver 127.0.0.11 valid=5s ipv6=off;` at the top of the `http` context
@@ -161,13 +161,13 @@ Replace the hand-rolled blue-green orchestration with Docker Swarm's built-in se
     - Keep all other config identical: rate limiting, TLS settings, HSTS, WebSocket proxy, downloads, landing page, certbot ACME challenge
   - Notes: The `set $backend` + `resolver` pattern forces nginx to re-resolve DNS per-request. Docker's internal DNS (`127.0.0.11`) resolves `app` to the Swarm service VIP. This is a well-known nginx OSS pattern for dynamic upstreams without nginx Plus.
 
-- [ ] Task 5: Delete obsolete files
+- [x] Task 5: Delete obsolete files
   - File: `docker/nginx/nginx.conf.template` → DELETE
   - File: `docker/nginx/nginx.http-only.conf.template` → DELETE
   - File: `scripts/rollback-config.sh` → DELETE
   - Notes: Templates replaced by static nginx.conf. Rollback handled by Swarm's `failure_action: rollback`. Manual rollback via `docker service rollback discord-clone_app` if needed.
 
-- [ ] Task 6: Rewrite `scripts/deploy.sh` for Swarm
+- [x] Task 6: Rewrite `scripts/deploy.sh` for Swarm
   - File: `scripts/deploy.sh`
   - Action: Replace the entire file (~267 lines → ~60 lines) with:
     1. **Arg parsing**: `IMAGE_TAG="${1:?Usage: deploy.sh <image-tag>}"`, set `DEPLOY_DIR`
@@ -183,7 +183,7 @@ Replace the hand-rolled blue-green orchestration with Docker Swarm's built-in se
     11. **Prune images**: `docker image prune -af --filter "until=168h"` (same as current)
   - Notes: Everything removed: blue-green slot detection, manual health polling, drain endpoint polling, nginx config templating, nginx validation container, nginx crash-loop detection, nginx reload + rollback, post-switchover verification, backup/restore logic. Swarm handles health checks, rollback, and restart natively.
 
-- [ ] Task 7: Update `scripts/setup.sh` for Swarm
+- [x] Task 7: Update `scripts/setup.sh` for Swarm
   - File: `scripts/setup.sh`
   - Action: Add the following changes:
     - After prerequisite checks (line 10-24), add: `docker swarm init 2>/dev/null || true` with info message
@@ -192,7 +192,7 @@ Replace the hand-rolled blue-green orchestration with Docker Swarm's built-in se
     - Add note about coturn: `docker compose -f docker-compose.coturn.yml up -d`
   - Notes: setup.sh is interactive (uses `read -rp`) — only runs manually on fresh EC2. The cert bootstrapping approach is the same conceptually, just uses `docker run` instead of compose.
 
-- [ ] Task 8: Simplify `release.yml` deploy-server job
+- [x] Task 8: Simplify `release.yml` deploy-server job
   - File: `.github/workflows/release.yml`
   - Action: In the `deploy-server` job:
     - **Remove the "Sync config files via SSM" step entirely** (lines 297-317). With Swarm, `docker stack deploy` reads the compose file directly from the repo checkout on EC2. The `git checkout origin/main -- docker-compose.yml docker/ scripts/` sync still happens but can be folded into the deploy command.
@@ -202,7 +202,7 @@ Replace the hand-rolled blue-green orchestration with Docker Swarm's built-in se
     - Keep: OIDC credential setup, failure notification webhook, concurrency control, environment protection
   - Notes: The config sync and deploy can be a single SSM command now. The S3 download sync for installer assets stays in the SSM command if it was there before.
 
-- [ ] Task 9: Narrow Terraform security group UDP range
+- [x] Task 9: Narrow Terraform security group UDP range
   - File: `infrastructure/main.tf`
   - Action: Change the mediasoup ingress rule (lines 67-72):
     - `from_port = 40000` (unchanged)

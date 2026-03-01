@@ -1,23 +1,12 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# Require Docker Compose V2 >= 2.20
-DC_VERSION=$(docker compose version --short 2>/dev/null || echo "0.0.0")
-DC_MAJOR=$(echo "$DC_VERSION" | cut -d. -f1)
-DC_MINOR=$(echo "$DC_VERSION" | cut -d. -f2)
-if [ "$DC_MAJOR" -lt 2 ] || { [ "$DC_MAJOR" -eq 2 ] && [ "$DC_MINOR" -lt 20 ]; }; then
-  echo "FATAL: Docker Compose V2 >= 2.20 required (found $DC_VERSION)"
-  exit 1
-fi
-
-DEPLOY_DIR="/home/ubuntu/discord_clone"
-DRAIN_TIMEOUT="${DRAIN_TIMEOUT:-30}"
 IMAGE_TAG="${1:?Usage: deploy.sh <image-tag>}"
 export IMAGE_TAG
-
+DEPLOY_DIR="/home/ubuntu/discord_clone"
 cd "$DEPLOY_DIR"
 
-# Fetch secrets from SSM into shell variables (scoped to this script's process only)
+# 1. Fetch secrets from SSM Parameter Store
 echo "Fetching secrets from SSM Parameter Store..."
 JWT_ACCESS_SECRET=$(aws ssm get-parameter --name "/discord-clone/prod/JWT_ACCESS_SECRET" --with-decryption --query "Parameter.Value" --output text)
 JWT_REFRESH_SECRET=$(aws ssm get-parameter --name "/discord-clone/prod/JWT_REFRESH_SECRET" --with-decryption --query "Parameter.Value" --output text)
@@ -26,241 +15,63 @@ GROUP_ENCRYPTION_KEY=$(aws ssm get-parameter --name "/discord-clone/prod/GROUP_E
 DATABASE_URL=$(aws ssm get-parameter --name "/discord-clone/prod/DATABASE_URL" --with-decryption --query "Parameter.Value" --output text)
 GHCR_TOKEN=$(aws ssm get-parameter --name "/discord-clone/prod/GHCR_TOKEN" --with-decryption --query "Parameter.Value" --output text)
 
-# Authenticate with GHCR to pull private images
+# 2. Authenticate with GHCR
 echo "$GHCR_TOKEN" | docker login ghcr.io -u AidenWoodside --password-stdin
 
-# Pass secrets as environment overrides — Docker stores them in the container config
-# No file on disk, no env_file directive needed
-export JWT_ACCESS_SECRET JWT_REFRESH_SECRET TURN_SECRET GROUP_ENCRYPTION_KEY DATABASE_URL
+# 3. Export secrets as env vars for docker stack deploy
+export JWT_ACCESS_SECRET JWT_REFRESH_SECRET GROUP_ENCRYPTION_KEY DATABASE_URL
 
-# Template coturn config with TURN_SECRET from SSM
+# 4. Template coturn config with TURN_SECRET
 COTURN_TEMPLATE="$DEPLOY_DIR/docker/coturn/turnserver.prod.conf.template"
 COTURN_CONF="$DEPLOY_DIR/docker/coturn/turnserver.prod.conf"
 if [ -f "$COTURN_TEMPLATE" ]; then
   sed "s|static-auth-secret=.*|static-auth-secret=$TURN_SECRET|" "$COTURN_TEMPLATE" > "$COTURN_CONF"
 fi
 
-# 1. Determine active slot by inspecting running containers (not a file)
-if docker compose ps app-blue --status running -q 2>/dev/null | grep -q .; then
-  ACTIVE="blue"; ACTIVE_PORT=3001
-  NEW="green"; NEW_PORT=3002
-elif docker compose ps app-green --status running -q 2>/dev/null | grep -q .; then
-  ACTIVE="green"; ACTIVE_PORT=3002
-  NEW="blue"; NEW_PORT=3001
-else
-  echo "No active slot detected — cold start, defaulting to blue"
-  ACTIVE="none"
-  NEW="blue"; NEW_PORT=3001
-fi
-echo "Active: $ACTIVE -> Deploying: $NEW"
+# 5. Ensure coturn is running (outside Swarm — needs host networking)
+docker compose -f docker-compose.coturn.yml up -d coturn
 
-# 2. Pull only the target slot image (quiet to avoid SSM output buffer overflow)
-docker compose pull -q "app-$NEW"
+# 6. Init Swarm (idempotent)
+docker swarm init 2>/dev/null || true
 
-# 3. Start new slot (no traffic routed yet — nginx still points at old slot)
-docker compose --profile deploy up -d "app-$NEW" 2>&1 | tail -5
+# 7. Deploy stack
+echo "Deploying discord-clone stack with image tag: $IMAGE_TAG"
+docker stack deploy -c docker-compose.yml --with-registry-auth --prune discord-clone
 
-# 3a. On cold start, run migrations before health check (tables may not exist yet)
-if [ "$ACTIVE" = "none" ]; then
-  echo "Cold start — waiting for container to accept connections..."
-  sleep 5
-  echo "Running migrations before health check..."
-  if ! docker compose exec -T "app-$NEW" node server/dist/scripts/migrate.js 2>&1; then
-    echo "FATAL: cold-start migration failed on app-$NEW"
-    docker compose stop "app-$NEW"
-    exit 1
-  fi
-  echo "Cold-start migrations complete"
-fi
-
-# 4. Health check new slot
+# 8. Wait for Swarm convergence (poll every 5s, up to 150s)
+echo "Waiting for service convergence..."
 for i in $(seq 1 30); do
-  if curl -sf "http://127.0.0.1:$NEW_PORT/api/health" > /dev/null 2>&1; then
-    echo "app-$NEW healthy (attempt $i)"
-    break
-  fi
+  STATE=$(docker service inspect discord-clone_app --format '{{.UpdateStatus.State}}' 2>/dev/null || echo "")
+  case "$STATE" in
+    completed|"")
+      echo "Service converged successfully"
+      break
+      ;;
+    rollback_completed|paused)
+      echo "FATAL: Service update failed (state: $STATE)"
+      echo "=== Service logs ==="
+      docker service logs --tail 50 discord-clone_app 2>&1 || true
+      exit 1
+      ;;
+  esac
   if [ "$i" -eq 30 ]; then
-    echo "FAILED: app-$NEW unhealthy after 60s"
-    docker compose stop "app-$NEW"
+    echo "FATAL: Timed out waiting for convergence (state: $STATE)"
+    docker service logs --tail 50 discord-clone_app 2>&1 || true
     exit 1
   fi
-  sleep 2
+  sleep 5
 done
 
-# 5. Run database migrations on new slot against Supabase (old slot still serves traffic)
-# Both slots can safely connect to Supabase concurrently — Postgres handles concurrent access.
-# Skip if already ran during cold start (step 3a)
-if [ "$ACTIVE" != "none" ]; then
-  if ! docker compose exec -T "app-$NEW" node server/dist/scripts/migrate.js 2>&1; then
-    echo "FATAL: database migration failed on app-$NEW (Supabase)"
-    docker compose stop "app-$NEW"
-    exit 1
-  fi
-fi
-
-# 6. Drain old slot — signal clients to reconnect
-if [ "$ACTIVE" != "none" ]; then
-  echo "Draining app-$ACTIVE (${DRAIN_TIMEOUT}s window)..."
-
-  # Trigger drain mode — check HTTP status to detect token mismatch
-  DRAIN_HTTP=$(curl -s -o /dev/null -w "%{http_code}" -X POST \
-    -H "X-Drain-Token: $JWT_ACCESS_SECRET" \
-    "http://127.0.0.1:$ACTIVE_PORT/api/drain" 2>/dev/null || echo "000")
-  if [ "$DRAIN_HTTP" = "403" ]; then
-    echo "WARNING: drain token rejected (old container may have stale secret) — skipping drain"
-  elif [ "$DRAIN_HTTP" = "000" ]; then
-    echo "WARNING: drain endpoint unreachable — skipping drain"
-  else
-    # Wait for connections to drain (poll every 2s, up to DRAIN_TIMEOUT)
-    DRAIN_START=$(date +%s)
-    while true; do
-      ELAPSED=$(( $(date +%s) - DRAIN_START ))
-      if [ "$ELAPSED" -ge "$DRAIN_TIMEOUT" ]; then
-        echo "Drain timeout reached — proceeding with switchover"
-        break
-      fi
-      DRAIN_RESP=$(curl -s -w "\n%{http_code}" -H "X-Drain-Token: $JWT_ACCESS_SECRET" \
-        "http://127.0.0.1:$ACTIVE_PORT/api/drain" 2>/dev/null || true)
-      DRAIN_CODE=$(echo "$DRAIN_RESP" | tail -1)
-      DRAIN_BODY=$(echo "$DRAIN_RESP" | sed '$d')
-      if [ "$DRAIN_CODE" != "200" ]; then
-        echo "WARNING: drain poll returned HTTP $DRAIN_CODE — skipping drain"
-        break
-      fi
-      CONNS=$(echo "$DRAIN_BODY" | jq -r '.connections // "unknown"')
-      if [ "$CONNS" = "0" ]; then
-        echo "All connections drained"
-        break
-      fi
-      echo "  $CONNS connections remaining (${ELAPSED}s elapsed)"
-      sleep 2
-    done
-  fi
-fi
-
-# 7. Switch nginx upstream via template (not in-place sed)
-NGINX_CONF="$DEPLOY_DIR/docker/nginx/nginx.conf"
-NGINX_TEMPLATE="$DEPLOY_DIR/docker/nginx/nginx.conf.template"
-NGINX_HTTP_TEMPLATE="$DEPLOY_DIR/docker/nginx/nginx.http-only.conf.template"
-CERT_PATH="$DEPLOY_DIR/data/certs/live/discweeds.com/fullchain.pem"
-cp "$NGINX_CONF" "$NGINX_CONF.bak"
-
-NEED_CERTS=false
-if [ ! -f "$CERT_PATH" ]; then
-  echo "SSL certs not found — bootstrapping nginx with HTTP-only config"
-  NEED_CERTS=true
-  sed "s/{{UPSTREAM}}/app-$NEW:$NEW_PORT/" "$NGINX_HTTP_TEMPLATE" > "$NGINX_CONF"
-else
-  sed "s/{{UPSTREAM}}/app-$NEW:$NEW_PORT/" "$NGINX_TEMPLATE" > "$NGINX_CONF"
-fi
-
-# 7a. Validate new config in a throwaway container BEFORE touching running nginx.
-# This catches bad configs (missing certs, syntax errors) without crashing the live proxy.
-VALIDATE_VOLUMES="-v $NGINX_CONF:/etc/nginx/conf.d/default.conf:ro -v $DEPLOY_DIR/data/certs:/etc/letsencrypt:ro"
-if ! docker run --rm --network discord_clone_backend $VALIDATE_VOLUMES nginx:1.27-alpine nginx -t 2>&1; then
-  echo "FATAL: nginx config validation failed — not touching running nginx"
-  cp "$NGINX_CONF.bak" "$NGINX_CONF"
-  docker compose stop "app-$NEW"
+# 9. Run migrations
+echo "Running database migrations..."
+APP_CONTAINER=$(docker ps -q -f "name=discord-clone_app" --latest)
+if [ -z "$APP_CONTAINER" ]; then
+  echo "FATAL: No app container found"
   exit 1
 fi
+docker exec "$APP_CONTAINER" node server/dist/scripts/migrate.js
 
-# 7b. Ensure nginx is running
-NGINX_WAS_DOWN=false
-if ! docker compose ps nginx --status running -q 2>/dev/null | grep -q .; then
-  NGINX_WAS_DOWN=true
-  echo "nginx not running — starting fresh"
-  docker compose rm -sf nginx 2>/dev/null || true
-  sleep 1
-  docker compose up -d --no-deps nginx 2>&1 | tail -5
-
-  # Wait for nginx to stabilize — a crash-looping container briefly shows "running"
-  # between restarts, so require CONSECUTIVE successes to confirm it's genuinely up.
-  NGINX_UP=false
-  CONSECUTIVE=0
-  for i in $(seq 1 10); do
-    sleep 2
-    if docker compose ps nginx --status running -q 2>/dev/null | grep -q .; then
-      CONSECUTIVE=$((CONSECUTIVE + 1))
-      if [ "$CONSECUTIVE" -ge 3 ]; then
-        NGINX_UP=true
-        break
-      fi
-    else
-      CONSECUTIVE=0
-    fi
-  done
-  if [ "$NGINX_UP" != "true" ]; then
-    echo "FATAL: nginx failed to stabilize — container logs:"
-    docker compose logs --tail=50 nginx 2>&1 || true
-    cp "$NGINX_CONF.bak" "$NGINX_CONF"
-    docker compose stop "app-$NEW"
-    exit 1
-  fi
-fi
-
-# 7c. If certs were missing, obtain them via certbot then switch to HTTPS config
-if [ "$NEED_CERTS" = "true" ]; then
-  echo "Requesting SSL certificate via certbot..."
-  docker compose run --rm certbot certonly \
-    --webroot -w /var/www/certbot \
-    -d discweeds.com \
-    --non-interactive --agree-tos \
-    --email admin@discweeds.com 2>&1
-
-  if [ ! -f "$CERT_PATH" ]; then
-    echo "FATAL: certbot failed to obtain SSL certificate"
-    docker compose stop "app-$NEW"
-    exit 1
-  fi
-
-  echo "SSL certs obtained — switching to HTTPS config"
-  sed "s/{{UPSTREAM}}/app-$NEW:$NEW_PORT/" "$NGINX_TEMPLATE" > "$NGINX_CONF"
-
-  # Re-validate the HTTPS config before reload
-  if ! docker run --rm --network discord_clone_backend $VALIDATE_VOLUMES nginx:1.27-alpine nginx -t 2>&1; then
-    echo "FATAL: HTTPS nginx config validation failed"
-    cp "$NGINX_CONF.bak" "$NGINX_CONF"
-    docker compose stop "app-$NEW"
-    exit 1
-  fi
-fi
-
-# 8. Reload nginx with validated config (skip if nginx was just started with the new config)
-if [ "$NGINX_WAS_DOWN" != "true" ]; then
-  if ! docker compose exec -T nginx nginx -s reload 2>&1; then
-    echo "FATAL: nginx reload failed — capturing logs:"
-    docker compose logs --tail=30 nginx 2>&1 || true
-    echo "Restoring backup config..."
-    cp "$NGINX_CONF.bak" "$NGINX_CONF"
-    docker compose exec -T nginx nginx -s reload || true
-    docker compose stop "app-$NEW"
-    exit 1
-  fi
-fi
-
-# 9. Post-switchover verification — nginx MUST be able to reach the new slot.
-# If this fails, the site is down. Abort before stopping the old slot.
-sleep 2
-if ! docker compose exec -T nginx wget --spider -q "http://app-$NEW:$NEW_PORT/api/health" 2>&1; then
-  echo "FATAL: post-switchover health check failed — nginx cannot reach app-$NEW"
-  echo "Capturing nginx logs:"
-  docker compose logs --tail=30 nginx 2>&1 || true
-  echo "Restoring previous config and keeping old slot running..."
-  cp "$NGINX_CONF.bak" "$NGINX_CONF"
-  # Try to reload nginx with old config so old slot can still serve traffic
-  docker compose exec -T nginx nginx -s reload 2>/dev/null || true
-  docker compose stop "app-$NEW"
-  exit 1
-fi
-
-# 10. Stop old slot
-if [ "$ACTIVE" != "none" ]; then
-  docker compose stop "app-$ACTIVE"
-fi
-
-# 11. Prune old Docker images (keep last 7 days)
+# 10. Prune old images (keep last 7 days)
 docker image prune -af --filter "until=168h" 2>/dev/null || true
 
-# 12. Cleanup
-rm -f "$NGINX_CONF.bak"
-echo "Deploy complete: app-$NEW ($IMAGE_TAG)"
+echo "Deploy complete: $IMAGE_TAG"

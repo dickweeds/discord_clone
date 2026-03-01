@@ -1,0 +1,19 @@
+# Coturn TURN/STUN server — runs outside Docker Swarm (requires host networking).
+# Managed independently: docker compose -f docker-compose.coturn.yml up -d
+services:
+  coturn:
+    image: coturn/coturn:4.6.3
+    network_mode: host
+    volumes:
+      - ./docker/coturn/turnserver.prod.conf:/etc/coturn/turnserver.conf:ro
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 512M
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "5"

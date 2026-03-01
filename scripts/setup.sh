@@ -23,6 +23,11 @@ echo "  Docker: $(docker --version)"
 echo "  Docker Compose: $(docker compose version --short)"
 echo ""
 
+# Initialize Docker Swarm (idempotent — safe to run if already initialized)
+echo "Initializing Docker Swarm..."
+docker swarm init 2>/dev/null || echo "  Swarm already initialized"
+echo ""
+
 # 2. Idempotency — check if .env already exists
 if [ -f .env ]; then
   echo "WARNING: .env file already exists."
@@ -146,15 +151,18 @@ server {
 }
 NGINX_EOF
 
-# Temporarily mount the HTTP-only config and start nginx
-docker compose run -d --name setup-nginx \
+# Start a standalone nginx container for cert provisioning (not via compose — main file is a Swarm stack)
+docker run -d --name setup-nginx \
   -v "$(pwd)/$TEMP_NGINX_CONF:/etc/nginx/conf.d/default.conf:ro" \
-  -v "$(pwd)/data/certbot-webroot:/var/www/certbot:ro" \
+  -v "$(pwd)/data/certbot-webroot:/var/www/certbot" \
   -p 80:80 \
   nginx:1.27-alpine 2>/dev/null || true
 
 # Run certbot in webroot mode
-docker compose run --rm certbot certonly \
+docker run --rm \
+  -v "$(pwd)/data/certs:/etc/letsencrypt" \
+  -v "$(pwd)/data/certbot-webroot:/var/www/certbot" \
+  certbot/certbot:v3.1.0 certonly \
   --webroot -w /var/www/certbot \
   -d "$DOMAIN" \
   --agree-tos \
@@ -176,11 +184,14 @@ echo "========================================"
 echo "  Setup Complete!"
 echo "========================================"
 echo ""
-echo "Start the server:"
-echo "  docker compose up -d"
+echo "Start coturn (runs outside Swarm — needs host networking):"
+echo "  docker compose -f docker-compose.coturn.yml up -d"
+echo ""
+echo "Deploy the Swarm stack:"
+echo "  docker stack deploy -c docker-compose.yml --with-registry-auth discord-clone"
 echo ""
 echo "View logs:"
-echo "  docker compose logs -f"
+echo "  docker service logs -f discord-clone_app"
 echo ""
 echo "Your server will be available at:"
 echo "  https://${DOMAIN}"

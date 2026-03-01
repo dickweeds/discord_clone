@@ -64,10 +64,10 @@ resource "aws_security_group" "app" {
     cidr_blocks = ["0.0.0.0/0"]
   }
 
-  # mediasoup RTP ports (40000-49999 currently, narrow to 40000-40099 after Phase 3 deploy)
+  # mediasoup RTP ports (single slot — Swarm stop-first, no blue-green split)
   ingress {
     from_port   = 40000
-    to_port     = 49999
+    to_port     = 40049
     protocol    = "udp"
     cidr_blocks = ["0.0.0.0/0"]
   }
