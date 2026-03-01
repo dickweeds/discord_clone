@@ -1,5 +1,14 @@
 # Changelog
 
+## [0.99.142](https://github.com/AidenWoodside/discord_clone/compare/v0.99.141...v0.99.142) (2026-03-01)
+
+
+### Bug Fixes
+
+* parse .env safely instead of bash source ([a26ad61](https://github.com/AidenWoodside/discord_clone/commit/a26ad6155f96084838c7b5504468c722269b93e1))
+* parse .env safely instead of bash source ([290886d](https://github.com/AidenWoodside/discord_clone/commit/290886de35e536331947c367551c8e73ca21ef61))
+* use node for health checks (wget not in slim image) ([2aea262](https://github.com/AidenWoodside/discord_clone/commit/2aea2621cfc2ffb5cba9aa40c1d1c5e26ca6a8e1))
+
 ## [0.99.141](https://github.com/AidenWoodside/discord_clone/compare/v0.99.140...v0.99.141) (2026-03-01)
 
 
