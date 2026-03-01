@@ -127,13 +127,42 @@ fi
 # 7. Switch nginx upstream via template (not in-place sed)
 NGINX_CONF="$DEPLOY_DIR/docker/nginx/nginx.conf"
 NGINX_TEMPLATE="$DEPLOY_DIR/docker/nginx/nginx.conf.template"
+NGINX_HTTP_TEMPLATE="$DEPLOY_DIR/docker/nginx/nginx.http-only.conf.template"
+CERT_PATH="$DEPLOY_DIR/data/certs/live/discweeds.com/fullchain.pem"
 cp "$NGINX_CONF" "$NGINX_CONF.bak"
-sed "s/{{UPSTREAM}}/app-$NEW:$NEW_PORT/" "$NGINX_TEMPLATE" > "$NGINX_CONF"
+
+NEED_CERTS=false
+if [ ! -f "$CERT_PATH" ]; then
+  echo "SSL certs not found — bootstrapping nginx with HTTP-only config"
+  NEED_CERTS=true
+  sed "s/{{UPSTREAM}}/app-$NEW:$NEW_PORT/" "$NGINX_HTTP_TEMPLATE" > "$NGINX_CONF"
+else
+  sed "s/{{UPSTREAM}}/app-$NEW:$NEW_PORT/" "$NGINX_TEMPLATE" > "$NGINX_CONF"
+fi
 
 # 7a. Start nginx if not already running
 if ! docker compose ps nginx --status running -q 2>/dev/null | grep -q .; then
   docker compose up -d --no-deps nginx 2>&1 | tail -5
   sleep 2
+fi
+
+# 7b. If certs were missing, obtain them via certbot then switch to HTTPS config
+if [ "$NEED_CERTS" = "true" ]; then
+  echo "Requesting SSL certificate via certbot..."
+  docker compose run --rm certbot certonly \
+    --webroot -w /var/www/certbot \
+    -d discweeds.com \
+    --non-interactive --agree-tos \
+    --email admin@discweeds.com 2>&1
+
+  if [ ! -f "$CERT_PATH" ]; then
+    echo "FATAL: certbot failed to obtain SSL certificate"
+    docker compose stop "app-$NEW"
+    exit 1
+  fi
+
+  echo "SSL certs obtained — switching to HTTPS config"
+  sed "s/{{UPSTREAM}}/app-$NEW:$NEW_PORT/" "$NGINX_TEMPLATE" > "$NGINX_CONF"
 fi
 
 # 8. Validate nginx config before reload
