@@ -1,5 +1,15 @@
 # Changelog
 
+## [0.99.143](https://github.com/AidenWoodside/discord_clone/compare/v0.99.142...v0.99.143) (2026-03-01)
+
+
+### Bug Fixes
+
+* add CHOWN/SETUID/SETGID capabilities to nginx in Swarm stack ([1acec7d](https://github.com/AidenWoodside/discord_clone/commit/1acec7d17da472787e5481239ffd89b5e67ac177))
+* add CHOWN/SETUID/SETGID capabilities to nginx in Swarm stack ([9f4dc8e](https://github.com/AidenWoodside/discord_clone/commit/9f4dc8ebd0d92c10e92ff8fcdb28f74634a9383e))
+* Fix voice video autoupdate fixes ([480a0c7](https://github.com/AidenWoodside/discord_clone/commit/480a0c7b58b6d5adbdc0ee67d9851e408920d074))
+* test pr ([7e2b874](https://github.com/AidenWoodside/discord_clone/commit/7e2b874b12a416cd4c6e35b6bac50804cec737df))
+
 ## [0.99.142](https://github.com/AidenWoodside/discord_clone/compare/v0.99.141...v0.99.142) (2026-03-01)
 
 
