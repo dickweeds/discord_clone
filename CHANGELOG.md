@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.99.131](https://github.com/AidenWoodside/discord_clone/compare/v0.99.130...v0.99.131) (2026-03-01)
+
+
+### Bug Fixes
+
+* install trivy directly instead of using broken action ([#60](https://github.com/AidenWoodside/discord_clone/issues/60)) ([5a64e27](https://github.com/AidenWoodside/discord_clone/commit/5a64e2767bfc4bf43706687d630ccb951f98b619))
+
 ## [0.99.130](https://github.com/AidenWoodside/discord_clone/compare/v0.99.129...v0.99.130) (2026-03-01)
 
 
