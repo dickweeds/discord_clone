@@ -16,6 +16,7 @@ name: Release
 on:
   push:
     tags: ['v*']
+  workflow_dispatch:
 
 # Deny all permissions by default — each job declares its own
 permissions: {}
