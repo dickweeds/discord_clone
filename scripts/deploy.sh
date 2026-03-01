@@ -170,20 +170,28 @@ if ! docker compose ps nginx --status running -q 2>/dev/null | grep -q .; then
   NGINX_WAS_DOWN=true
   echo "nginx not running — starting fresh"
   docker compose rm -sf nginx 2>/dev/null || true
+  sleep 1
   docker compose up -d --no-deps nginx 2>&1 | tail -5
 
-  # Wait for nginx to stabilize (not just "Started" — actually running)
+  # Wait for nginx to stabilize — a crash-looping container briefly shows "running"
+  # between restarts, so require CONSECUTIVE successes to confirm it's genuinely up.
   NGINX_UP=false
-  for i in $(seq 1 5); do
+  CONSECUTIVE=0
+  for i in $(seq 1 10); do
     sleep 2
     if docker compose ps nginx --status running -q 2>/dev/null | grep -q .; then
-      NGINX_UP=true
-      break
+      CONSECUTIVE=$((CONSECUTIVE + 1))
+      if [ "$CONSECUTIVE" -ge 3 ]; then
+        NGINX_UP=true
+        break
+      fi
+    else
+      CONSECUTIVE=0
     fi
   done
   if [ "$NGINX_UP" != "true" ]; then
-    echo "FATAL: nginx failed to start — container logs:"
-    docker compose logs --tail=30 nginx 2>&1 || true
+    echo "FATAL: nginx failed to stabilize — container logs:"
+    docker compose logs --tail=50 nginx 2>&1 || true
     cp "$NGINX_CONF.bak" "$NGINX_CONF"
     docker compose stop "app-$NEW"
     exit 1
@@ -230,10 +238,19 @@ if [ "$NGINX_WAS_DOWN" != "true" ]; then
   fi
 fi
 
-# 9. Post-switchover verification — verify nginx can reach new slot via Docker DNS
+# 9. Post-switchover verification — nginx MUST be able to reach the new slot.
+# If this fails, the site is down. Abort before stopping the old slot.
 sleep 2
 if ! docker compose exec -T nginx wget --spider -q "http://app-$NEW:$NEW_PORT/api/health" 2>&1; then
-  echo "WARNING: post-switchover health check via nginx->app-$NEW failed — verify manually"
+  echo "FATAL: post-switchover health check failed — nginx cannot reach app-$NEW"
+  echo "Capturing nginx logs:"
+  docker compose logs --tail=30 nginx 2>&1 || true
+  echo "Restoring previous config and keeping old slot running..."
+  cp "$NGINX_CONF.bak" "$NGINX_CONF"
+  # Try to reload nginx with old config so old slot can still serve traffic
+  docker compose exec -T nginx nginx -s reload 2>/dev/null || true
+  docker compose stop "app-$NEW"
+  exit 1
 fi
 
 # 10. Stop old slot
