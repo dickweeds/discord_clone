@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.99.140](https://github.com/AidenWoodside/discord_clone/compare/v0.99.139...v0.99.140) (2026-03-01)
+
+
+### Bug Fixes
+
+* Feat/deploy rework docker swarm ([aad649a](https://github.com/AidenWoodside/discord_clone/commit/aad649a316db648e15c3695cec36becb8fec9dca))
+
 ## [0.99.139](https://github.com/AidenWoodside/discord_clone/compare/v0.99.138...v0.99.139) (2026-03-01)
 
 
