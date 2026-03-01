@@ -130,6 +130,12 @@ NGINX_TEMPLATE="$DEPLOY_DIR/docker/nginx/nginx.conf.template"
 cp "$NGINX_CONF" "$NGINX_CONF.bak"
 sed "s/{{UPSTREAM}}/app-$NEW:$NEW_PORT/" "$NGINX_TEMPLATE" > "$NGINX_CONF"
 
+# 7a. Start nginx if not already running (cold start)
+if ! docker compose ps nginx --status running -q 2>/dev/null | grep -q .; then
+  docker compose up -d nginx 2>&1 | tail -5
+  sleep 2
+fi
+
 # 8. Validate nginx config before reload
 if ! docker compose exec -T nginx nginx -t 2>&1; then
   echo "FATAL: nginx config validation failed — restoring backup"
