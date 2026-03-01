@@ -145,9 +145,6 @@ services:
       - ./data/downloads:/usr/share/nginx/downloads:ro
       - ./data/certs:/etc/letsencrypt:ro
       - ./data/certbot-webroot:/var/www/certbot:ro
-    depends_on:
-      app-blue:
-        condition: service_healthy
     restart: unless-stopped
     deploy:
       resources:
