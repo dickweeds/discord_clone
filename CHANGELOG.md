@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.99.132](https://github.com/AidenWoodside/discord_clone/compare/v0.99.131...v0.99.132) (2026-03-01)
+
+
+### Bug Fixes
+
+* install trivy to user-writable path ([#62](https://github.com/AidenWoodside/discord_clone/issues/62)) ([8b64034](https://github.com/AidenWoodside/discord_clone/commit/8b64034276b9b421f8aa0ec575f41443efd0786c))
+
 ## [0.99.131](https://github.com/AidenWoodside/discord_clone/compare/v0.99.130...v0.99.131) (2026-03-01)
 
 
