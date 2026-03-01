@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.99.138](https://github.com/AidenWoodside/discord_clone/compare/v0.99.137...v0.99.138) (2026-03-01)
+
+
+### Bug Fixes
+
+* validate nginx config before reload and fix drain monitoring ([83c41a3](https://github.com/AidenWoodside/discord_clone/commit/83c41a3a4378e8cca9a900fb3d743b3d2ab9deec))
+* validate nginx config before reload and fix drain monitoring ([1d765b4](https://github.com/AidenWoodside/discord_clone/commit/1d765b40acd949574158a46004b29cd39e233205))
+
 ## [0.99.137](https://github.com/AidenWoodside/discord_clone/compare/v0.99.136...v0.99.137) (2026-03-01)
 
 
