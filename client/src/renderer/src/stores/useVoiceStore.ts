@@ -8,6 +8,30 @@ type ConnectionState = 'disconnected' | 'connecting' | 'connected';
 
 // Internal flag to track mute state before deafen was activated
 let wasMutedBeforeDeafen = false;
+const PEER_VOLUME_STORAGE_KEY = 'voicePeerVolumes';
+
+function clamp(value: number, min: number, max: number): number {
+  return Math.max(min, Math.min(max, value));
+}
+
+function loadPeerVolumes(): Map<string, number> {
+  try {
+    const raw = localStorage.getItem(PEER_VOLUME_STORAGE_KEY);
+    if (!raw) return new Map();
+    const parsed = JSON.parse(raw) as Record<string, unknown>;
+    const entries = Object.entries(parsed)
+      .filter(([, value]) => typeof value === 'number')
+      .map(([key, value]) => [key, clamp(Math.round(value as number), 0, 200)] as const);
+    return new Map(entries);
+  } catch {
+    return new Map();
+  }
+}
+
+function persistPeerVolumes(peerVolumes: Map<string, number>): void {
+  const serialized = Object.fromEntries(peerVolumes.entries());
+  localStorage.setItem(PEER_VOLUME_STORAGE_KEY, JSON.stringify(serialized));
+}
 
 interface VoiceState {
   currentChannelId: string | null;
@@ -24,6 +48,7 @@ interface VoiceState {
   selectedAudioInputId: string | null;
   selectedAudioOutputId: string | null;
   remoteMuteState: Map<string, { muted: boolean; deafened: boolean }>;
+  peerVolumes: Map<string, number>;
 
   joinChannel: (channelId: string, userId: string) => Promise<void>;
   leaveChannel: () => Promise<void>;
@@ -42,6 +67,8 @@ interface VoiceState {
   setAudioInputDevice: (deviceId: string | null) => void;
   setAudioOutputDevice: (deviceId: string | null) => void;
   setRemoteMuteState: (userId: string, muted: boolean, deafened: boolean) => void;
+  getPeerVolume: (userId: string) => number;
+  setPeerVolume: (userId: string, volumePercent: number) => void;
 }
 
 export const useVoiceStore = create<VoiceState>((set, get) => ({
@@ -59,6 +86,7 @@ export const useVoiceStore = create<VoiceState>((set, get) => ({
   selectedAudioInputId: localStorage.getItem('voiceInputDeviceId') ?? null,
   selectedAudioOutputId: localStorage.getItem('voiceOutputDeviceId') ?? null,
   remoteMuteState: new Map(),
+  peerVolumes: loadPeerVolumes(),
 
   joinChannel: async (channelId: string, userId: string) => {
     const state = get();
@@ -388,5 +416,18 @@ export const useVoiceStore = create<VoiceState>((set, get) => ({
       remoteMuteState.set(userId, { muted, deafened });
       return { remoteMuteState };
     });
+  },
+
+  getPeerVolume: (userId: string) => get().peerVolumes.get(userId) ?? 100,
+
+  setPeerVolume: (userId: string, volumePercent: number) => {
+    const clamped = clamp(Math.round(volumePercent), 0, 200);
+    set((state) => {
+      const peerVolumes = new Map(state.peerVolumes);
+      peerVolumes.set(userId, clamped);
+      persistPeerVolumes(peerVolumes);
+      return { peerVolumes };
+    });
+    mediaService.setPeerVolume(userId, clamped / 100);
   },
 }));

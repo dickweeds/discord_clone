@@ -187,12 +187,14 @@ class WsClient {
 
         await this.request<void>('voice:consumer-resume', { consumerId: consumer.id });
       } else {
+        const { useVoiceStore } = await import('../stores/useVoiceStore');
+        const initialVolumeScalar = useVoiceStore.getState().getPeerVolume(payload.peerId) / 100;
         const consumer = await mediaService.consumeAudio(recvTransport, {
           consumerId: consumeResponse.consumerId,
           producerId: consumeResponse.producerId,
           kind: consumeResponse.kind as 'audio',
           rtpParameters: consumeResponse.rtpParameters as Parameters<typeof mediaService.consumeAudio>[1]['rtpParameters'],
-        });
+        }, payload.peerId, initialVolumeScalar);
 
         await this.request<void>('voice:consumer-resume', { consumerId: consumer.id });
 

@@ -52,14 +52,14 @@ describe('VoiceParticipant', () => {
   });
 
   it('has correct row height (32px = h-8)', () => {
-    const { container } = render(<VoiceParticipant userId="user-1" />);
-    const row = container.firstChild as HTMLElement;
+    render(<VoiceParticipant userId="user-1" />);
+    const row = screen.getByRole('listitem');
     expect(row.className).toContain('h-8');
   });
 
   it('has left indent (pl-6 = 24px)', () => {
-    const { container } = render(<VoiceParticipant userId="user-1" />);
-    const row = container.firstChild as HTMLElement;
+    render(<VoiceParticipant userId="user-1" />);
+    const row = screen.getByRole('listitem');
     expect(row.className).toContain('pl-6');
   });
 

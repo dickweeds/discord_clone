@@ -4,6 +4,7 @@ import { useVoiceStore } from '../../stores/useVoiceStore';
 import { getAvatarColor } from '../../utils/avatarColor';
 import useAuthStore from '../../stores/useAuthStore';
 import { MicOff, HeadphoneOff } from 'lucide-react';
+import { UserContextMenu } from '../userContextMenu/UserContextMenu';
 
 interface VoiceParticipantProps {
   userId: string;
@@ -39,7 +40,7 @@ export function VoiceParticipant({ userId }: VoiceParticipantProps): React.React
   if (!isLocalUser && remoteMuteState?.deafened) ariaLabel += ' (deafened)';
   else if (!isLocalUser && remoteMuteState?.muted) ariaLabel += ' (muted)';
 
-  return (
+  const row = (
     <div
       className="h-8 flex items-center gap-2 pl-6 pr-2"
       role="listitem"
@@ -66,5 +67,17 @@ export function VoiceParticipant({ userId }: VoiceParticipantProps): React.React
       </div>
       <span className="text-sm text-text-secondary truncate">{username}</span>
     </div>
+  );
+
+  return (
+    <UserContextMenu
+      userId={userId}
+      username={username}
+      surface="voice"
+      isTargetOnline={true}
+      isTargetInVoice={true}
+    >
+      {row}
+    </UserContextMenu>
   );
 }
