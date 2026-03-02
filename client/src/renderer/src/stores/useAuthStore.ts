@@ -6,6 +6,7 @@ interface User {
   id: string;
   username: string;
   role: string;
+  avatarUrl?: string;
 }
 
 interface AuthState {
@@ -23,6 +24,7 @@ interface AuthState {
   logout: () => Promise<void>;
   refreshTokens: () => Promise<void>;
   restoreSession: () => Promise<void>;
+  setUserAvatarUrl: (avatarUrl?: string) => void;
   clearError: () => void;
 }
 
@@ -360,6 +362,8 @@ const useAuthStore = create<AuthState>((set, get) => {
           const payload = JSON.parse(atob(data.accessToken.split('.')[1]));
           const uid = payload.userId;
 
+          const me = await apiRequest<User>('/api/users/me', { method: 'GET' });
+
           await window.api.secureStorage.set('accessToken', data.accessToken);
           await window.api.secureStorage.set('refreshToken', data.refreshToken);
 
@@ -380,7 +384,12 @@ const useAuthStore = create<AuthState>((set, get) => {
           }
 
           set({
-            user: { id: uid, username: payload.username, role: payload.role },
+            user: {
+              id: uid,
+              username: me.username ?? payload.username,
+              role: me.role ?? payload.role,
+              ...(me.avatarUrl ? { avatarUrl: me.avatarUrl } : {}),
+            },
             accessToken: data.accessToken,
             refreshToken: data.refreshToken,
             groupKey,
@@ -400,6 +409,10 @@ const useAuthStore = create<AuthState>((set, get) => {
         restoreInFlight = false;
       }
     },
+
+    setUserAvatarUrl: (avatarUrl?: string) => set((state) => ({
+      user: state.user ? { ...state.user, avatarUrl } : null,
+    })),
 
     clearError: () => set({ error: null }),
   };

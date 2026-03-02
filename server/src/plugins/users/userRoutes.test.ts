@@ -66,4 +66,61 @@ describe('GET /api/users', () => {
     const body = JSON.parse(response.payload);
     expect(body.error.code).toBe('UNAUTHORIZED');
   });
+
+  it('returns current user profile from GET /api/users/me', async () => {
+    await seedOwner(app);
+    const { accessToken, id } = await seedUserWithSession(app);
+
+    const response = await app.inject({
+      method: 'GET',
+      url: '/api/users/me',
+      headers: { authorization: `Bearer ${accessToken}` },
+    });
+
+    expect(response.statusCode).toBe(200);
+    const body = JSON.parse(response.payload);
+    expect(body.data.id).toBe(id);
+    expect(body.data).toHaveProperty('username');
+    expect(body.data).toHaveProperty('role');
+    expect(body.data).toHaveProperty('createdAt');
+    expect(body.data).not.toHaveProperty('password_hash');
+    expect(body.data).not.toHaveProperty('passwordHash');
+  });
+
+  it('returns 401 for avatar upload without auth', async () => {
+    const response = await app.inject({
+      method: 'POST',
+      url: '/api/users/me/avatar',
+    });
+
+    expect(response.statusCode).toBe(401);
+    const body = JSON.parse(response.payload);
+    expect(body.error.code).toBe('UNAUTHORIZED');
+  });
+
+  it('returns 400 for avatar upload without file', async () => {
+    await seedOwner(app);
+    const { accessToken } = await seedUserWithSession(app);
+
+    const response = await app.inject({
+      method: 'POST',
+      url: '/api/users/me/avatar',
+      headers: { authorization: `Bearer ${accessToken}` },
+    });
+
+    expect(response.statusCode).toBe(400);
+    const body = JSON.parse(response.payload);
+    expect(body.error.code).toBe('AVATAR_REQUIRED');
+  });
+
+  it('returns 401 for avatar remove without auth', async () => {
+    const response = await app.inject({
+      method: 'DELETE',
+      url: '/api/users/me/avatar',
+    });
+
+    expect(response.statusCode).toBe(401);
+    const body = JSON.parse(response.payload);
+    expect(body.error.code).toBe('UNAUTHORIZED');
+  });
 });

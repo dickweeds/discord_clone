@@ -58,11 +58,14 @@ async function withRetry<T>(fn: () => Promise<T>, maxRetries = 2): Promise<T> {
 
 export async function apiRequest<T>(path: string, options?: RequestInit, returnFullBody?: boolean): Promise<T> {
   const accessToken = getAccessToken();
+  const isFormData = options?.body instanceof FormData;
   const headers: Record<string, string> = {
-    'Content-Type': 'application/json',
     ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}),
     ...(options?.headers as Record<string, string> || {}),
   };
+  if (!isFormData && !headers['Content-Type']) {
+    headers['Content-Type'] = 'application/json';
+  }
 
   let response = await fetch(`${BASE_URL}${path}`, { ...options, headers });
 

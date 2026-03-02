@@ -61,6 +61,7 @@ export interface UserPublic {
   id: string;
   username: string;
   role: 'owner' | 'user';
+  avatarUrl?: string;
   createdAt: string;
 }
 

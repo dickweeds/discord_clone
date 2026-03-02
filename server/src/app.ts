@@ -1,5 +1,10 @@
+import { fileURLToPath } from 'node:url';
+import { dirname, resolve } from 'node:path';
+import { mkdir } from 'node:fs/promises';
 import Fastify, { FastifyInstance } from 'fastify';
 import cors from '@fastify/cors';
+import multipart from '@fastify/multipart';
+import fastifyStatic from '@fastify/static';
 import { sql } from 'drizzle-orm';
 import dbPlugin from './plugins/db.js';
 import authMiddleware from './plugins/auth/authMiddleware.js';
@@ -16,6 +21,11 @@ import { LOG_REDACT_CONFIG } from './config/logRedaction.js';
 import { CORS_ORIGIN } from './config/corsConfig.js';
 
 export async function buildApp(): Promise<FastifyInstance> {
+  const __filename = fileURLToPath(import.meta.url);
+  const __dirname = dirname(__filename);
+  const avatarStorageRoot = process.env.AVATAR_UPLOAD_DIR ?? resolve(__dirname, '../storage/avatars');
+  await mkdir(avatarStorageRoot, { recursive: true });
+
   const app = Fastify({
     logger: {
       level: process.env.LOG_LEVEL || (process.env.NODE_ENV === 'production' ? 'warn' : 'info'),
@@ -31,6 +41,20 @@ export async function buildApp(): Promise<FastifyInstance> {
   await app.register(cors, {
     origin: CORS_ORIGIN,
     credentials: true,
+  });
+  await app.register(multipart, {
+    limits: {
+      fileSize: 2 * 1024 * 1024,
+      files: 1,
+    },
+  });
+  await app.register(fastifyStatic, {
+    root: avatarStorageRoot,
+    prefix: '/uploads/avatars/',
+    decorateReply: false,
+    list: false,
+    maxAge: '7d',
+    immutable: true,
   });
   await app.register(dbPlugin);
 

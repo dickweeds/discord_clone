@@ -159,11 +159,17 @@ export interface MemberAddedPayload {
   id: string;
   username: string;
   role: 'owner' | 'user';
+  avatarUrl?: string;
   createdAt: string;
 }
 
 export interface MemberRemovedPayload {
   userId: string;
+}
+
+export interface UserUpdatePayload {
+  userId: string;
+  avatarUrl?: string;
 }
 
 // Type constants for namespace:action pattern

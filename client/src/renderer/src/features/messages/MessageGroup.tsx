@@ -2,6 +2,7 @@ import React from 'react';
 import type { MessageGroupData } from '../../utils/groupMessages';
 import { formatTimestamp } from '../../utils/formatTimestamp';
 import { useUsername } from '../../hooks/useUsername';
+import { Avatar } from '../../components';
 
 interface MessageGroupProps {
   group: MessageGroupData;
@@ -9,19 +10,19 @@ interface MessageGroupProps {
 }
 
 export function MessageGroup({ group, isFirst }: MessageGroupProps): React.ReactNode {
-  const { username, avatarColor } = useUsername(group.authorId);
+  const { username, avatarUrl } = useUsername(group.authorId);
 
   return (
     <div role="group" aria-label={`Messages from ${username}`} className={`flex gap-3 px-2 py-0.5 hover:bg-bg-hover transition-colors duration-150 ${isFirst ? '' : 'mt-4'}`}>
       {/* Avatar column */}
       <div className="flex-shrink-0 w-8 pt-0.5">
-        <div
-          aria-hidden="true"
-          className="w-8 h-8 rounded-full flex items-center justify-center text-sm font-medium text-text-primary"
-          style={{ backgroundColor: avatarColor }}
-        >
-          {username.charAt(0).toUpperCase()}
-        </div>
+        <Avatar
+          username={username}
+          avatarUrl={avatarUrl}
+          ariaHidden
+          sizeClassName="w-8 h-8"
+          textClassName="text-sm"
+        />
       </div>
 
       {/* Message content column */}

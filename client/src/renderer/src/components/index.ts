@@ -5,3 +5,4 @@ export { ContextMenu, ContextMenuItem } from './ContextMenu';
 export { DropdownMenu, DropdownMenuItem } from './DropdownMenu';
 export { Tooltip } from './Tooltip';
 export { ScrollArea } from './ScrollArea';
+export { Avatar } from './Avatar';

@@ -8,6 +8,7 @@ import type {
   ChannelDeletedPayload,
   MemberAddedPayload,
   MemberRemovedPayload,
+  UserUpdatePayload,
   VoicePeerJoinedPayload,
   VoicePeerLeftPayload,
   VoiceNewProducerPayload,
@@ -21,6 +22,7 @@ import { usePresenceStore } from '../stores/usePresenceStore';
 import { useChannelStore } from '../stores/useChannelStore';
 import { useMemberStore } from '../stores/useMemberStore';
 import { useAdminNotificationStore } from '../stores/useAdminNotificationStore';
+import useAuthStore from '../stores/useAuthStore';
 import * as mediaService from './mediaService';
 import * as vadService from './vadService';
 
@@ -322,6 +324,13 @@ class WsClient {
     } else if (message.type === WS_TYPES.MEMBER_REMOVED) {
       const payload = message.payload as MemberRemovedPayload;
       useMemberStore.getState().removeMember(payload.userId);
+    } else if (message.type === WS_TYPES.USER_UPDATE) {
+      const payload = message.payload as UserUpdatePayload;
+      useMemberStore.getState().updateMemberAvatar(payload.userId, payload.avatarUrl);
+      const currentUserId = useAuthStore.getState().user?.id;
+      if (currentUserId === payload.userId) {
+        useAuthStore.getState().setUserAvatarUrl(payload.avatarUrl);
+      }
     } else if (message.type === WS_TYPES.VOICE_PEER_JOINED) {
       const payload = message.payload as VoicePeerJoinedPayload;
       import('../stores/useVoiceStore').then(({ useVoiceStore }) => {

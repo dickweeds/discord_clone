@@ -1,9 +1,9 @@
 import React from 'react';
 import { useMemberStore } from '../../stores/useMemberStore';
 import { useVoiceStore } from '../../stores/useVoiceStore';
-import { getAvatarColor } from '../../utils/avatarColor';
 import useAuthStore from '../../stores/useAuthStore';
 import { MicOff, HeadphoneOff } from 'lucide-react';
+import { Avatar } from '../../components';
 
 interface VoiceParticipantProps {
   userId: string;
@@ -28,8 +28,7 @@ export function VoiceParticipant({ userId }: VoiceParticipantProps): React.React
   const showDeafenIcon = showLocalDeafened || showRemoteDeafened;
 
   const username = member?.username ?? 'Unknown';
-  const avatarColor = getAvatarColor(username);
-  const initial = username.charAt(0).toUpperCase();
+  const avatarUrl = member?.avatarUrl;
 
   // Build ARIA label
   let ariaLabel = username;
@@ -45,14 +44,16 @@ export function VoiceParticipant({ userId }: VoiceParticipantProps): React.React
       role="listitem"
       aria-label={ariaLabel}
     >
-      <div
+      <Avatar
+        username={username}
+        avatarUrl={avatarUrl}
+        sizeClassName="w-6 h-6"
+        textClassName="text-xs"
         className={[
-          'w-6 h-6 rounded-full flex items-center justify-center text-xs font-medium text-text-primary flex-shrink-0 relative',
+          'flex-shrink-0',
           isSpeaking && 'ring-2 ring-voice-speaking animate-speakingPulse',
         ].filter(Boolean).join(' ')}
-        style={{ backgroundColor: avatarColor }}
       >
-        {initial}
         {showDeafenIcon && (
           <div className="absolute -bottom-0.5 -right-0.5 bg-bg-primary rounded-full p-0.5">
             <HeadphoneOff className="w-3 h-3 text-text-muted" />
@@ -63,7 +64,7 @@ export function VoiceParticipant({ userId }: VoiceParticipantProps): React.React
             <MicOff className="w-3 h-3 text-text-muted" />
           </div>
         )}
-      </div>
+      </Avatar>
       <span className="text-sm text-text-secondary truncate">{username}</span>
     </div>
   );

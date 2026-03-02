@@ -8,6 +8,7 @@ interface MemberState {
   error: string | null;
   fetchMembers: () => Promise<void>;
   addMember: (member: UserPublic) => void;
+  updateMemberAvatar: (userId: string, avatarUrl?: string) => void;
   removeMember: (userId: string) => void;
   clearError: () => void;
 }
@@ -29,6 +30,16 @@ export const useMemberStore = create<MemberState>((set) => ({
     if (state.members.some((m) => m.id === member.id)) return state;
     return { members: [...state.members, member] };
   }),
+  updateMemberAvatar: (userId: string, avatarUrl?: string) => set((state) => ({
+    members: state.members.map((member) => (
+      member.id === userId
+        ? {
+            ...member,
+            ...(avatarUrl ? { avatarUrl } : { avatarUrl: undefined }),
+          }
+        : member
+    )),
+  })),
   removeMember: (userId: string) => set((state) => ({
     members: state.members.filter((m) => m.id !== userId),
   })),

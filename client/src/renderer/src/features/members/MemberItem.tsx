@@ -1,6 +1,6 @@
 import React from 'react';
 import type { UserPublic } from 'discord-clone-shared';
-import { getAvatarColor } from '../../utils/avatarColor';
+import { Avatar } from '../../components';
 
 interface MemberItemProps {
   member: UserPublic;
@@ -8,19 +8,16 @@ interface MemberItemProps {
 }
 
 export function MemberItem({ member, isOnline }: MemberItemProps): React.ReactNode {
-  const avatarColor = getAvatarColor(member.username);
-  const initial = member.username.charAt(0).toUpperCase();
-
   return (
     <div className={`h-[42px] px-4 flex items-center gap-2 rounded-md hover:bg-bg-hover mx-2 cursor-default ${!isOnline ? 'opacity-60' : ''}`}>
       {/* Avatar with status dot */}
       <div className="relative flex-shrink-0">
-        <div
-          className="w-8 h-8 rounded-full flex items-center justify-center text-sm font-medium text-text-primary"
-          style={{ backgroundColor: avatarColor }}
-        >
-          {initial}
-        </div>
+        <Avatar
+          username={member.username}
+          avatarUrl={member.avatarUrl}
+          sizeClassName="w-8 h-8"
+          textClassName="text-sm"
+        />
         <div className={`absolute bottom-0 right-0 w-2.5 h-2.5 rounded-full border-2 border-bg-secondary ${isOnline ? 'bg-status-online' : 'bg-status-offline'}`} />
       </div>
 

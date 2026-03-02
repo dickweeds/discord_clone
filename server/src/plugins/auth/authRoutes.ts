@@ -251,6 +251,7 @@ export default fp(async (fastify: FastifyInstance) => {
         id: result.user.id,
         username: result.user.username,
         role: result.user.role,
+        ...(result.user.avatar_url ? { avatarUrl: result.user.avatar_url } : {}),
         createdAt: result.user.created_at.toISOString(),
       },
     }, fastify.log);
@@ -263,6 +264,7 @@ export default fp(async (fastify: FastifyInstance) => {
           id: result.user.id,
           username: result.user.username,
           role: result.user.role,
+          ...(result.user.avatar_url ? { avatarUrl: result.user.avatar_url } : {}),
         },
         encryptedGroupKey: result.user.encrypted_group_key ?? null,
       },
@@ -334,6 +336,7 @@ export default fp(async (fastify: FastifyInstance) => {
           id: user.id,
           username: user.username,
           role: user.role,
+          ...(user.avatar_url ? { avatarUrl: user.avatar_url } : {}),
         },
         encryptedGroupKey: user.encrypted_group_key ?? null,
       },
