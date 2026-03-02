@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.99.146](https://github.com/AidenWoodside/discord_clone/compare/v0.99.145...v0.99.146) (2026-03-02)
+
+
+### Bug Fixes
+
+* prevent voice channel leave/rejoin when clicking current channel ([2c38e58](https://github.com/AidenWoodside/discord_clone/commit/2c38e58d802fb0d66da7b802d3b1e624cbaf50d3))
+* prevent voice channel leave/rejoin when clicking current channel ([d81c868](https://github.com/AidenWoodside/discord_clone/commit/d81c8682d26965ebc161c32f008cde59858a2cc2))
+
 ## [0.99.145](https://github.com/AidenWoodside/discord_clone/compare/v0.99.144...v0.99.145) (2026-03-02)
 
 
