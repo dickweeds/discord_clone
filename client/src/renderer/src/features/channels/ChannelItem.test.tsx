@@ -76,7 +76,7 @@ describe('ChannelItem', () => {
 
   it('does not call joinChannel when already in the same voice channel', async () => {
     const joinSpy = vi.fn();
-    useVoiceStore.setState({ currentChannelId: 'ch-1', joinChannel: joinSpy } as any);
+    useVoiceStore.setState({ currentChannelId: 'ch-1', joinChannel: joinSpy } as Partial<ReturnType<typeof useVoiceStore.getState>>);
 
     renderItem({ type: 'voice' });
     const user = userEvent.setup();

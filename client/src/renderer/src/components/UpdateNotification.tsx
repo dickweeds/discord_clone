@@ -11,7 +11,6 @@ export function UpdateNotification(): React.ReactNode {
   const dismissAction = useUpdateStore((s) => s.dismiss);
   const quitAndInstall = useUpdateStore((s) => s.quitAndInstall);
   const checkForUpdates = useUpdateStore((s) => s.checkForUpdates);
-  const error = useUpdateStore((s) => s.error);
   const lastAction = useUpdateStore((s) => s.lastAction);
   const connectionState = usePresenceStore((s) => s.connectionState);
 
