@@ -44,3 +44,11 @@ export function playMuteSound(): void {
 export function playUnmuteSound(): void {
   playTone([440], 0.1);
 }
+
+export function playDeafenSound(): void {
+  playTone([220, 180], 0.2);
+}
+
+export function playUndeafenSound(): void {
+  playTone([180, 220], 0.2);
+}

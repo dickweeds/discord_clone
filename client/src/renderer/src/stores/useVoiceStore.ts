@@ -2,7 +2,7 @@ import { create } from 'zustand';
 import * as voiceService from '../services/voiceService';
 import * as mediaService from '../services/mediaService';
 import * as vadService from '../services/vadService';
-import { playConnectSound, playDisconnectSound, playMuteSound, playUnmuteSound } from '../utils/soundPlayer';
+import { playConnectSound, playDisconnectSound, playMuteSound, playUnmuteSound, playDeafenSound, playUndeafenSound } from '../utils/soundPlayer';
 
 type ConnectionState = 'disconnected' | 'connecting' | 'connected';
 
@@ -264,7 +264,7 @@ export const useVoiceStore = create<VoiceState>((set, get) => ({
       wasMutedBeforeDeafen = state.isMuted;
       mediaService.deafenAudio();
       vadService.stopLocalVAD();
-      playMuteSound();
+      playDeafenSound();
       // Clear self from speaking users
       const speakingUsers = new Set(state.speakingUsers);
       if (state.currentUserId) {
@@ -273,8 +273,8 @@ export const useVoiceStore = create<VoiceState>((set, get) => ({
       set({ isDeafened: true, isMuted: true, speakingUsers });
     } else {
       mediaService.undeafenAudio(wasMutedBeforeDeafen);
-      playUnmuteSound();
       if (!wasMutedBeforeDeafen) {
+        playUndeafenSound();
         // Restart local VAD since mic is being unmuted
         const localStream = mediaService.getLocalStream();
         if (localStream && state.currentUserId) {

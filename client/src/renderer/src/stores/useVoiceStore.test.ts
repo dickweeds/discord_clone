@@ -30,6 +30,8 @@ vi.mock('../utils/soundPlayer', () => ({
   playDisconnectSound: vi.fn(),
   playMuteSound: vi.fn(),
   playUnmuteSound: vi.fn(),
+  playDeafenSound: vi.fn(),
+  playUndeafenSound: vi.fn(),
 }));
 
 vi.mock('../services/wsClient', () => ({
@@ -43,7 +45,7 @@ import { useVoiceStore } from './useVoiceStore';
 import * as voiceService from '../services/voiceService';
 import * as mediaService from '../services/mediaService';
 import * as vadService from '../services/vadService';
-import { playConnectSound, playDisconnectSound, playMuteSound, playUnmuteSound } from '../utils/soundPlayer';
+import { playConnectSound, playDisconnectSound, playMuteSound, playUnmuteSound, playDeafenSound, playUndeafenSound } from '../utils/soundPlayer';
 
 const mockJoin = vi.mocked(voiceService.joinVoiceChannel);
 const mockLeave = vi.mocked(voiceService.leaveVoiceChannel);
@@ -786,24 +788,29 @@ describe('useVoiceStore', () => {
       }));
     });
 
-    it('plays mute sound when deafening', () => {
+    it('plays deafen sound when deafening', () => {
       useVoiceStore.getState().toggleDeafen();
-      expect(playMuteSound).toHaveBeenCalled();
+      expect(playDeafenSound).toHaveBeenCalled();
+      expect(playMuteSound).not.toHaveBeenCalled();
     });
 
-    it('plays unmute sound when undeafening', () => {
-      useVoiceStore.setState({ isDeafened: true, isMuted: true });
-      useVoiceStore.getState().toggleDeafen();
-      expect(playUnmuteSound).toHaveBeenCalled();
-    });
-
-    it('plays unmute sound when undeafening back to muted state', () => {
-      useVoiceStore.setState({ isMuted: true });
+    it('plays undeafen sound when undeafening and was not muted before', () => {
+      useVoiceStore.setState({ isMuted: false });
       useVoiceStore.getState().toggleDeafen(); // deafen on
+      vi.clearAllMocks();
+      useVoiceStore.getState().toggleDeafen(); // deafen off
+      expect(playUndeafenSound).toHaveBeenCalled();
+      expect(playUnmuteSound).not.toHaveBeenCalled();
+    });
+
+    it('does not play any sound when undeafening back to muted state', () => {
+      useVoiceStore.setState({ isMuted: true });
+      useVoiceStore.getState().toggleDeafen(); // deafen on (wasMutedBeforeDeafen = true)
+      vi.clearAllMocks();
       useVoiceStore.getState().toggleDeafen(); // deafen off (restores muted=true)
 
-      expect(playMuteSound).toHaveBeenCalledTimes(1);
-      expect(playUnmuteSound).toHaveBeenCalledTimes(1);
+      expect(playUndeafenSound).not.toHaveBeenCalled();
+      expect(playUnmuteSound).not.toHaveBeenCalled();
       expect(useVoiceStore.getState().isMuted).toBe(true);
     });
   });
