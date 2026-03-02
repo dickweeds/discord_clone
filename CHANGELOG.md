@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.99.145](https://github.com/AidenWoodside/discord_clone/compare/v0.99.144...v0.99.145) (2026-03-02)
+
+
+### Bug Fixes
+
+* download bug and error handling ([45d7721](https://github.com/AidenWoodside/discord_clone/commit/45d7721b933ade0fdc6ee7c8aba54ee804173690))
+
 ## [0.99.144](https://github.com/AidenWoodside/discord_clone/compare/v0.99.143...v0.99.144) (2026-03-02)
 
 
