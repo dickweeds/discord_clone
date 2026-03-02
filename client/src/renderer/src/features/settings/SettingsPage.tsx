@@ -2,7 +2,9 @@ import React, { useEffect } from 'react';
 import { X, LogOut } from 'lucide-react';
 import { useNavigate } from 'react-router';
 import { AudioSettings } from './AudioSettings';
+import { Button } from '../../components';
 import useAuthStore from '../../stores/useAuthStore';
+import { useUpdateStore } from '../../stores/useUpdateStore';
 
 interface SettingsPageProps {
   onClose: () => void;
@@ -10,7 +12,10 @@ interface SettingsPageProps {
 
 export function SettingsPage({ onClose }: SettingsPageProps): React.ReactNode {
   const logout = useAuthStore((s) => s.logout);
+  const checkForUpdates = useUpdateStore((s) => s.checkForUpdates);
+  const updateStatus = useUpdateStore((s) => s.status);
   const navigate = useNavigate();
+  const isCheckingOrDownloading = updateStatus === 'checking' || updateStatus === 'downloading';
 
   const handleLogout = async (): Promise<void> => {
     await logout();
@@ -42,6 +47,21 @@ export function SettingsPage({ onClose }: SettingsPageProps): React.ReactNode {
       </div>
       <div className="max-w-2xl">
         <AudioSettings />
+        <section className="px-4 py-4 border-t border-border-default">
+          <h2 className="text-base font-semibold text-text-primary">App Updates</h2>
+          <p className="text-sm text-text-secondary mt-1">Check for new desktop app versions.</p>
+          <div className="mt-3">
+            <Button
+              type="button"
+              variant="secondary"
+              size="sm"
+              onClick={checkForUpdates}
+              disabled={isCheckingOrDownloading}
+            >
+              {updateStatus === 'checking' ? 'Checking...' : 'Check for Updates'}
+            </Button>
+          </div>
+        </section>
       </div>
       <div className="mt-auto border-t border-border-default px-4 py-4">
         <button
