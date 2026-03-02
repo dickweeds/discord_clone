@@ -175,3 +175,19 @@ jobs:
         run: cd infrastructure && terraform validate
       - name: Terraform Format Check
         run: cd infrastructure && terraform fmt -check -recursive
+
+  ci-gate:
+    if: always()
+    needs: [lint-pr-title, lint, test-client, test-server, trivy-scan, terraform-validate]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check all job results
+        run: |
+          results=("${{ needs.lint-pr-title.result }}" "${{ needs.lint.result }}" "${{ needs.test-client.result }}" "${{ needs.test-server.result }}" "${{ needs.trivy-scan.result }}" "${{ needs.terraform-validate.result }}")
+          for r in "${results[@]}"; do
+            if [[ "$r" == "failure" || "$r" == "cancelled" ]]; then
+              echo "CI failed: one or more jobs returned $r"
+              exit 1
+            fi
+          done
+          echo "All CI jobs passed or were skipped"
