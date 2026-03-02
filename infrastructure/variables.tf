@@ -18,7 +18,7 @@ variable "ami_id" {
 variable "github_repo" {
   description = "GitHub repository in format owner/repo"
   type        = string
-  default     = "AidenWoodside/discord_clone"
+  default     = "dickweeds/discord_clone"
 }
 
 variable "assets_bucket_name" {
