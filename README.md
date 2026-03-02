@@ -70,6 +70,11 @@ xcode-select --install
 sudo apt-get install -y build-essential python3 make g++
 ```
 
+**WSL (additional audio tooling for voice testing):**
+```bash
+sudo apt install -y pulseaudio-utils
+```
+
 **Linux (Fedora/RHEL):**
 ```bash
 sudo dnf groupinstall "Development Tools"
@@ -249,6 +254,17 @@ docker compose -f docker-compose.dev.yml up -d
 ```
 
 Ensure `TURN_SECRET` in `.env` matches the coturn configuration in `docker/coturn/turnserver.conf`.
+
+#### WSL Notes (Voice Troubleshooting)
+
+If you are running the client from WSL and voice join fails, it is usually an audio-device visibility issue rather than an API/WebSocket issue.
+
+- Install PulseAudio utilities in WSL:
+```bash
+sudo apt install -y pulseaudio-utils
+```
+- Verify devices are visible in the app before joining voice.
+- If no audio devices appear, run the Electron client on Windows and keep the server in WSL. This is the most reliable local setup.
 
 ## Architecture
 
