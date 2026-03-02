@@ -1,5 +1,23 @@
 # Changelog
 
+## [0.99.148](https://github.com/dickweeds/discord_clone/compare/v0.99.147...v0.99.148) (2026-03-02)
+
+
+### Features
+
+* add deafen button audio feedback ([4b148d5](https://github.com/dickweeds/discord_clone/commit/4b148d51e17011bfa8de35f4ca14dbac49fdd515))
+* **voice:** add deafen toggle audio feedback ([3cfeff6](https://github.com/dickweeds/discord_clone/commit/3cfeff68923b2cbf605f84479c0053c4501b0881))
+
+
+### Bug Fixes
+
+* add dev fallback for unavailable OS encryption ([4669160](https://github.com/dickweeds/discord_clone/commit/4669160c599f53bdd12aac0f9a95bcd558047b27))
+* add dev fallback when electron safeStorage is unavailable ([d4203fd](https://github.com/dickweeds/discord_clone/commit/d4203fde2a8646715dd10096c3131e86ae3e057e))
+* tighten safeStorage fallback to dev-only and guard plaintext read path ([d253135](https://github.com/dickweeds/discord_clone/commit/d253135c9c3b1c304f42ab51042994062c1ded30))
+* update org references from AidenWoodside to dickweeds ([4ab42b9](https://github.com/dickweeds/discord_clone/commit/4ab42b9107cd6271ba1c4e526e64901cf91a38e1))
+* update org references from AidenWoodside to dickweeds ([3c0f3c9](https://github.com/dickweeds/discord_clone/commit/3c0f3c90f78233d606ec3888d596526eb902d7a4))
+* use distinct deafen sounds and fix sound logic on undeafen ([f76f5bd](https://github.com/dickweeds/discord_clone/commit/f76f5bdcdc560fac2d013c7ff378709427839d2f))
+
 ## [0.99.147](https://github.com/AidenWoodside/discord_clone/compare/v0.99.146...v0.99.147) (2026-03-02)
 
 
