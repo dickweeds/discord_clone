@@ -153,6 +153,21 @@ describe('useVoiceStore', () => {
       expect(voiceService.cleanupMedia).toHaveBeenCalled();
     });
 
+    it('is a no-op when joining the same channel already connected to', async () => {
+      useVoiceStore.setState({
+        currentChannelId: 'voice-ch-1',
+        currentUserId: 'my-user-id',
+        connectionState: 'connected',
+      });
+
+      await useVoiceStore.getState().joinChannel('voice-ch-1', 'my-user-id');
+
+      expect(mockJoin).not.toHaveBeenCalled();
+      expect(mockLeave).not.toHaveBeenCalled();
+      expect(useVoiceStore.getState().currentChannelId).toBe('voice-ch-1');
+      expect(useVoiceStore.getState().connectionState).toBe('connected');
+    });
+
     it('leaves current channel before joining new one', async () => {
       // Set up as already connected
       useVoiceStore.setState({

@@ -13,13 +13,14 @@ interface ChannelItemProps {
 export function ChannelItem({ channel, isActive }: ChannelItemProps): React.ReactNode {
   const navigate = useNavigate();
   const joinChannel = useVoiceStore((s) => s.joinChannel);
+  const currentChannelId = useVoiceStore((s) => s.currentChannelId);
   const userId = useAuthStore((s) => s.user?.id);
   const Icon = channel.type === 'text' ? Hash : Volume2;
 
   const handleClick = () => {
     if (channel.type === 'text') {
       navigate(`/app/channels/${channel.id}`);
-    } else if (userId) {
+    } else if (userId && channel.id !== currentChannelId) {
       joinChannel(channel.id, userId);
     }
   };

@@ -3,6 +3,7 @@ import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter, useLocation } from 'react-router';
 import { ChannelItem } from './ChannelItem';
+import { useVoiceStore } from '../../stores/useVoiceStore';
 
 let capturedPathname = '';
 
@@ -15,6 +16,7 @@ function LocationSpy() {
 beforeEach(() => {
   vi.clearAllMocks();
   capturedPathname = '';
+  useVoiceStore.setState({ currentChannelId: null });
 });
 
 function renderItem(props: { type: 'text' | 'voice'; isActive?: boolean }) {
@@ -70,5 +72,16 @@ describe('ChannelItem', () => {
   it('renders voice channel with correct button', () => {
     renderItem({ type: 'voice' });
     expect(screen.getByRole('button', { name: /test-channel/i })).toBeInTheDocument();
+  });
+
+  it('does not call joinChannel when already in the same voice channel', async () => {
+    const joinSpy = vi.fn();
+    useVoiceStore.setState({ currentChannelId: 'ch-1', joinChannel: joinSpy } as any);
+
+    renderItem({ type: 'voice' });
+    const user = userEvent.setup();
+    await user.click(screen.getByRole('button'));
+
+    expect(joinSpy).not.toHaveBeenCalled();
   });
 });

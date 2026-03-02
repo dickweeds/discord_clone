@@ -63,6 +63,11 @@ export const useVoiceStore = create<VoiceState>((set, get) => ({
   joinChannel: async (channelId: string, userId: string) => {
     const state = get();
 
+    // No-op if already in the requested channel
+    if (state.currentChannelId === channelId) {
+      return;
+    }
+
     // Leave current channel first if already in one
     if (state.currentChannelId) {
       await get().leaveChannel();
