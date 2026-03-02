@@ -1,5 +1,15 @@
 # Changelog
 
+## [0.99.149](https://github.com/dickweeds/discord_clone/compare/v0.99.148...v0.99.149) (2026-03-02)
+
+
+### Bug Fixes
+
+* set EC2 root volume to 20 GB to match live instance ([2e87b47](https://github.com/dickweeds/discord_clone/commit/2e87b47c0142232e0062c52db31bfedece85e1ff))
+* set EC2 root volume to 20 GB to match live instance ([d328bfd](https://github.com/dickweeds/discord_clone/commit/d328bfd6557ca213b71fcd83e69c002e2640316f))
+* update OIDC trust policy repo and align AWS credentials action v… ([ba8b1c6](https://github.com/dickweeds/discord_clone/commit/ba8b1c650a0826973fd7b6172f2de41582000b95))
+* update OIDC trust policy repo and align AWS credentials action version ([50fbeba](https://github.com/dickweeds/discord_clone/commit/50fbebae8d7a86c3aed5f9d8cc2e845f2a0f0787))
+
 ## [0.99.148](https://github.com/dickweeds/discord_clone/compare/v0.99.147...v0.99.148) (2026-03-02)
 
 
