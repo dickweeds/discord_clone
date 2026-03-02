@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.99.150](https://github.com/dickweeds/discord_clone/compare/v0.99.149...v0.99.150) (2026-03-02)
+
+
+### Bug Fixes
+
+* align chat scrollbar with app theme ([0a43bfb](https://github.com/dickweeds/discord_clone/commit/0a43bfb349dd91daf3481e162e22772358b013aa))
+* **client:** theme chat message scrollbar to match app palette ([6a689e9](https://github.com/dickweeds/discord_clone/commit/6a689e9455012267a665ff713980222dbadd857e))
+
 ## [0.99.149](https://github.com/dickweeds/discord_clone/compare/v0.99.148...v0.99.149) (2026-03-02)
 
 
