@@ -1,9 +1,19 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { WS_RECONNECT_DELAY } from 'discord-clone-shared';
 import { usePresenceStore } from '../stores/usePresenceStore';
+import useAuthStore from '../stores/useAuthStore';
 import { wsClient } from './wsClient';
 
 // Mock WebSocket
 let mockInstances: MockWebSocket[] = [];
+const mockRefreshTokens = vi.fn<() => Promise<void>>();
+const mockAuthState: {
+  accessToken: string | null;
+  refreshTokens: () => Promise<void>;
+} = {
+  accessToken: null,
+  refreshTokens: mockRefreshTokens,
+};
 
 class MockWebSocket {
   static readonly OPEN = 1;
@@ -55,6 +65,10 @@ const OriginalWebSocket = globalThis.WebSocket;
 beforeEach(() => {
   mockInstances = [];
   globalThis.WebSocket = MockWebSocket as unknown as typeof WebSocket;
+  mockAuthState.accessToken = null;
+  mockRefreshTokens.mockReset();
+  mockRefreshTokens.mockResolvedValue(undefined);
+  vi.spyOn(useAuthStore, 'getState').mockReturnValue(mockAuthState as unknown as ReturnType<typeof useAuthStore.getState>);
   // Ensure wsClient is disconnected and fresh
   wsClient.disconnect();
   usePresenceStore.setState({
@@ -198,13 +212,49 @@ describe('wsClient', () => {
       expect(mockInstances).toHaveLength(1);
     });
 
-    it('should not reconnect on auth failure (4001)', () => {
+    it('should attempt reconnect on auth failure (4001)', () => {
       wsClient.connect('my-token');
       mockInstances[0].triggerOpen();
 
       mockInstances[0].triggerClose(4001);
 
+      expect(usePresenceStore.getState().connectionState).toBe('reconnecting');
+    });
+
+    it('should force token refresh on auth failure before reconnecting', async () => {
+      vi.useFakeTimers();
+      mockAuthState.accessToken = 'stale-token';
+      mockRefreshTokens.mockImplementation(async () => {
+        mockAuthState.accessToken = 'fresh-token';
+      });
+
+      wsClient.connect('my-token');
+      mockInstances[0].triggerOpen();
+      mockInstances[0].triggerClose(4001);
+
+      await vi.advanceTimersByTimeAsync(WS_RECONNECT_DELAY + 1);
+
+      expect(mockRefreshTokens).toHaveBeenCalledTimes(1);
+      expect(mockInstances).toHaveLength(2);
+      expect(mockInstances[1].url).toContain('token=fresh-token');
+      vi.useRealTimers();
+    });
+
+    it('should stop reconnecting when forced refresh fails on auth failure', async () => {
+      vi.useFakeTimers();
+      mockAuthState.accessToken = 'stale-token';
+      mockRefreshTokens.mockRejectedValue(new Error('refresh failed'));
+
+      wsClient.connect('my-token');
+      mockInstances[0].triggerOpen();
+      mockInstances[0].triggerClose(4001);
+
+      await vi.advanceTimersByTimeAsync(WS_RECONNECT_DELAY + 1);
+
+      expect(mockRefreshTokens).toHaveBeenCalledTimes(1);
+      expect(mockInstances).toHaveLength(1);
       expect(usePresenceStore.getState().connectionState).toBe('disconnected');
+      vi.useRealTimers();
     });
   });
 

@@ -40,10 +40,12 @@ class WsClient {
   private reconnectDelay = WS_RECONNECT_DELAY;
   private accessToken: string | null = null;
   private intentionalClose = false;
+  private forceRefreshOnReconnect = false;
 
   connect(accessToken: string): void {
     this.accessToken = accessToken;
     this.intentionalClose = false;
+    this.forceRefreshOnReconnect = false;
 
     usePresenceStore.getState().setConnectionState('connecting');
 
@@ -65,9 +67,13 @@ class WsClient {
       this.markPendingMessagesFailed();
       this.cleanupVoiceOnDisconnect();
 
-      if (this.intentionalClose || event.code === 4001 || event.code === 4003) {
+      if (this.intentionalClose || event.code === 4003) {
         usePresenceStore.getState().setConnectionState('disconnected');
         return;
+      }
+
+      if (event.code === 4001) {
+        this.forceRefreshOnReconnect = true;
       }
 
       this.startReconnection();
@@ -80,6 +86,7 @@ class WsClient {
 
   disconnect(): void {
     this.intentionalClose = true;
+    this.forceRefreshOnReconnect = false;
     this.clearReconnectTimer();
 
     if (this.socket) {
@@ -384,12 +391,15 @@ class WsClient {
     this.reconnectTimer = setTimeout(async () => {
       if (this.intentionalClose) return;
 
+      const forceRefresh = this.forceRefreshOnReconnect;
+      this.forceRefreshOnReconnect = false;
+
       // Try refreshing the token before reconnecting
       try {
         const useAuthStore = (await import('../stores/useAuthStore')).default;
         const { accessToken } = useAuthStore.getState();
 
-        if (!accessToken) {
+        if (forceRefresh || !accessToken) {
           // Try refreshing tokens
           try {
             await useAuthStore.getState().refreshTokens();
@@ -403,6 +413,10 @@ class WsClient {
           this.accessToken = accessToken;
         }
       } catch {
+        if (forceRefresh) {
+          usePresenceStore.getState().setConnectionState('disconnected');
+          return;
+        }
         // Module import failed — use existing token
       }
 
@@ -430,9 +444,12 @@ class WsClient {
         ws.onclose = (event: CloseEvent) => {
           this.socket = null;
           this.cleanupVoiceOnDisconnect();
-          if (this.intentionalClose || event.code === 4001) {
+          if (this.intentionalClose || event.code === 4003) {
             usePresenceStore.getState().setConnectionState('disconnected');
             return;
+          }
+          if (event.code === 4001) {
+            this.forceRefreshOnReconnect = true;
           }
           this.startReconnection();
         };
