@@ -1,5 +1,21 @@
 # Changelog
 
+## [0.99.151](https://github.com/dickweeds/discord_clone/compare/v0.99.150...v0.99.151) (2026-03-02)
+
+
+### Features
+
+* add check for updates button in settings ([2eee760](https://github.com/dickweeds/discord_clone/commit/2eee7601c538158562a53e610a725ca4d5bcd14f))
+* **client:** add check for updates button to settings ([90f8582](https://github.com/dickweeds/discord_clone/commit/90f8582b871ae4964b79035be2e415a1dfe7d033))
+* **client:** add extensible user context menu with per-user voice volume ([422451d](https://github.com/dickweeds/discord_clone/commit/422451d1db3c95e9ea81900f1365b1d888373389))
+
+
+### Bug Fixes
+
+* **client:** force token refresh on ws 4001 reconnect ([a22f10a](https://github.com/dickweeds/discord_clone/commit/a22f10a0dfa526ea68f90260054deecd9623064e))
+* fixed bug where &gt;15 connection would timeout until user took another action ([825cefe](https://github.com/dickweeds/discord_clone/commit/825cefec5cb6ae89269a4687406e77a578bf56a9))
+* fixed bug where &gt;15min connection would timeout ([507ea54](https://github.com/dickweeds/discord_clone/commit/507ea544c6ba239aa783c59109d6eb5aaa4a1bc6))
+
 ## [0.99.150](https://github.com/dickweeds/discord_clone/compare/v0.99.149...v0.99.150) (2026-03-02)
 
 
