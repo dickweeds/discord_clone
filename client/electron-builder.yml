@@ -9,13 +9,19 @@ files:
   - '!electron.vite.config.*'
   - '!{.eslintignore,.eslintrc.cjs,.prettierignore,.prettierrc.yaml,dev-app-update.yml,CHANGELOG.md,README.md}'
   - '!{tsconfig.json,tsconfig.node.json,tsconfig.web.json}'
+artifactName: "Discord-Clone-${version}-${arch}.${ext}"
 mac:
   target:
     - target: dmg
       arch:
         - x64
         - arm64
+    - target: zip
+      arch:
+        - x64
+        - arm64
 win:
+  artifactName: "Discord-Clone-Setup-${version}.${ext}"
   target:
     - target: nsis
       arch:
