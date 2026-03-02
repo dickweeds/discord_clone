@@ -51,6 +51,7 @@ import {
   getLocalStream,
   switchAudioInput,
   switchAudioOutput,
+  setPeerVolume,
 } from './mediaService';
 import * as vadService from './vadService';
 
@@ -58,6 +59,7 @@ import * as vadService from './vadService';
 const originalNavigator = globalThis.navigator;
 const originalAudio = globalThis.Audio;
 const originalMediaStream = globalThis.MediaStream;
+const originalAudioContext = globalThis.AudioContext;
 
 function makeMockTransport(id: string) {
   return {
@@ -96,6 +98,7 @@ afterEach(() => {
   });
   globalThis.Audio = originalAudio;
   globalThis.MediaStream = originalMediaStream;
+  globalThis.AudioContext = originalAudioContext;
 });
 
 describe('mediaService', () => {
@@ -266,6 +269,7 @@ describe('mediaService', () => {
           kind: 'audio',
           rtpParameters: {} as Parameters<typeof consumeAudio>[1]['rtpParameters'],
         },
+        'peer-1',
       );
 
       expect(transport.consume).toHaveBeenCalledWith({
@@ -342,6 +346,7 @@ describe('mediaService', () => {
           kind: 'audio',
           rtpParameters: {} as Parameters<typeof consumeAudio>[1]['rtpParameters'],
         },
+        'peer-1',
       );
 
       expect(getConsumers().size).toBe(1);
@@ -364,6 +369,7 @@ describe('mediaService', () => {
           kind: 'audio',
           rtpParameters: {} as Parameters<typeof consumeAudio>[1]['rtpParameters'],
         },
+        'peer-1',
       );
 
       expect(getConsumers().size).toBe(1);
@@ -456,6 +462,7 @@ describe('mediaService', () => {
           kind: 'audio',
           rtpParameters: {} as Parameters<typeof consumeAudio>[1]['rtpParameters'],
         },
+        'peer-1',
       );
 
       deafenAudio();
@@ -487,6 +494,7 @@ describe('mediaService', () => {
           kind: 'audio',
           rtpParameters: {} as Parameters<typeof consumeAudio>[1]['rtpParameters'],
         },
+        'peer-1',
       );
 
       undeafenAudio(false);
@@ -1003,6 +1011,7 @@ describe('mediaService', () => {
           kind: 'audio',
           rtpParameters: {} as Parameters<typeof consumeAudio>[1]['rtpParameters'],
         },
+        'peer-1',
       );
 
       await switchAudioOutput('speaker-1');
@@ -1036,9 +1045,88 @@ describe('mediaService', () => {
           kind: 'audio',
           rtpParameters: {} as Parameters<typeof consumeAudio>[1]['rtpParameters'],
         },
+        'peer-1',
       );
 
       expect(mockSetSinkId).toHaveBeenCalledWith('speaker-1');
+    });
+  });
+
+  describe('setPeerVolume', () => {
+    it('updates the target peer consumer volume', async () => {
+      const mockPlay = vi.fn().mockResolvedValue(undefined);
+      const mockAudioA = { play: mockPlay, pause: vi.fn(), srcObject: null, volume: 1 };
+      const mockAudioB = { play: mockPlay, pause: vi.fn(), srcObject: null, volume: 1 };
+      let callCount = 0;
+      globalThis.Audio = function MockAudio(this: Record<string, unknown>) {
+        callCount += 1;
+        Object.assign(this, callCount === 1 ? mockAudioA : mockAudioB);
+      } as unknown as typeof Audio;
+      globalThis.MediaStream = function MockMediaStream() {
+        return {};
+      } as unknown as typeof MediaStream;
+
+      const transportA = {
+        ...makeMockTransport('recv-1'),
+        consume: vi.fn().mockResolvedValue({
+          id: 'consumer-a',
+          producerId: 'p-a',
+          track: { kind: 'audio' },
+          on: vi.fn(),
+          close: vi.fn(),
+          resume: vi.fn(),
+        }),
+      };
+      const transportB = {
+        ...makeMockTransport('recv-2'),
+        consume: vi.fn().mockResolvedValue({
+          id: 'consumer-b',
+          producerId: 'p-b',
+          track: { kind: 'audio' },
+          on: vi.fn(),
+          close: vi.fn(),
+          resume: vi.fn(),
+        }),
+      };
+
+      await consumeAudio(
+        transportA as unknown as Parameters<typeof consumeAudio>[0],
+        {
+          consumerId: 'consumer-a',
+          producerId: 'p-a',
+          kind: 'audio',
+          rtpParameters: {} as Parameters<typeof consumeAudio>[1]['rtpParameters'],
+        },
+        'peer-a',
+      );
+      await consumeAudio(
+        transportB as unknown as Parameters<typeof consumeAudio>[0],
+        {
+          consumerId: 'consumer-b',
+          producerId: 'p-b',
+          kind: 'audio',
+          rtpParameters: {} as Parameters<typeof consumeAudio>[1]['rtpParameters'],
+        },
+        'peer-b',
+      );
+
+      setPeerVolume('peer-a', 0.3);
+
+      const entries = [...getConsumers().values()];
+      const peerAEntry = entries.find((entry) => entry.peerId === 'peer-a');
+      const peerBEntry = entries.find((entry) => entry.peerId === 'peer-b');
+
+      if (peerAEntry?.gainNode) {
+        expect(peerAEntry.gainNode.gain.value).toBeCloseTo(0.3);
+      } else {
+        expect(peerAEntry?.audio.volume).toBeCloseTo(0.3);
+      }
+
+      if (peerBEntry?.gainNode) {
+        expect(peerBEntry.gainNode.gain.value).toBeCloseTo(1);
+      } else {
+        expect(peerBEntry?.audio.volume).toBeCloseTo(1);
+      }
     });
   });
 });

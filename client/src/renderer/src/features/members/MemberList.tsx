@@ -4,8 +4,8 @@ import { usePresenceStore } from '../../stores/usePresenceStore';
 import useAuthStore from '../../stores/useAuthStore';
 import { ScrollArea } from '../../components';
 import { MemberItem } from './MemberItem';
-import { MemberContextMenu } from '../admin/MemberContextMenu';
 import { BannedUsersPanel } from '../admin/BannedUsersPanel';
+import { UserContextMenu } from '../userContextMenu/UserContextMenu';
 
 export function MemberList(): React.ReactNode {
   const members = useMemberStore((s) => s.members);
@@ -41,9 +41,16 @@ export function MemberList(): React.ReactNode {
               ONLINE — {onlineMembers.length}
             </h2>
             {onlineMembers.map((member) => (
-              <MemberContextMenu key={member.id} userId={member.id} username={member.username}>
+              <UserContextMenu
+                key={member.id}
+                userId={member.id}
+                username={member.username}
+                surface="member-online"
+                isTargetOnline={true}
+                isTargetInVoice={false}
+              >
                 <MemberItem member={member} isOnline={true} />
-              </MemberContextMenu>
+              </UserContextMenu>
             ))}
           </div>
         )}
@@ -53,9 +60,16 @@ export function MemberList(): React.ReactNode {
               OFFLINE — {offlineMembers.length}
             </h2>
             {offlineMembers.map((member) => (
-              <MemberContextMenu key={member.id} userId={member.id} username={member.username}>
+              <UserContextMenu
+                key={member.id}
+                userId={member.id}
+                username={member.username}
+                surface="member-offline"
+                isTargetOnline={false}
+                isTargetInVoice={false}
+              >
                 <MemberItem member={member} isOnline={false} />
-              </MemberContextMenu>
+              </UserContextMenu>
             ))}
           </div>
         )}

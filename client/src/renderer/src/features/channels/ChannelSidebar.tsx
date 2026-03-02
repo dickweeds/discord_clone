@@ -65,12 +65,24 @@ function ChannelGroup({
       </h2>
       {channels.map((channel) => {
         const participants = channelParticipants.get(channel.id) ?? [];
-        const item = (
+        const channelItem = (
+          <ChannelItem
+            channel={channel}
+            isActive={channel.id === activeChannelId}
+          />
+        );
+
+        const wrappedChannelItem = isOwner
+          ? (
+            <ChannelContextMenu channelId={channel.id} channelName={channel.name}>
+              {channelItem}
+            </ChannelContextMenu>
+          )
+          : channelItem;
+
+        return (
           <React.Fragment key={channel.id}>
-            <ChannelItem
-              channel={channel}
-              isActive={channel.id === activeChannelId}
-            />
+            {wrappedChannelItem}
             {channel.type === 'voice' && participants.length > 0 && (
               <div>
                 {participants.map((userId) => (
@@ -80,16 +92,6 @@ function ChannelGroup({
             )}
           </React.Fragment>
         );
-
-        if (isOwner) {
-          return (
-            <ChannelContextMenu key={channel.id} channelId={channel.id} channelName={channel.name}>
-              {item}
-            </ChannelContextMenu>
-          );
-        }
-
-        return item;
       })}
     </div>
   );

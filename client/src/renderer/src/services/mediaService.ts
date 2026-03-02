@@ -15,8 +15,20 @@ let localStream: MediaStream | null = null;
 let videoProducer: types.Producer | null = null;
 let localVideoStream: MediaStream | null = null;
 let currentOutputDeviceId = '';
-const consumers = new Map<string, { consumer: types.Consumer; audio: HTMLAudioElement }>();
+export interface AudioConsumerEntry {
+  consumer: types.Consumer;
+  audio: HTMLAudioElement;
+  peerId: string;
+  gainNode?: GainNode;
+  audioContext?: AudioContext;
+}
+
+const consumers = new Map<string, AudioConsumerEntry>();
 const videoConsumers = new Map<string, { consumer: types.Consumer; element: HTMLVideoElement; peerId: string; stream: MediaStream | null }>();
+
+function clamp(value: number, min: number, max: number): number {
+  return Math.max(min, Math.min(max, value));
+}
 
 export function getDevice(): Device | null {
   return device;
@@ -134,6 +146,8 @@ export async function produceAudio(
 export async function consumeAudio(
   transport: types.Transport,
   params: { consumerId: string; producerId: string; kind: 'audio'; rtpParameters: types.RtpParameters },
+  peerId: string,
+  initialVolumeScalar = 1,
 ): Promise<types.Consumer> {
   const consumer = await transport.consume({
     id: params.consumerId,
@@ -143,7 +157,36 @@ export async function consumeAudio(
   });
 
   const audio = new Audio();
-  audio.srcObject = new MediaStream([consumer.track]);
+  const clampedScalar = clamp(initialVolumeScalar, 0, 2);
+
+  let gainNode: GainNode | undefined;
+  let audioContext: AudioContext | undefined;
+
+  if (typeof AudioContext !== 'undefined') {
+    try {
+      audioContext = new AudioContext();
+      const sourceStream = new MediaStream([consumer.track]);
+      const source = audioContext.createMediaStreamSource(sourceStream);
+      gainNode = audioContext.createGain();
+      gainNode.gain.value = clampedScalar;
+      const destination = audioContext.createMediaStreamDestination();
+      source.connect(gainNode);
+      gainNode.connect(destination);
+      audio.srcObject = destination.stream;
+      await audioContext.resume().catch(() => Promise.resolve());
+    } catch {
+      // Fallback to direct audio element path if Web Audio setup fails
+      audioContext?.close().catch(() => Promise.resolve());
+      audioContext = undefined;
+      gainNode = undefined;
+      audio.srcObject = new MediaStream([consumer.track]);
+      audio.volume = clamp(clampedScalar, 0, 1);
+    }
+  } else {
+    audio.srcObject = new MediaStream([consumer.track]);
+    audio.volume = clamp(clampedScalar, 0, 1);
+  }
+
   if (currentOutputDeviceId) {
     try {
       await (audio as unknown as { setSinkId: (id: string) => Promise<void> }).setSinkId(currentOutputDeviceId);
@@ -153,7 +196,7 @@ export async function consumeAudio(
   }
   await audio.play();
 
-  consumers.set(consumer.id, { consumer, audio });
+  consumers.set(consumer.id, { consumer, audio, peerId, gainNode, audioContext });
 
   return consumer;
 }
@@ -323,8 +366,20 @@ export function getRecvTransport(): types.Transport | null {
   return recvTransport;
 }
 
-export function getConsumers(): Map<string, { consumer: types.Consumer; audio: HTMLAudioElement }> {
+export function getConsumers(): Map<string, AudioConsumerEntry> {
   return consumers;
+}
+
+export function setPeerVolume(peerId: string, volumeScalar: number): void {
+  const clampedScalar = clamp(volumeScalar, 0, 2);
+  for (const [, entry] of consumers) {
+    if (entry.peerId !== peerId) continue;
+    if (entry.gainNode) {
+      entry.gainNode.gain.value = clampedScalar;
+    } else {
+      entry.audio.volume = clamp(clampedScalar, 0, 1);
+    }
+  }
 }
 
 export function removeConsumerByProducerId(producerId: string): void {
@@ -333,6 +388,9 @@ export function removeConsumerByProducerId(producerId: string): void {
       entry.consumer.close();
       entry.audio.pause();
       entry.audio.srcObject = null;
+      if (entry.audioContext) {
+        entry.audioContext.close().catch(() => Promise.resolve());
+      }
       consumers.delete(consumerId);
       break;
     }
@@ -373,6 +431,9 @@ export function cleanup(): void {
     entry.consumer.close();
     entry.audio.pause();
     entry.audio.srcObject = null;
+    if (entry.audioContext) {
+      entry.audioContext.close().catch(() => Promise.resolve());
+    }
   }
   consumers.clear();
 

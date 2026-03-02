@@ -17,6 +17,7 @@ vi.mock('../services/mediaService', () => ({
   getLocalStream: vi.fn().mockReturnValue(null),
   switchAudioInput: vi.fn().mockResolvedValue(undefined),
   switchAudioOutput: vi.fn().mockResolvedValue(undefined),
+  setPeerVolume: vi.fn(),
 }));
 
 vi.mock('../services/vadService', () => ({
@@ -66,6 +67,7 @@ beforeEach(() => {
     selectedAudioInputId: null,
     selectedAudioOutputId: null,
     remoteMuteState: new Map(),
+    peerVolumes: new Map(),
   });
   localStorage.clear();
   vi.clearAllMocks();
@@ -505,6 +507,28 @@ describe('useVoiceStore', () => {
       const state = useVoiceStore.getState();
       expect(state.channelParticipants.get('ch-1')).toEqual(['u1', 'u2']);
       expect(state.channelParticipants.get('ch-2')).toEqual(['u3']);
+    });
+  });
+
+  describe('peer volume', () => {
+    it('returns 100 by default when unset', () => {
+      expect(useVoiceStore.getState().getPeerVolume('user-1')).toBe(100);
+    });
+
+    it('sets and persists peer volume', () => {
+      useVoiceStore.getState().setPeerVolume('user-1', 135);
+
+      expect(useVoiceStore.getState().getPeerVolume('user-1')).toBe(135);
+      expect(localStorage.getItem('voicePeerVolumes')).toBe(JSON.stringify({ 'user-1': 135 }));
+      expect(mediaService.setPeerVolume).toHaveBeenCalledWith('user-1', 1.35);
+    });
+
+    it('clamps peer volume between 0 and 200', () => {
+      useVoiceStore.getState().setPeerVolume('user-1', 999);
+      expect(useVoiceStore.getState().getPeerVolume('user-1')).toBe(200);
+
+      useVoiceStore.getState().setPeerVolume('user-1', -1);
+      expect(useVoiceStore.getState().getPeerVolume('user-1')).toBe(0);
     });
   });
 
