@@ -322,6 +322,24 @@ describe('ContentArea', () => {
     expect(maxWidthContainer).toBeInTheDocument();
   });
 
+  it('applies themed chat scrollbar class to the message log container', async () => {
+    useMessageStore.setState({
+      messages: new Map([
+        ['ch-1', [
+          { id: 'msg-1', channelId: 'ch-1', authorId: 'user-1', content: 'Scrollbar check', createdAt: '2024-01-01T12:00:00Z', status: 'sent' as const },
+        ]],
+      ]),
+    });
+
+    renderContentArea('ch-1');
+
+    await waitFor(() => {
+      expect(screen.getByText('Scrollbar check')).toBeInTheDocument();
+    });
+
+    expect(screen.getByRole('log')).toHaveClass('chat-scrollbar');
+  });
+
   it('does not redirect when a non-active channel is removed', () => {
     renderContentArea('ch-1');
     expect(screen.getByText('This is the beginning of #general. Send the first message!')).toBeInTheDocument();

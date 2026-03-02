@@ -173,7 +173,7 @@ export function ContentArea(): React.ReactNode {
             </div>
           </div>
         ) : (
-          <div className="flex-1 overflow-y-auto relative" ref={scrollRef} onScroll={handleScroll} role="log" aria-label={`Messages in ${channel.name}`}>
+          <div className="flex-1 overflow-y-auto relative chat-scrollbar" ref={scrollRef} onScroll={handleScroll} role="log" aria-label={`Messages in ${channel.name}`}>
             {isLoadingMore && (
               <div className="flex justify-center py-2">
                 <Loader2 className="animate-spin text-text-muted" size={20} aria-label="Loading older messages" />
