@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.99.147](https://github.com/AidenWoodside/discord_clone/compare/v0.99.146...v0.99.147) (2026-03-02)
+
+
+### Bug Fixes
+
+* fix auto download ([82f1fcf](https://github.com/AidenWoodside/discord_clone/commit/82f1fcfa93b6007ad176aaecc370cfdf9d697f69))
+* linting errors ([ddcedfc](https://github.com/AidenWoodside/discord_clone/commit/ddcedfc6c800a2a67896c4903de1c69999c125b4))
+
 ## [0.99.146](https://github.com/AidenWoodside/discord_clone/compare/v0.99.145...v0.99.146) (2026-03-02)
 
 
