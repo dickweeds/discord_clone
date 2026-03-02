@@ -19,6 +19,7 @@ beforeEach(() => {
     downloadProgress: 0,
     error: null,
     dismissed: false,
+    lastAction: null,
   });
   vi.clearAllMocks();
   // @ts-expect-error mock window.api.updater
@@ -33,11 +34,13 @@ describe('useUpdateStore', () => {
     expect(state.downloadProgress).toBe(0);
     expect(state.error).toBeNull();
     expect(state.dismissed).toBe(false);
+    expect(state.lastAction).toBeNull();
   });
 
   it('should set status to checking when checkForUpdates is called', () => {
     useUpdateStore.getState().checkForUpdates();
     expect(useUpdateStore.getState().status).toBe('checking');
+    expect(useUpdateStore.getState().lastAction).toBe('check');
     expect(mockUpdater.checkForUpdates).toHaveBeenCalled();
   });
 
@@ -67,6 +70,7 @@ describe('useUpdateStore', () => {
     useUpdateStore.getState().downloadUpdate();
     expect(useUpdateStore.getState().status).toBe('downloading');
     expect(useUpdateStore.getState().downloadProgress).toBe(0);
+    expect(useUpdateStore.getState().lastAction).toBe('download');
     expect(mockUpdater.downloadUpdate).toHaveBeenCalled();
   });
 
@@ -113,6 +117,7 @@ describe('useUpdateStore', () => {
       downloadProgress: 50,
       error: 'fail',
       dismissed: true,
+      lastAction: 'download',
     });
 
     useUpdateStore.getState().reset();
@@ -123,6 +128,7 @@ describe('useUpdateStore', () => {
     expect(state.downloadProgress).toBe(0);
     expect(state.error).toBeNull();
     expect(state.dismissed).toBe(false);
+    expect(state.lastAction).toBeNull();
   });
 
   it('should return cleanup function from initUpdateListeners', () => {

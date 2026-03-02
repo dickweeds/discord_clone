@@ -11,6 +11,8 @@ export function UpdateNotification(): React.ReactNode {
   const dismissAction = useUpdateStore((s) => s.dismiss);
   const quitAndInstall = useUpdateStore((s) => s.quitAndInstall);
   const checkForUpdates = useUpdateStore((s) => s.checkForUpdates);
+  const error = useUpdateStore((s) => s.error);
+  const lastAction = useUpdateStore((s) => s.lastAction);
   const connectionState = usePresenceStore((s) => s.connectionState);
 
   // Auto-dismiss error after 10 seconds by resetting to idle
@@ -85,15 +87,16 @@ export function UpdateNotification(): React.ReactNode {
   }
 
   if (status === 'error') {
+    const isDownloadError = lastAction === 'download';
     return (
       <div
         role="status"
         aria-live="polite"
         className="px-4 py-2 text-sm font-medium text-center bg-bg-secondary text-[#f23f43] rounded-lg mx-2 mt-2 motion-safe:animate-[fadeIn_200ms_ease-in] motion-reduce:animate-none flex items-center justify-center gap-3"
       >
-        <span>Update check failed.</span>
+        <span>{isDownloadError ? 'Update download failed.' : 'Update check failed.'}</span>
         <button
-          onClick={checkForUpdates}
+          onClick={isDownloadError ? downloadUpdate : checkForUpdates}
           className="px-3 py-1 rounded bg-bg-tertiary text-text-secondary text-xs font-semibold hover:opacity-90 transition-opacity"
         >
           Retry

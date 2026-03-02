@@ -59,11 +59,7 @@ export function initAutoUpdater(mainWindow: BrowserWindow): void {
   });
 
   ipcMain.handle('updater:download', async () => {
-    try {
-      await autoUpdater.downloadUpdate();
-    } catch (err) {
-      console.error('Failed to download update:', err);
-    }
+    await autoUpdater.downloadUpdate();
   });
 
   ipcMain.handle('updater:install', () => {

@@ -6,6 +6,7 @@ interface UpdateState {
   downloadProgress: number;
   error: string | null;
   dismissed: boolean;
+  lastAction: 'check' | 'download' | null;
 }
 
 interface UpdateActions {
@@ -23,6 +24,7 @@ const initialState: UpdateState = {
   downloadProgress: 0,
   error: null,
   dismissed: false,
+  lastAction: null,
 };
 
 export const useUpdateStore = create<UpdateState & UpdateActions>()((set) => ({
@@ -30,13 +32,13 @@ export const useUpdateStore = create<UpdateState & UpdateActions>()((set) => ({
 
   checkForUpdates: () => {
     if (!window.api?.updater) return;
-    set({ status: 'checking', error: null });
+    set({ status: 'checking', error: null, lastAction: 'check' });
     window.api.updater.checkForUpdates();
   },
 
   downloadUpdate: () => {
     if (!window.api?.updater) return;
-    set({ status: 'downloading', downloadProgress: 0 });
+    set({ status: 'downloading', downloadProgress: 0, lastAction: 'download' });
     window.api.updater.downloadUpdate();
   },
 

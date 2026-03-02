@@ -1,5 +1,5 @@
 appId: com.discord-clone.app
-productName: Discord Clone
+productName: Discord-Clone
 electronVersion: 40.6.0
 directories:
   buildResources: build

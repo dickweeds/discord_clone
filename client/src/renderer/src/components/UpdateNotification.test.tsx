@@ -95,23 +95,38 @@ describe('UpdateNotification', () => {
     expect(mockUpdater.quitAndInstall).toHaveBeenCalled();
   });
 
-  it('should render error banner with Retry button', () => {
-    useUpdateStore.setState({ status: 'error', error: 'Network failed' });
+  it('should render check error banner with Retry button', () => {
+    useUpdateStore.setState({ status: 'error', error: 'Network failed', lastAction: 'check' });
     render(<UpdateNotification />);
     expect(screen.getByText('Update check failed.')).toBeInTheDocument();
     expect(screen.getByText('Retry')).toBeInTheDocument();
   });
 
-  it('should call checkForUpdates when Retry is clicked', () => {
-    useUpdateStore.setState({ status: 'error', error: 'Network failed' });
+  it('should render download error banner with Retry button', () => {
+    useUpdateStore.setState({ status: 'error', error: 'Network failed', lastAction: 'download' });
+    render(<UpdateNotification />);
+    expect(screen.getByText('Update download failed.')).toBeInTheDocument();
+    expect(screen.getByText('Retry')).toBeInTheDocument();
+  });
+
+  it('should call checkForUpdates when Retry is clicked after check error', () => {
+    useUpdateStore.setState({ status: 'error', error: 'Network failed', lastAction: 'check' });
     render(<UpdateNotification />);
     fireEvent.click(screen.getByText('Retry'));
     expect(useUpdateStore.getState().status).toBe('checking');
     expect(mockUpdater.checkForUpdates).toHaveBeenCalled();
   });
 
+  it('should call downloadUpdate when Retry is clicked after download error', () => {
+    useUpdateStore.setState({ status: 'error', error: 'Network failed', lastAction: 'download' });
+    render(<UpdateNotification />);
+    fireEvent.click(screen.getByText('Retry'));
+    expect(useUpdateStore.getState().status).toBe('downloading');
+    expect(mockUpdater.downloadUpdate).toHaveBeenCalled();
+  });
+
   it('should auto-dismiss error after 10 seconds by resetting to idle', () => {
-    useUpdateStore.setState({ status: 'error', error: 'fail' });
+    useUpdateStore.setState({ status: 'error', error: 'fail', lastAction: 'check' });
     render(<UpdateNotification />);
     expect(screen.getByText('Update check failed.')).toBeInTheDocument();
 
