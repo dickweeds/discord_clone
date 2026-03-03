@@ -6,6 +6,7 @@ import type { DecryptedMessage } from './useMessageStore';
 beforeEach(() => {
   useMessageStore.setState({
     messages: new Map(),
+    reactions: new Map(),
     hasMoreMessages: new Map(),
     cursors: new Map(),
     isLoadingMore: false,
@@ -311,6 +312,75 @@ describe('useMessageStore', () => {
 
       useMessageStore.getState().setLoadingMore(false);
       expect(useMessageStore.getState().isLoadingMore).toBe(false);
+    });
+  });
+
+  describe('reaction actions', () => {
+    describe('setReactionsForMessages', () => {
+      it('merges reaction data into state', () => {
+        const reactionsMap = new Map([
+          ['msg-1', [{ emoji: '\u{1F44D}', count: 2, userIds: ['u1', 'u2'] }]],
+          ['msg-2', [{ emoji: '\u2764\uFE0F', count: 1, userIds: ['u1'] }]],
+        ]);
+
+        useMessageStore.getState().setReactionsForMessages(reactionsMap);
+
+        expect(useMessageStore.getState().reactions.get('msg-1')).toHaveLength(1);
+        expect(useMessageStore.getState().reactions.get('msg-2')).toHaveLength(1);
+      });
+    });
+
+    describe('addReaction', () => {
+      it('creates new entry when emoji is new', () => {
+        useMessageStore.getState().addReaction('msg-1', 'u1', '\u{1F44D}');
+
+        const reactions = useMessageStore.getState().reactions.get('msg-1');
+        expect(reactions).toHaveLength(1);
+        expect(reactions![0]).toEqual({ emoji: '\u{1F44D}', count: 1, userIds: ['u1'] });
+      });
+
+      it('increments count when emoji exists', () => {
+        useMessageStore.getState().addReaction('msg-1', 'u1', '\u{1F44D}');
+        useMessageStore.getState().addReaction('msg-1', 'u2', '\u{1F44D}');
+
+        const reactions = useMessageStore.getState().reactions.get('msg-1');
+        expect(reactions![0].count).toBe(2);
+        expect(reactions![0].userIds).toEqual(['u1', 'u2']);
+      });
+
+      it('is idempotent — same user+emoji does not double-count', () => {
+        useMessageStore.getState().addReaction('msg-1', 'u1', '\u{1F44D}');
+        useMessageStore.getState().addReaction('msg-1', 'u1', '\u{1F44D}');
+
+        const reactions = useMessageStore.getState().reactions.get('msg-1');
+        expect(reactions![0].count).toBe(1);
+        expect(reactions![0].userIds).toEqual(['u1']);
+      });
+    });
+
+    describe('removeReaction', () => {
+      it('decrements count and removes userId', () => {
+        useMessageStore.getState().addReaction('msg-1', 'u1', '\u{1F44D}');
+        useMessageStore.getState().addReaction('msg-1', 'u2', '\u{1F44D}');
+        useMessageStore.getState().removeReaction('msg-1', 'u1', '\u{1F44D}');
+
+        const reactions = useMessageStore.getState().reactions.get('msg-1');
+        expect(reactions![0].count).toBe(1);
+        expect(reactions![0].userIds).toEqual(['u2']);
+      });
+
+      it('removes entry when count reaches 0', () => {
+        useMessageStore.getState().addReaction('msg-1', 'u1', '\u{1F44D}');
+        useMessageStore.getState().removeReaction('msg-1', 'u1', '\u{1F44D}');
+
+        const reactions = useMessageStore.getState().reactions.get('msg-1');
+        expect(reactions).toBeUndefined();
+      });
+
+      it('is no-op for non-existent reaction', () => {
+        useMessageStore.getState().removeReaction('msg-1', 'u1', '\u{1F44D}');
+        expect(useMessageStore.getState().reactions.get('msg-1')).toBeUndefined();
+      });
     });
   });
 });

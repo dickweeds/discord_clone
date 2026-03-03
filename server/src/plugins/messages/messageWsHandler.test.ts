@@ -8,7 +8,7 @@ vi.hoisted(() => {
 });
 
 import { setupApp, teardownApp, truncateAll, seedRegularUser } from '../../test/helpers.js';
-import { channels, messages } from '../../db/schema.js';
+import { channels, messages, messageReactions } from '../../db/schema.js';
 import { clearHandlers, routeMessage } from '../../ws/wsRouter.js';
 import { registerMessageHandlers } from './messageWsHandler.js';
 import { eq } from 'drizzle-orm';
@@ -256,5 +256,210 @@ describe('messageWsHandler', () => {
     expect((mockLog.warn as ReturnType<typeof vi.fn>)).toHaveBeenCalled();
     // Sender still receives (broadcast continues despite one client failing)
     expect(senderWs.send).toHaveBeenCalledOnce();
+  });
+
+  describe('reaction handlers', () => {
+    let messageId: string;
+
+    beforeEach(async () => {
+      const [msg] = await app.db.insert(messages).values({
+        channel_id: channelId,
+        user_id: userId,
+        encrypted_content: 'test-content',
+        nonce: 'test-nonce',
+      }).returning();
+      messageId = msg.id;
+    });
+
+    it('stores reaction and broadcasts reaction:added on valid reaction:add', async () => {
+      const senderWs = createMockSocket();
+      const receiverWs = createMockSocket();
+      clients.set(userId, senderWs);
+      clients.set('other-user', receiverWs);
+
+      const raw = JSON.stringify({
+        type: 'reaction:add',
+        payload: { messageId, channelId, emoji: '\u{1F44D}' },
+      });
+
+      routeMessage(senderWs, raw, userId, mockLog);
+      await waitForCall(senderWs.send as ReturnType<typeof vi.fn>);
+
+      // Reaction stored in DB
+      const stored = await app.db.select().from(messageReactions).where(eq(messageReactions.message_id, messageId));
+      expect(stored).toHaveLength(1);
+      expect(stored[0].emoji).toBe('\u{1F44D}');
+      expect(stored[0].user_id).toBe(userId);
+
+      // Both clients receive broadcast
+      expect(senderWs.send).toHaveBeenCalledOnce();
+      expect(receiverWs.send).toHaveBeenCalledOnce();
+
+      const sent = JSON.parse((receiverWs.send as ReturnType<typeof vi.fn>).mock.calls[0][0] as string);
+      expect(sent.type).toBe('reaction:added');
+      expect(sent.payload.messageId).toBe(messageId);
+      expect(sent.payload.channelId).toBe(channelId);
+      expect(sent.payload.userId).toBe(userId);
+      expect(sent.payload.emoji).toBe('\u{1F44D}');
+    });
+
+    it('duplicate reaction:add is idempotent (no error, still broadcasts)', async () => {
+      const ws = createMockSocket();
+      clients.set(userId, ws);
+
+      const raw = JSON.stringify({
+        type: 'reaction:add',
+        payload: { messageId, channelId, emoji: '\u{1F44D}' },
+      });
+
+      routeMessage(ws, raw, userId, mockLog);
+      await waitForCall(ws.send as ReturnType<typeof vi.fn>);
+
+      (ws.send as ReturnType<typeof vi.fn>).mockClear();
+
+      routeMessage(ws, raw, userId, mockLog);
+      await waitForCall(ws.send as ReturnType<typeof vi.fn>);
+
+      const sent = JSON.parse((ws.send as ReturnType<typeof vi.fn>).mock.calls[0][0] as string);
+      expect(sent.type).toBe('reaction:added');
+
+      // Still only one reaction in DB
+      const stored = await app.db.select().from(messageReactions).where(eq(messageReactions.message_id, messageId));
+      expect(stored).toHaveLength(1);
+    });
+
+    it('reaction:add returns error on missing messageId', () => {
+      const ws = createMockSocket();
+      clients.set(userId, ws);
+
+      const raw = JSON.stringify({
+        type: 'reaction:add',
+        payload: { channelId, emoji: '\u{1F44D}' },
+      });
+
+      routeMessage(ws, raw, userId, mockLog);
+
+      expect(ws.send).toHaveBeenCalledOnce();
+      const sent = JSON.parse((ws.send as ReturnType<typeof vi.fn>).mock.calls[0][0] as string);
+      expect(sent.type).toBe('text:error');
+      expect(sent.payload.error).toBe('MISSING_MESSAGE_ID');
+    });
+
+    it('reaction:add returns error on emoji exceeding 32 chars', () => {
+      const ws = createMockSocket();
+      clients.set(userId, ws);
+
+      const raw = JSON.stringify({
+        type: 'reaction:add',
+        payload: { messageId, channelId, emoji: 'a'.repeat(33) },
+      });
+
+      routeMessage(ws, raw, userId, mockLog);
+
+      expect(ws.send).toHaveBeenCalledOnce();
+      const sent = JSON.parse((ws.send as ReturnType<typeof vi.fn>).mock.calls[0][0] as string);
+      expect(sent.type).toBe('text:error');
+      expect(sent.payload.error).toBe('EMOJI_TOO_LONG');
+    });
+
+    it('reaction:add returns error on missing emoji', () => {
+      const ws = createMockSocket();
+      clients.set(userId, ws);
+
+      const raw = JSON.stringify({
+        type: 'reaction:add',
+        payload: { messageId, channelId },
+      });
+
+      routeMessage(ws, raw, userId, mockLog);
+
+      expect(ws.send).toHaveBeenCalledOnce();
+      const sent = JSON.parse((ws.send as ReturnType<typeof vi.fn>).mock.calls[0][0] as string);
+      expect(sent.type).toBe('text:error');
+      expect(sent.payload.error).toBe('MISSING_EMOJI');
+    });
+
+    it('removes reaction and broadcasts reaction:removed', async () => {
+      // First add a reaction
+      const ws = createMockSocket();
+      clients.set(userId, ws);
+
+      const addRaw = JSON.stringify({
+        type: 'reaction:add',
+        payload: { messageId, channelId, emoji: '\u{1F44D}' },
+      });
+      routeMessage(ws, addRaw, userId, mockLog);
+      await waitForCall(ws.send as ReturnType<typeof vi.fn>);
+      (ws.send as ReturnType<typeof vi.fn>).mockClear();
+
+      // Now remove it
+      const removeRaw = JSON.stringify({
+        type: 'reaction:remove',
+        payload: { messageId, channelId, emoji: '\u{1F44D}' },
+      });
+      routeMessage(ws, removeRaw, userId, mockLog);
+      await waitForCall(ws.send as ReturnType<typeof vi.fn>);
+
+      const sent = JSON.parse((ws.send as ReturnType<typeof vi.fn>).mock.calls[0][0] as string);
+      expect(sent.type).toBe('reaction:removed');
+      expect(sent.payload.messageId).toBe(messageId);
+      expect(sent.payload.userId).toBe(userId);
+      expect(sent.payload.emoji).toBe('\u{1F44D}');
+
+      // Reaction removed from DB
+      const stored = await app.db.select().from(messageReactions).where(eq(messageReactions.message_id, messageId));
+      expect(stored).toHaveLength(0);
+    });
+
+    it('non-existent reaction:remove is silent no-op (no broadcast)', async () => {
+      const ws = createMockSocket();
+      clients.set(userId, ws);
+
+      const raw = JSON.stringify({
+        type: 'reaction:remove',
+        payload: { messageId, channelId, emoji: '\u{1F44D}' },
+      });
+
+      routeMessage(ws, raw, userId, mockLog);
+
+      // Give some time for any async work
+      await new Promise(r => setTimeout(r, 100));
+
+      expect(ws.send).not.toHaveBeenCalled();
+    });
+
+    it('reaction:remove returns error on emoji exceeding 32 chars', () => {
+      const ws = createMockSocket();
+      clients.set(userId, ws);
+
+      const raw = JSON.stringify({
+        type: 'reaction:remove',
+        payload: { messageId, channelId, emoji: 'x'.repeat(33) },
+      });
+
+      routeMessage(ws, raw, userId, mockLog);
+
+      expect(ws.send).toHaveBeenCalledOnce();
+      const sent = JSON.parse((ws.send as ReturnType<typeof vi.fn>).mock.calls[0][0] as string);
+      expect(sent.type).toBe('text:error');
+      expect(sent.payload.error).toBe('EMOJI_TOO_LONG');
+    });
+
+    it('reaction:remove returns error on missing fields', () => {
+      const ws = createMockSocket();
+      clients.set(userId, ws);
+
+      const raw = JSON.stringify({
+        type: 'reaction:remove',
+        payload: { channelId, emoji: '\u{1F44D}' },
+      });
+
+      routeMessage(ws, raw, userId, mockLog);
+
+      expect(ws.send).toHaveBeenCalledOnce();
+      const sent = JSON.parse((ws.send as ReturnType<typeof vi.fn>).mock.calls[0][0] as string);
+      expect(sent.type).toBe('text:error');
+      expect(sent.payload.error).toBe('MISSING_MESSAGE_ID');
+    });
   });
 });

@@ -15,6 +15,8 @@ import type {
   VoiceConsumeResponse,
   VoiceChannelPresencePayload,
   VoiceStatePayload,
+  ReactionAddedPayload,
+  ReactionRemovedPayload,
 } from 'discord-clone-shared';
 import { WS_TYPES, WS_RECONNECT_DELAY, WS_MAX_RECONNECT_DELAY } from 'discord-clone-shared';
 import { usePresenceStore } from '../stores/usePresenceStore';
@@ -315,6 +317,32 @@ class WsClient {
           console.warn('[wsClient] Failed to mark message as failed:', err);
         });
       }
+    } else if (message.type === WS_TYPES.REACTION_ADDED) {
+      const payload = message.payload as ReactionAddedPayload;
+      (async () => {
+        try {
+          const { default: useAuthStore } = await import('../stores/useAuthStore');
+          const currentUserId = useAuthStore.getState().user?.id;
+          if (payload.userId === currentUserId) return; // Already applied optimistically
+          const { default: useMessageStore } = await import('../stores/useMessageStore');
+          useMessageStore.getState().addReaction(payload.messageId, payload.userId, payload.emoji);
+        } catch (err) {
+          console.warn('[wsClient] Failed to add reaction:', err);
+        }
+      })();
+    } else if (message.type === WS_TYPES.REACTION_REMOVED) {
+      const payload = message.payload as ReactionRemovedPayload;
+      (async () => {
+        try {
+          const { default: useAuthStore } = await import('../stores/useAuthStore');
+          const currentUserId = useAuthStore.getState().user?.id;
+          if (payload.userId === currentUserId) return; // Already applied optimistically
+          const { default: useMessageStore } = await import('../stores/useMessageStore');
+          useMessageStore.getState().removeReaction(payload.messageId, payload.userId, payload.emoji);
+        } catch (err) {
+          console.warn('[wsClient] Failed to remove reaction:', err);
+        }
+      })();
     } else if (message.type === WS_TYPES.CHANNEL_CREATED) {
       const payload = message.payload as ChannelCreatedPayload;
       useChannelStore.getState().addChannel(payload.channel);

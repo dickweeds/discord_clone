@@ -2,10 +2,10 @@ import { encryptMessage, decryptMessage } from './encryptionService';
 import { wsClient } from './wsClient';
 import { apiGet } from './apiClient';
 import { WS_TYPES, MAX_MESSAGE_LENGTH } from 'discord-clone-shared';
-import type { TextSendPayload, TextReceivePayload, ApiPaginatedList } from 'discord-clone-shared';
+import type { TextSendPayload, ApiPaginatedList } from 'discord-clone-shared';
 import useAuthStore from '../stores/useAuthStore';
 import useMessageStore from '../stores/useMessageStore';
-import type { DecryptedMessage } from '../stores/useMessageStore';
+import type { DecryptedMessage, ReactionSummary } from '../stores/useMessageStore';
 
 export function sendMessage(channelId: string, plaintext: string): void {
   const groupKey = useAuthStore.getState().groupKey;
@@ -57,19 +57,31 @@ export function sendMessage(channelId: string, plaintext: string): void {
 
 const PAGE_LIMIT = 50;
 
+interface MessageWithReactions {
+  messageId: string;
+  channelId: string;
+  authorId: string;
+  content: string;
+  nonce: string;
+  createdAt: string;
+  reactions: ReactionSummary[];
+}
+
 async function fetchAndDecryptMessages(
   channelId: string,
   options?: { cursor?: string },
-): Promise<{ messages: DecryptedMessage[]; hasMore: boolean; cursor: string | null } | null> {
+): Promise<{ messages: DecryptedMessage[]; hasMore: boolean; cursor: string | null; reactionsMap: Map<string, ReactionSummary[]> } | null> {
   let url = `/api/channels/${encodeURIComponent(channelId)}/messages?limit=${PAGE_LIMIT}`;
   if (options?.cursor) {
     url += `&cursor=${encodeURIComponent(options.cursor)}`;
   }
 
-  const result = await apiGet<ApiPaginatedList<TextReceivePayload>>(url, true);
+  const result = await apiGet<ApiPaginatedList<MessageWithReactions>>(url, true);
 
   const groupKey = useAuthStore.getState().groupKey;
   if (!groupKey) return null;
+
+  const reactionsMap = new Map<string, ReactionSummary[]>();
 
   const decrypted: DecryptedMessage[] = result.data.map((msg) => {
     let content: string;
@@ -78,6 +90,11 @@ async function fetchAndDecryptMessages(
     } catch {
       content = '[Decryption failed]';
     }
+
+    if (msg.reactions && msg.reactions.length > 0) {
+      reactionsMap.set(msg.messageId, msg.reactions);
+    }
+
     return {
       id: msg.messageId,
       channelId: msg.channelId,
@@ -91,7 +108,7 @@ async function fetchAndDecryptMessages(
   // API returns newest first — reverse for chronological display
   decrypted.reverse();
 
-  return { messages: decrypted, hasMore: result.cursor !== null, cursor: result.cursor };
+  return { messages: decrypted, hasMore: result.cursor !== null, cursor: result.cursor, reactionsMap };
 }
 
 export async function fetchMessages(channelId: string): Promise<void> {
@@ -107,6 +124,9 @@ export async function fetchMessages(channelId: string): Promise<void> {
     }
 
     useMessageStore.getState().setMessages(channelId, data.messages, data.hasMore, data.cursor);
+    if (data.reactionsMap.size > 0) {
+      useMessageStore.getState().setReactionsForMessages(data.reactionsMap);
+    }
     useMessageStore.getState().setLoading(false);
   } catch (err) {
     useMessageStore.getState().setLoading(false);
@@ -131,6 +151,9 @@ export async function fetchOlderMessages(channelId: string): Promise<void> {
     }
 
     useMessageStore.getState().prependMessages(channelId, data.messages, data.hasMore, data.cursor);
+    if (data.reactionsMap.size > 0) {
+      useMessageStore.getState().setReactionsForMessages(data.reactionsMap);
+    }
     useMessageStore.getState().setLoadingMore(false);
   } catch (err) {
     useMessageStore.getState().setLoadingMore(false);

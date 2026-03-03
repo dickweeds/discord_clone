@@ -1,8 +1,19 @@
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { render, screen } from '@testing-library/react';
+import { Tooltip } from 'radix-ui';
 import { useMemberStore } from '../../stores/useMemberStore';
+import useMessageStore from '../../stores/useMessageStore';
 import { MessageGroup } from './MessageGroup';
 import type { MessageGroupData } from '../../utils/groupMessages';
+
+vi.mock('../../services/reactionService', () => ({
+  toggleReaction: vi.fn(),
+}));
+
+vi.mock('@emoji-mart/react', () => ({
+  default: () => null,
+}));
+vi.mock('@emoji-mart/data', () => ({ default: {} }));
 
 beforeEach(() => {
   useMemberStore.setState({
@@ -13,7 +24,26 @@ beforeEach(() => {
     isLoading: false,
     error: null,
   });
+  useMessageStore.setState({
+    messages: new Map(),
+    reactions: new Map(),
+    hasMoreMessages: new Map(),
+    cursors: new Map(),
+    isLoadingMore: false,
+    currentChannelId: null,
+    isLoading: false,
+    error: null,
+    sendError: null,
+  });
 });
+
+function renderGroup(group: MessageGroupData, isFirst = true) {
+  return render(
+    <Tooltip.Provider>
+      <MessageGroup group={group} isFirst={isFirst} />
+    </Tooltip.Provider>,
+  );
+}
 
 function makeGroup(overrides?: Partial<MessageGroupData>): MessageGroupData {
   return {
@@ -35,17 +65,17 @@ function makeGroup(overrides?: Partial<MessageGroupData>): MessageGroupData {
 
 describe('MessageGroup', () => {
   it('renders avatar with correct initial and color', () => {
-    render(<MessageGroup group={makeGroup()} isFirst={true} />);
+    renderGroup(makeGroup());
     expect(screen.getByText('A')).toBeInTheDocument();
   });
 
   it('renders username from member store', () => {
-    render(<MessageGroup group={makeGroup()} isFirst={true} />);
+    renderGroup(makeGroup());
     expect(screen.getByText('alice')).toBeInTheDocument();
   });
 
   it('renders timestamp in readable format', () => {
-    render(<MessageGroup group={makeGroup()} isFirst={true} />);
+    renderGroup(makeGroup());
     // Timestamp should contain some time representation
     const timestampEl = screen.getByText(/\d{1,2}:\d{2}/);
     expect(timestampEl).toBeInTheDocument();
@@ -59,7 +89,7 @@ describe('MessageGroup', () => {
         { id: 'msg-3', channelId: 'ch-1', authorId: 'user-1', content: 'Third message', createdAt: '2024-01-01T12:02:00Z', status: 'sent' },
       ],
     });
-    render(<MessageGroup group={group} isFirst={true} />);
+    renderGroup(group);
     expect(screen.getByText('First message')).toBeInTheDocument();
     expect(screen.getByText('Second message')).toBeInTheDocument();
     expect(screen.getByText('Third message')).toBeInTheDocument();
@@ -71,7 +101,7 @@ describe('MessageGroup', () => {
         { id: 'msg-1', channelId: 'ch-1', authorId: 'user-1', content: 'Failed msg', createdAt: '2024-01-01T12:00:00Z', status: 'failed', tempId: 'temp-1' },
       ],
     });
-    render(<MessageGroup group={group} isFirst={true} />);
+    renderGroup(group);
     expect(screen.getByText('Message not delivered')).toBeInTheDocument();
   });
 
@@ -81,7 +111,7 @@ describe('MessageGroup', () => {
         { id: 'msg-1', channelId: 'ch-1', authorId: 'user-1', content: 'Pending msg', createdAt: '2024-01-01T12:00:00Z', status: 'sending', tempId: 'temp-1' },
       ],
     });
-    render(<MessageGroup group={group} isFirst={true} />);
+    renderGroup(group);
     expect(screen.getByText('Sending...')).toBeInTheDocument();
   });
 
@@ -92,30 +122,42 @@ describe('MessageGroup', () => {
         { id: 'msg-1', channelId: 'ch-1', authorId: 'unknown-user-long-id', content: 'Hello', createdAt: '2024-01-01T12:00:00Z', status: 'sent' },
       ],
     });
-    render(<MessageGroup group={group} isFirst={true} />);
+    renderGroup(group);
     expect(screen.getByText('unknown-')).toBeInTheDocument();
   });
 
   it('applies mt-4 class on non-first groups', () => {
-    const { container } = render(<MessageGroup group={makeGroup()} isFirst={false} />);
+    const { container } = renderGroup(makeGroup(), false);
     expect(container.firstChild).toHaveClass('mt-4');
   });
 
   it('does not apply mt-4 class on first group', () => {
-    const { container } = render(<MessageGroup group={makeGroup()} isFirst={true} />);
+    const { container } = renderGroup(makeGroup());
     expect(container.firstChild).not.toHaveClass('mt-4');
   });
 
   it('has role="group" with accessible label', () => {
-    const { container } = render(<MessageGroup group={makeGroup()} isFirst={true} />);
+    const { container } = renderGroup(makeGroup());
     expect(container.firstChild).toHaveAttribute('role', 'group');
     expect(container.firstChild).toHaveAttribute('aria-label', 'Messages from alice');
   });
 
   it('marks avatar as aria-hidden', () => {
-    const { container } = render(<MessageGroup group={makeGroup()} isFirst={true} />);
+    const { container } = renderGroup(makeGroup());
     const avatar = container.querySelector('[aria-hidden="true"]');
     expect(avatar).toBeInTheDocument();
     expect(avatar).toHaveTextContent('A');
+  });
+
+  it('each message div has group/msg class for hover scoping', () => {
+    const { container } = renderGroup(makeGroup());
+    const messageDiv = container.querySelector('.group\\/msg');
+    expect(messageDiv).toBeInTheDocument();
+  });
+
+  it('renders hover toolbar with hidden class by default', () => {
+    const { container } = renderGroup(makeGroup());
+    const toolbar = container.querySelector('.hidden.group-hover\\/msg\\:flex');
+    expect(toolbar).toBeInTheDocument();
   });
 });

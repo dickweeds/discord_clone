@@ -2,6 +2,8 @@ import React from 'react';
 import type { MessageGroupData } from '../../utils/groupMessages';
 import { formatTimestamp } from '../../utils/formatTimestamp';
 import { useUsername } from '../../hooks/useUsername';
+import { MessageHoverToolbar } from './MessageHoverToolbar';
+import { ReactionPills } from './ReactionPills';
 
 interface MessageGroupProps {
   group: MessageGroupData;
@@ -38,12 +40,14 @@ export function MessageGroup({ group, isFirst }: MessageGroupProps): React.React
           const isSending = msg.status === 'sending';
 
           return (
-            <div key={msg.id} className="mt-1">
+            <div key={msg.id} className="relative group/msg mt-1">
+              <MessageHoverToolbar messageId={msg.id} channelId={msg.channelId} />
               <p className={`text-base text-text-secondary whitespace-pre-wrap break-words ${isFailed ? 'opacity-60' : ''}`}>
                 {msg.content}
               </p>
               {isSending && <span className="text-text-muted text-xs italic">Sending...</span>}
               {isFailed && <span className="text-[#f23f43] text-xs">Message not delivered</span>}
+              <ReactionPills messageId={msg.id} channelId={msg.channelId} />
             </div>
           );
         })}

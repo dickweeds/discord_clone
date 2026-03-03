@@ -1,5 +1,7 @@
 import { create } from 'zustand';
-import type { TextReceivePayload } from 'discord-clone-shared';
+import type { TextReceivePayload, ReactionSummary } from 'discord-clone-shared';
+
+export type { ReactionSummary };
 
 export interface DecryptedMessage {
   id: string;
@@ -13,6 +15,7 @@ export interface DecryptedMessage {
 
 interface MessageState {
   messages: Map<string, DecryptedMessage[]>;
+  reactions: Map<string, ReactionSummary[]>;
   hasMoreMessages: Map<string, boolean>;
   cursors: Map<string, string | null>;
   isLoadingMore: boolean;
@@ -35,10 +38,14 @@ interface MessageState {
   setSendError: (sendError: string | null) => void;
   clearError: () => void;
   clearSendError: () => void;
+  setReactionsForMessages: (reactionsMap: Map<string, ReactionSummary[]>) => void;
+  addReaction: (messageId: string, userId: string, emoji: string) => void;
+  removeReaction: (messageId: string, userId: string, emoji: string) => void;
 }
 
 const useMessageStore = create<MessageState>((set, get) => ({
   messages: new Map(),
+  reactions: new Map(),
   hasMoreMessages: new Map(),
   cursors: new Map(),
   isLoadingMore: false,
@@ -139,6 +146,59 @@ const useMessageStore = create<MessageState>((set, get) => ({
   setSendError: (sendError: string | null) => set({ sendError }),
   clearError: () => set({ error: null }),
   clearSendError: () => set({ sendError: null }),
+
+  setReactionsForMessages: (reactionsMap: Map<string, ReactionSummary[]>) => {
+    const newReactions = new Map(get().reactions);
+    for (const [messageId, summaries] of reactionsMap) {
+      newReactions.set(messageId, summaries);
+    }
+    set({ reactions: newReactions });
+  },
+
+  addReaction: (messageId: string, userId: string, emoji: string) => {
+    const newReactions = new Map(get().reactions);
+    const existing = newReactions.get(messageId) ?? [];
+
+    const emojiEntry = existing.find((r) => r.emoji === emoji);
+    if (emojiEntry) {
+      // Idempotent — don't double-add same user
+      if (emojiEntry.userIds.includes(userId)) return;
+      newReactions.set(messageId, existing.map((r) =>
+        r.emoji === emoji
+          ? { ...r, count: r.count + 1, userIds: [...r.userIds, userId] }
+          : r,
+      ));
+    } else {
+      newReactions.set(messageId, [...existing, { emoji, count: 1, userIds: [userId] }]);
+    }
+    set({ reactions: newReactions });
+  },
+
+  removeReaction: (messageId: string, userId: string, emoji: string) => {
+    const newReactions = new Map(get().reactions);
+    const existing = newReactions.get(messageId);
+    if (!existing) return;
+
+    const emojiEntry = existing.find((r) => r.emoji === emoji);
+    if (!emojiEntry || !emojiEntry.userIds.includes(userId)) return;
+
+    if (emojiEntry.count <= 1) {
+      // Remove the entry entirely
+      const filtered = existing.filter((r) => r.emoji !== emoji);
+      if (filtered.length === 0) {
+        newReactions.delete(messageId);
+      } else {
+        newReactions.set(messageId, filtered);
+      }
+    } else {
+      newReactions.set(messageId, existing.map((r) =>
+        r.emoji === emoji
+          ? { ...r, count: r.count - 1, userIds: r.userIds.filter((id) => id !== userId) }
+          : r,
+      ));
+    }
+    set({ reactions: newReactions });
+  },
 }));
 
 export default useMessageStore;

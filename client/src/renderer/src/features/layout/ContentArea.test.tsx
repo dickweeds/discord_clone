@@ -2,6 +2,7 @@ import { describe, it, expect, vi, beforeAll, beforeEach } from 'vitest';
 import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter, Route, Routes } from 'react-router';
+import { Tooltip } from 'radix-ui';
 import { useChannelStore } from '../../stores/useChannelStore';
 import { useUIStore } from '../../stores/useUIStore';
 import useMessageStore from '../../stores/useMessageStore';
@@ -37,15 +38,29 @@ vi.mock('../../services/apiClient', () => ({
   configureApiClient: vi.fn(),
 }));
 
-// Mock useAuthStore
-vi.mock('../../stores/useAuthStore', () => ({
-  default: {
-    getState: () => ({
-      groupKey: new Uint8Array(32),
-      user: { id: 'user-1', username: 'test', role: 'user' },
-    }),
-  },
+// Mock reactionService
+vi.mock('../../services/reactionService', () => ({
+  toggleReaction: vi.fn(),
 }));
+
+// Mock emoji-mart
+vi.mock('@emoji-mart/react', () => ({
+  default: () => null,
+}));
+vi.mock('@emoji-mart/data', () => ({
+  default: {},
+}));
+
+// Mock useAuthStore — support both hook usage `useAuthStore(selector)` and `useAuthStore.getState()`
+vi.mock('../../stores/useAuthStore', () => {
+  const state = {
+    groupKey: new Uint8Array(32),
+    user: { id: 'user-1', username: 'test', role: 'user' },
+  };
+  const store = (selector?: (s: typeof state) => unknown) => selector ? selector(state) : state;
+  store.getState = () => state;
+  return { default: store };
+});
 
 import { ContentArea } from './ContentArea';
 
@@ -72,6 +87,7 @@ beforeEach(() => {
   useUIStore.setState({ isMemberListVisible: true });
   useMessageStore.setState({
     messages: new Map(),
+    reactions: new Map(),
     hasMoreMessages: new Map(),
     isLoadingMore: false,
     currentChannelId: null,
@@ -100,12 +116,14 @@ beforeEach(() => {
 function renderContentArea(channelId?: string) {
   const initialEntry = channelId ? `/app/channels/${channelId}` : '/app/channels';
   return render(
-    <MemoryRouter initialEntries={[initialEntry]}>
-      <Routes>
-        <Route path="/app/channels/:channelId" element={<ContentArea />} />
-        <Route path="/app/channels" element={<ContentArea />} />
-      </Routes>
-    </MemoryRouter>,
+    <Tooltip.Provider>
+      <MemoryRouter initialEntries={[initialEntry]}>
+        <Routes>
+          <Route path="/app/channels/:channelId" element={<ContentArea />} />
+          <Route path="/app/channels" element={<ContentArea />} />
+        </Routes>
+      </MemoryRouter>
+    </Tooltip.Provider>,
   );
 }
 
@@ -487,6 +505,30 @@ describe('ContentArea', () => {
 
     // Verify loading state is cleared
     expect(screen.queryByText('Loading messages...')).not.toBeInTheDocument();
+  });
+
+  it('renders reaction pills when messages have reactions', async () => {
+    useMessageStore.setState({
+      messages: new Map([
+        ['ch-1', [
+          { id: 'msg-1', channelId: 'ch-1', authorId: 'user-1', content: 'Hello', createdAt: '2024-01-01T12:00:00Z', status: 'sent' as const },
+        ]],
+      ]),
+      reactions: new Map([
+        ['msg-1', [{ emoji: '\u2764\uFE0F', count: 2, userIds: ['user-1', 'user-2'] }]],
+      ]),
+    });
+
+    renderContentArea('ch-1');
+
+    await waitFor(() => {
+      // Heart emoji only appears in reaction pills (not in the quick-react toolbar)
+      const hearts = screen.getAllByText('\u2764\uFE0F');
+      // One in quick-react toolbar, one in reaction pill
+      expect(hearts.length).toBeGreaterThanOrEqual(2);
+      // The count "2" comes from the reaction pill
+      expect(screen.getByText('2')).toBeInTheDocument();
+    });
   });
 
   describe('loading older messages', () => {

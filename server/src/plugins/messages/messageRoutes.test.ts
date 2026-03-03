@@ -10,6 +10,7 @@ vi.hoisted(() => {
 import { setupApp, teardownApp, truncateAll, seedUserWithSession } from '../../test/helpers.js';
 import { channels } from '../../db/schema.js';
 import { createMessage } from './messageService.js';
+import { addReaction } from './reactionService.js';
 
 describe('GET /api/channels/:channelId/messages', () => {
   let app: FastifyInstance;
@@ -173,5 +174,72 @@ describe('GET /api/channels/:channelId/messages', () => {
     expect(response.statusCode).toBe(400);
     const body = JSON.parse(response.payload);
     expect(body.error.code).toBe('INVALID_CURSOR');
+  });
+
+  describe('reactions in message fetch', () => {
+    it('message with no reactions returns empty reactions array', async () => {
+      await createMessage(app.db, { channelId, userId, encryptedContent: 'msg', nonce: 'n' });
+
+      const response = await app.inject({
+        method: 'GET',
+        url: `/api/channels/${channelId}/messages`,
+        headers: { authorization: `Bearer ${accessToken}` },
+      });
+
+      const body = JSON.parse(response.payload);
+      expect(body.data[0].reactions).toEqual([]);
+    });
+
+    it('message with reactions returns correct summary', async () => {
+      const msg = await createMessage(app.db, { channelId, userId, encryptedContent: 'msg', nonce: 'n' });
+      await addReaction(app.db, { messageId: msg.id, userId, emoji: '\u{1F44D}' });
+
+      const response = await app.inject({
+        method: 'GET',
+        url: `/api/channels/${channelId}/messages`,
+        headers: { authorization: `Bearer ${accessToken}` },
+      });
+
+      const body = JSON.parse(response.payload);
+      const reactions = body.data[0].reactions;
+      expect(reactions).toHaveLength(1);
+      expect(reactions[0].emoji).toBe('\u{1F44D}');
+      expect(reactions[0].count).toBe(1);
+      expect(reactions[0].userIds).toContain(userId);
+    });
+
+    it('multiple emojis on same message are all returned', async () => {
+      const msg = await createMessage(app.db, { channelId, userId, encryptedContent: 'msg', nonce: 'n' });
+      await addReaction(app.db, { messageId: msg.id, userId, emoji: '\u{1F44D}' });
+      await addReaction(app.db, { messageId: msg.id, userId, emoji: '\u2764\uFE0F' });
+
+      const response = await app.inject({
+        method: 'GET',
+        url: `/api/channels/${channelId}/messages`,
+        headers: { authorization: `Bearer ${accessToken}` },
+      });
+
+      const body = JSON.parse(response.payload);
+      expect(body.data[0].reactions).toHaveLength(2);
+    });
+
+    it('reactions from multiple users show correct count', async () => {
+      const msg = await createMessage(app.db, { channelId, userId, encryptedContent: 'msg', nonce: 'n' });
+      const user2 = await seedUserWithSession(app, 'user2');
+      await addReaction(app.db, { messageId: msg.id, userId, emoji: '\u{1F44D}' });
+      await addReaction(app.db, { messageId: msg.id, userId: user2.id, emoji: '\u{1F44D}' });
+
+      const response = await app.inject({
+        method: 'GET',
+        url: `/api/channels/${channelId}/messages`,
+        headers: { authorization: `Bearer ${accessToken}` },
+      });
+
+      const body = JSON.parse(response.payload);
+      const thumbsUp = body.data[0].reactions.find((r: { emoji: string }) => r.emoji === '\u{1F44D}');
+      expect(thumbsUp.count).toBe(2);
+      expect(thumbsUp.userIds).toContain(userId);
+      expect(thumbsUp.userIds).toContain(user2.id);
+    });
   });
 });

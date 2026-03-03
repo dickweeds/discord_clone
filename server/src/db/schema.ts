@@ -1,4 +1,4 @@
-import { pgTable, pgEnum, text, uuid, timestamp, boolean, index } from 'drizzle-orm/pg-core';
+import { pgTable, pgEnum, text, uuid, timestamp, boolean, index, uniqueIndex } from 'drizzle-orm/pg-core';
 import type { InferSelectModel, InferInsertModel } from 'drizzle-orm';
 
 // --- Enums ---
@@ -70,6 +70,18 @@ export const messages = pgTable('messages', {
   index('messages_channel_created_idx').on(table.channel_id, table.created_at, table.id),
 ]).enableRLS();
 
+// --- Message Reactions ---
+export const messageReactions = pgTable('message_reactions', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  message_id: uuid('message_id').notNull().references(() => messages.id, { onDelete: 'cascade' }),
+  user_id: uuid('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+  emoji: text('emoji').notNull(),
+  created_at: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+}, (table) => [
+  uniqueIndex('uq_message_reactions_message_user_emoji').on(table.message_id, table.user_id, table.emoji),
+  index('idx_message_reactions_message_id').on(table.message_id),
+]).enableRLS();
+
 // --- Inferred Types ---
 export type User = InferSelectModel<typeof users>;
 export type NewUser = InferInsertModel<typeof users>;
@@ -88,3 +100,6 @@ export type NewChannel = InferInsertModel<typeof channels>;
 
 export type Message = InferSelectModel<typeof messages>;
 export type NewMessage = InferInsertModel<typeof messages>;
+
+export type MessageReaction = InferSelectModel<typeof messageReactions>;
+export type NewMessageReaction = InferInsertModel<typeof messageReactions>;

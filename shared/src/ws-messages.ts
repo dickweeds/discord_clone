@@ -146,6 +146,39 @@ export interface ChannelDeletedPayload {
   channelId: string;
 }
 
+// Reactions
+export interface ReactionSummary {
+  emoji: string;
+  count: number;
+  userIds: string[];
+}
+
+export interface ReactionAddPayload {
+  messageId: string;
+  channelId: string;
+  emoji: string;
+}
+
+export interface ReactionRemovePayload {
+  messageId: string;
+  channelId: string;
+  emoji: string;
+}
+
+export interface ReactionAddedPayload {
+  messageId: string;
+  channelId: string;
+  userId: string;
+  emoji: string;
+}
+
+export interface ReactionRemovedPayload {
+  messageId: string;
+  channelId: string;
+  userId: string;
+  emoji: string;
+}
+
 // Admin action payloads
 export interface UserKickedPayload {
   userId: string;
@@ -197,4 +230,8 @@ export const WS_TYPES = {
   USER_BANNED: 'user:banned',
   MEMBER_ADDED: 'member:added',
   MEMBER_REMOVED: 'member:removed',
+  REACTION_ADD: 'reaction:add',
+  REACTION_REMOVE: 'reaction:remove',
+  REACTION_ADDED: 'reaction:added',
+  REACTION_REMOVED: 'reaction:removed',
 } as const;

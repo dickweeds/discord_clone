@@ -2,6 +2,7 @@ import type { FastifyInstance } from 'fastify';
 import { eq } from 'drizzle-orm';
 import { channels } from '../../db/schema.js';
 import { getMessagesByChannel, InvalidCursorError } from './messageService.js';
+import { getReactionsForMessages } from './reactionService.js';
 
 export default async function messageRoutes(fastify: FastifyInstance) {
   fastify.get<{
@@ -40,6 +41,17 @@ export default async function messageRoutes(fastify: FastifyInstance) {
                   content: { type: 'string' },
                   nonce: { type: 'string' },
                   createdAt: { type: 'string' },
+                  reactions: {
+                    type: 'array',
+                    items: {
+                      type: 'object',
+                      properties: {
+                        emoji: { type: 'string' },
+                        count: { type: 'integer' },
+                        userIds: { type: 'array', items: { type: 'string' } },
+                      },
+                    },
+                  },
                 },
               },
             },
@@ -64,6 +76,9 @@ export default async function messageRoutes(fastify: FastifyInstance) {
     try {
       const { rows, nextCursor } = await getMessagesByChannel(fastify.db, channelId, limit, cursor);
 
+      const messageIds = rows.map((r) => r.id);
+      const reactionsMap = await getReactionsForMessages(fastify.db, messageIds);
+
       const data = rows.map((row) => ({
         messageId: row.id,
         channelId: row.channel_id,
@@ -71,6 +86,7 @@ export default async function messageRoutes(fastify: FastifyInstance) {
         content: row.encrypted_content,
         nonce: row.nonce,
         createdAt: row.created_at.toISOString(),
+        reactions: reactionsMap.get(row.id) ?? [],
       }));
 
       return reply.send({ data, cursor: nextCursor, count: data.length });
