@@ -76,9 +76,9 @@ export async function getReactionsForMessages(
 
   if (messageIds.length === 0) return result;
 
-  const rows = await db.select().from(messageReactions).where(
-    inArray(messageReactions.message_id, messageIds),
-  );
+  const rows = await db.select().from(messageReactions)
+    .where(inArray(messageReactions.message_id, messageIds))
+    .orderBy(messageReactions.created_at);
 
   const grouped = new Map<string, Map<string, string[]>>();
   for (const row of rows) {

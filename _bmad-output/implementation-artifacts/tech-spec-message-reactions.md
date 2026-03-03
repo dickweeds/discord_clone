@@ -68,6 +68,8 @@ Add Discord-style emoji reactions to text channel messages. A hover toolbar on e
 | `client/src/renderer/src/services/wsClient.ts` | Add `reaction:added` / `reaction:removed` handling in `handleMessage()` if/else chain |
 | `client/src/renderer/src/features/messages/MessageGroup.tsx` | Add per-message hover toolbar + render reaction pills below message body |
 | `client/src/renderer/src/stores/useMessageStore.ts` | Add `reactions` state (`Map<messageId, ReactionSummary[]>`) and actions |
+| `server/src/test/helpers.ts` | Add `message_reactions` to `truncateAll` for test isolation |
+| `client/src/renderer/src/features/layout/ContentArea.test.tsx` | Add emoji-mart and reactionService mocks, reaction pills integration test |
 
 ### Files to Create
 
@@ -309,8 +311,10 @@ Add Discord-style emoji reactions to text channel messages. A hover toolbar on e
 
 - [x] Task 22: Update ContentArea to pass reactions from fetch
   - File: `client/src/renderer/src/features/layout/ContentArea.tsx`
-  - Action: No changes needed — `fetchMessages` and `fetchOlderMessages` in `messageService.ts` already write to the store (Task 14). `ReactionPills` reads directly from `useMessageStore`. `ContentArea` doesn't need to thread reaction props.
-  - Notes: This is a verification task — confirm no changes needed in ContentArea
+  - Action: No code changes needed in `ContentArea.tsx` — `fetchMessages` and `fetchOlderMessages` in `messageService.ts` already write to the store (Task 14). `ReactionPills` reads directly from `useMessageStore`. `ContentArea` doesn't need to thread reaction props.
+  - File: `client/src/renderer/src/features/layout/ContentArea.test.tsx`
+  - Action: Added emoji-mart and reactionService mocks to prevent import errors. Added integration test verifying reaction pills render within ContentArea when messages have reactions.
+  - Notes: Verification task for ContentArea.tsx (no changes), but test file required updates for new component dependencies
 
 ### Acceptance Criteria
 

@@ -1,5 +1,7 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
-import { render, screen, fireEvent } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
+import { Tooltip } from 'radix-ui';
 import useMessageStore from '../../stores/useMessageStore';
 import useAuthStore from '../../stores/useAuthStore';
 import { useMemberStore } from '../../stores/useMemberStore';
@@ -9,7 +11,20 @@ vi.mock('../../services/reactionService', () => ({
   toggleReaction: vi.fn(),
 }));
 
+vi.mock('@emoji-mart/react', () => ({
+  default: () => null,
+}));
+vi.mock('@emoji-mart/data', () => ({ default: {} }));
+
 import { toggleReaction } from '../../services/reactionService';
+
+function renderPills(messageId = 'msg-1', channelId = 'ch-1') {
+  return render(
+    <Tooltip.Provider delayDuration={0}>
+      <ReactionPills messageId={messageId} channelId={channelId} />
+    </Tooltip.Provider>,
+  );
+}
 
 beforeEach(() => {
   useMessageStore.setState({
@@ -41,7 +56,7 @@ beforeEach(() => {
 
 describe('ReactionPills', () => {
   it('renders nothing when no reactions exist', () => {
-    const { container } = render(<ReactionPills messageId="msg-1" channelId="ch-1" />);
+    const { container } = renderPills();
     expect(container.innerHTML).toBe('');
   });
 
@@ -53,7 +68,7 @@ describe('ReactionPills', () => {
       ]]]),
     );
 
-    render(<ReactionPills messageId="msg-1" channelId="ch-1" />);
+    renderPills();
 
     expect(screen.getByText('\u{1F44D}')).toBeInTheDocument();
     expect(screen.getByText('3')).toBeInTheDocument();
@@ -68,7 +83,7 @@ describe('ReactionPills', () => {
       ]]]),
     );
 
-    render(<ReactionPills messageId="msg-1" channelId="ch-1" />);
+    renderPills();
 
     const pill = screen.getByText('\u{1F44D}').closest('button');
     expect(pill).toHaveClass('border-accent-primary');
@@ -81,7 +96,7 @@ describe('ReactionPills', () => {
       ]]]),
     );
 
-    render(<ReactionPills messageId="msg-1" channelId="ch-1" />);
+    renderPills();
 
     fireEvent.click(screen.getByText('\u{1F44D}').closest('button')!);
     expect(toggleReaction).toHaveBeenCalledWith('msg-1', 'ch-1', '\u{1F44D}');
@@ -94,8 +109,53 @@ describe('ReactionPills', () => {
       ]]]),
     );
 
-    render(<ReactionPills messageId="msg-1" channelId="ch-1" />);
+    renderPills();
 
     expect(screen.getByLabelText('Add reaction')).toBeInTheDocument();
+  });
+
+  it('shows reactor usernames in tooltip on hover', async () => {
+    useMessageStore.getState().setReactionsForMessages(
+      new Map([['msg-1', [
+        { emoji: '\u{1F44D}', count: 2, userIds: ['u1', 'u2'] },
+      ]]]),
+    );
+
+    renderPills();
+
+    const user = userEvent.setup();
+    await user.hover(screen.getByText('\u{1F44D}').closest('button')!);
+
+    await waitFor(() => {
+      // Radix renders tooltip text in both a visible element and a sr-only description
+      expect(screen.getAllByText('alice, bob').length).toBeGreaterThanOrEqual(1);
+    });
+  });
+
+  it('shows truncated tooltip with "and N more" for 4+ reactors', async () => {
+    useMemberStore.setState({
+      members: [
+        { id: 'u1', username: 'alice', role: 'user', createdAt: '2024-01-01T00:00:00Z' },
+        { id: 'u2', username: 'bob', role: 'user', createdAt: '2024-01-01T00:00:00Z' },
+        { id: 'u3', username: 'charlie', role: 'user', createdAt: '2024-01-01T00:00:00Z' },
+        { id: 'u4', username: 'diana', role: 'user', createdAt: '2024-01-01T00:00:00Z' },
+      ],
+      isLoading: false,
+      error: null,
+    });
+    useMessageStore.getState().setReactionsForMessages(
+      new Map([['msg-1', [
+        { emoji: '\u{1F44D}', count: 4, userIds: ['u1', 'u2', 'u3', 'u4'] },
+      ]]]),
+    );
+
+    renderPills();
+
+    const user = userEvent.setup();
+    await user.hover(screen.getByText('\u{1F44D}').closest('button')!);
+
+    await waitFor(() => {
+      expect(screen.getAllByText('alice, bob, charlie and 1 more').length).toBeGreaterThanOrEqual(1);
+    });
   });
 });

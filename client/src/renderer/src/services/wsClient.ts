@@ -319,26 +319,30 @@ class WsClient {
       }
     } else if (message.type === WS_TYPES.REACTION_ADDED) {
       const payload = message.payload as ReactionAddedPayload;
-      import('../stores/useAuthStore').then(({ default: useAuthStore }) => {
-        const currentUserId = useAuthStore.getState().user?.id;
-        if (payload.userId === currentUserId) return; // Already applied optimistically
-        import('../stores/useMessageStore').then(({ default: useMessageStore }) => {
+      (async () => {
+        try {
+          const { default: useAuthStore } = await import('../stores/useAuthStore');
+          const currentUserId = useAuthStore.getState().user?.id;
+          if (payload.userId === currentUserId) return; // Already applied optimistically
+          const { default: useMessageStore } = await import('../stores/useMessageStore');
           useMessageStore.getState().addReaction(payload.messageId, payload.userId, payload.emoji);
-        });
-      }).catch((err) => {
-        console.warn('[wsClient] Failed to add reaction:', err);
-      });
+        } catch (err) {
+          console.warn('[wsClient] Failed to add reaction:', err);
+        }
+      })();
     } else if (message.type === WS_TYPES.REACTION_REMOVED) {
       const payload = message.payload as ReactionRemovedPayload;
-      import('../stores/useAuthStore').then(({ default: useAuthStore }) => {
-        const currentUserId = useAuthStore.getState().user?.id;
-        if (payload.userId === currentUserId) return; // Already applied optimistically
-        import('../stores/useMessageStore').then(({ default: useMessageStore }) => {
+      (async () => {
+        try {
+          const { default: useAuthStore } = await import('../stores/useAuthStore');
+          const currentUserId = useAuthStore.getState().user?.id;
+          if (payload.userId === currentUserId) return; // Already applied optimistically
+          const { default: useMessageStore } = await import('../stores/useMessageStore');
           useMessageStore.getState().removeReaction(payload.messageId, payload.userId, payload.emoji);
-        });
-      }).catch((err) => {
-        console.warn('[wsClient] Failed to remove reaction:', err);
-      });
+        } catch (err) {
+          console.warn('[wsClient] Failed to remove reaction:', err);
+        }
+      })();
     } else if (message.type === WS_TYPES.CHANNEL_CREATED) {
       const payload = message.payload as ChannelCreatedPayload;
       useChannelStore.getState().addChannel(payload.channel);

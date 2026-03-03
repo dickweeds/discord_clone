@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { toggleReaction } from '../../services/reactionService';
-import { Tooltip } from 'radix-ui';
+import { Tooltip, Popover } from 'radix-ui';
 import { EmojiPicker } from './EmojiPicker';
 
 interface MessageHoverToolbarProps {
@@ -21,50 +21,56 @@ export function MessageHoverToolbar({ messageId, channelId }: MessageHoverToolba
   const [showPicker, setShowPicker] = useState(false);
 
   return (
-    <Tooltip.Provider delayDuration={300}>
-      <div className="hidden group-hover/msg:flex absolute -top-4 right-2 gap-0.5 rounded-md bg-bg-secondary border border-border-default shadow-md p-0.5 z-10">
-        {QUICK_REACTIONS.map(({ emoji, name }) => (
-          <Tooltip.Root key={emoji}>
-            <Tooltip.Trigger asChild>
-              <button
-                type="button"
-                onClick={() => toggleReaction(messageId, channelId, emoji)}
-                className="w-7 h-7 flex items-center justify-center rounded text-sm text-text-muted hover:text-text-primary hover:bg-bg-hover transition-colors"
-              >
-                {emoji}
-              </button>
-            </Tooltip.Trigger>
-            <Tooltip.Portal>
-              <Tooltip.Content
-                className="bg-bg-floating text-text-primary text-xs rounded px-2 py-1 shadow-lg border border-border-default"
-                sideOffset={5}
-              >
-                {name}
-                <Tooltip.Arrow className="fill-bg-floating" />
-              </Tooltip.Content>
-            </Tooltip.Portal>
-          </Tooltip.Root>
-        ))}
-        <div className="relative">
+    <div className="hidden group-hover/msg:flex absolute -top-4 right-2 gap-0.5 rounded-md bg-bg-secondary border border-border-default shadow-md p-0.5 z-10">
+      {QUICK_REACTIONS.map(({ emoji, name }) => (
+        <Tooltip.Root key={emoji}>
+          <Tooltip.Trigger asChild>
+            <button
+              type="button"
+              onClick={() => toggleReaction(messageId, channelId, emoji)}
+              className="w-7 h-7 flex items-center justify-center rounded text-sm text-text-muted hover:text-text-primary hover:bg-bg-hover transition-colors"
+            >
+              {emoji}
+            </button>
+          </Tooltip.Trigger>
+          <Tooltip.Portal>
+            <Tooltip.Content
+              className="bg-bg-floating text-text-primary text-xs rounded px-2 py-1 shadow-lg border border-border-default"
+              sideOffset={5}
+            >
+              {name}
+              <Tooltip.Arrow className="fill-bg-floating" />
+            </Tooltip.Content>
+          </Tooltip.Portal>
+        </Tooltip.Root>
+      ))}
+      <Popover.Root open={showPicker} onOpenChange={setShowPicker}>
+        <Popover.Trigger asChild>
           <button
             type="button"
-            onClick={() => setShowPicker(!showPicker)}
             className="w-7 h-7 flex items-center justify-center rounded text-sm text-text-muted hover:text-text-primary hover:bg-bg-hover transition-colors"
             aria-label="More reactions"
           >
             +
           </button>
-          {showPicker && (
+        </Popover.Trigger>
+        <Popover.Portal>
+          <Popover.Content
+            side="top"
+            align="end"
+            sideOffset={5}
+            className="z-50 bg-bg-floating rounded-lg shadow-lg border border-border-default"
+            onOpenAutoFocus={(e) => e.preventDefault()}
+          >
             <EmojiPicker
               onSelect={(emoji) => {
                 toggleReaction(messageId, channelId, emoji);
                 setShowPicker(false);
               }}
-              onClose={() => setShowPicker(false)}
             />
-          )}
-        </div>
-      </div>
-    </Tooltip.Provider>
+          </Popover.Content>
+        </Popover.Portal>
+      </Popover.Root>
+    </div>
   );
 }

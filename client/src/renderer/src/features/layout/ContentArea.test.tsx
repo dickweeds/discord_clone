@@ -2,6 +2,7 @@ import { describe, it, expect, vi, beforeAll, beforeEach } from 'vitest';
 import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter, Route, Routes } from 'react-router';
+import { Tooltip } from 'radix-ui';
 import { useChannelStore } from '../../stores/useChannelStore';
 import { useUIStore } from '../../stores/useUIStore';
 import useMessageStore from '../../stores/useMessageStore';
@@ -115,12 +116,14 @@ beforeEach(() => {
 function renderContentArea(channelId?: string) {
   const initialEntry = channelId ? `/app/channels/${channelId}` : '/app/channels';
   return render(
-    <MemoryRouter initialEntries={[initialEntry]}>
-      <Routes>
-        <Route path="/app/channels/:channelId" element={<ContentArea />} />
-        <Route path="/app/channels" element={<ContentArea />} />
-      </Routes>
-    </MemoryRouter>,
+    <Tooltip.Provider>
+      <MemoryRouter initialEntries={[initialEntry]}>
+        <Routes>
+          <Route path="/app/channels/:channelId" element={<ContentArea />} />
+          <Route path="/app/channels" element={<ContentArea />} />
+        </Routes>
+      </MemoryRouter>
+    </Tooltip.Provider>,
   );
 }
 
