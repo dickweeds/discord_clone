@@ -1,3 +1,5 @@
+import type { AudioProducerSource } from './types.js';
+
 export interface WsMessage<T = unknown> {
   type: string;
   payload: T;
@@ -71,6 +73,7 @@ export interface VoiceProducePayload {
   transportId: string;
   kind: 'audio' | 'video';
   rtpParameters: unknown;
+  source?: AudioProducerSource;
 }
 
 export interface VoiceProduceResponse {
@@ -96,6 +99,7 @@ export interface VoiceNewProducerPayload {
   producerId: string;
   peerId: string;
   kind: 'audio' | 'video';
+  source?: AudioProducerSource;
 }
 
 export interface VoiceProducerClosedPayload {
@@ -197,4 +201,26 @@ export const WS_TYPES = {
   USER_BANNED: 'user:banned',
   MEMBER_ADDED: 'member:added',
   MEMBER_REMOVED: 'member:removed',
+  SOUNDBOARD_PLAY: 'soundboard:play',
+  SOUNDBOARD_STOP: 'soundboard:stop',
 } as const;
+
+// Soundboard — send (client → server) vs broadcast (server → clients)
+export interface SoundboardPlaySendPayload {
+  soundId: string;
+}
+
+export interface SoundboardPlayBroadcastPayload {
+  userId: string;
+  soundId: string;
+  soundName: string;
+}
+
+export interface SoundboardStopBroadcastPayload {
+  userId: string;
+}
+
+/** @deprecated Use SoundboardPlayBroadcastPayload instead */
+export type SoundboardPlayPayload = SoundboardPlayBroadcastPayload;
+/** @deprecated Use SoundboardStopBroadcastPayload instead */
+export type SoundboardStopPayload = SoundboardStopBroadcastPayload;

@@ -15,6 +15,13 @@
       "when": 1772330400000,
       "tag": "0001_drop_phantom_indexes",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1772499990101,
+      "tag": "0002_quiet_william_stryker",
+      "breakpoints": true
     }
   ]
 }

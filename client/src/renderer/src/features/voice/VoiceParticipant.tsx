@@ -3,7 +3,8 @@ import { useMemberStore } from '../../stores/useMemberStore';
 import { useVoiceStore } from '../../stores/useVoiceStore';
 import { getAvatarColor } from '../../utils/avatarColor';
 import useAuthStore from '../../stores/useAuthStore';
-import { MicOff, HeadphoneOff } from 'lucide-react';
+import { MicOff, HeadphoneOff, Volume2, VolumeOff } from 'lucide-react';
+import { useSoundboardStore } from '../../stores/useSoundboardStore';
 import { UserContextMenu } from '../userContextMenu/UserContextMenu';
 
 interface VoiceParticipantProps {
@@ -18,6 +19,9 @@ export function VoiceParticipant({ userId }: VoiceParticipantProps): React.React
   const remoteMuteState = useVoiceStore((s) => s.remoteMuteState.get(userId));
   const currentUserId = useAuthStore((s) => s.user?.id);
   const isLocalUser = userId === currentUserId;
+  const isSoundboardMuted = useSoundboardStore((s) => s.mutedSoundboardUsers.has(userId));
+  const toggleSoundboardMute = useSoundboardStore((s) => s.toggleUserSoundboardMute);
+  const activeSoundName = useSoundboardStore((s) => s.activePlayers.get(userId));
 
   // Determine mute/deafen state for display
   const showLocalMuted = isLocalUser && isMuted && !isDeafened;
@@ -42,7 +46,7 @@ export function VoiceParticipant({ userId }: VoiceParticipantProps): React.React
 
   const row = (
     <div
-      className="h-8 flex items-center gap-2 pl-6 pr-2"
+      className="h-8 flex items-center gap-2 pl-6 pr-2 group"
       role="listitem"
       aria-label={ariaLabel}
     >
@@ -65,7 +69,28 @@ export function VoiceParticipant({ userId }: VoiceParticipantProps): React.React
           </div>
         )}
       </div>
-      <span className="text-sm text-text-secondary truncate">{username}</span>
+      <span className="text-sm text-text-secondary truncate">
+        {username}
+        {activeSoundName && (
+          <span className="ml-1 text-xs text-accent-primary animate-pulse">
+            {activeSoundName}
+          </span>
+        )}
+      </span>
+      {!isLocalUser && (
+        <button
+          onClick={(e) => { e.stopPropagation(); toggleSoundboardMute(userId); }}
+          className={`flex-shrink-0 w-4 h-4 flex items-center justify-center transition-opacity ${
+            isSoundboardMuted
+              ? 'text-text-muted'
+              : 'text-text-muted opacity-0 group-hover:opacity-100'
+          }`}
+          aria-label={isSoundboardMuted ? 'Unmute soundboard' : 'Mute soundboard'}
+          title={isSoundboardMuted ? 'Unmute soundboard' : 'Mute soundboard'}
+        >
+          {isSoundboardMuted ? <VolumeOff size={12} /> : <Volume2 size={12} />}
+        </button>
+      )}
     </div>
   );
 

@@ -1,8 +1,10 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { render, screen } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { VoiceParticipant } from './VoiceParticipant';
 import { useMemberStore } from '../../stores/useMemberStore';
 import { useVoiceStore } from '../../stores/useVoiceStore';
+import { useSoundboardStore } from '../../stores/useSoundboardStore';
 
 vi.mock('../../stores/useAuthStore', () => ({
   default: Object.assign(
@@ -16,6 +18,8 @@ vi.mock('../../stores/useAuthStore', () => ({
   ),
 }));
 
+const mockToggleSoundboardMute = vi.fn();
+
 beforeEach(() => {
   useMemberStore.setState({
     members: [
@@ -28,6 +32,11 @@ beforeEach(() => {
     isMuted: false,
     isDeafened: false,
     remoteMuteState: new Map(),
+  });
+  useSoundboardStore.setState({
+    mutedSoundboardUsers: new Set<string>(),
+    activePlayers: new Map<string, string>(),
+    toggleUserSoundboardMute: mockToggleSoundboardMute,
   });
 });
 
@@ -203,6 +212,55 @@ describe('VoiceParticipant', () => {
 
       const row = screen.getByRole('listitem');
       expect(row).toHaveAttribute('aria-label', expect.stringContaining('(deafened)'));
+    });
+  });
+
+  describe('soundboard mute', () => {
+    it('renders soundboard mute button for non-local participants', () => {
+      render(<VoiceParticipant userId="user-2" />);
+
+      const button = screen.getByRole('button', { name: 'Mute soundboard' });
+      expect(button).toBeInTheDocument();
+    });
+
+    it('does NOT render soundboard mute button for local user', () => {
+      render(<VoiceParticipant userId="user-1" />);
+
+      const button = screen.queryByRole('button', { name: /soundboard/i });
+      expect(button).not.toBeInTheDocument();
+    });
+
+    it('clicking mute button calls toggleUserSoundboardMute', async () => {
+      const user = userEvent.setup();
+      render(<VoiceParticipant userId="user-2" />);
+
+      const button = screen.getByRole('button', { name: 'Mute soundboard' });
+      await user.click(button);
+
+      expect(mockToggleSoundboardMute).toHaveBeenCalledWith('user-2');
+    });
+
+    it('shows VolumeOff icon when user is soundboard-muted', () => {
+      useSoundboardStore.setState({
+        mutedSoundboardUsers: new Set(['user-2']),
+        activePlayers: new Map<string, string>(),
+        toggleUserSoundboardMute: mockToggleSoundboardMute,
+      });
+      render(<VoiceParticipant userId="user-2" />);
+
+      const button = screen.getByRole('button', { name: 'Unmute soundboard' });
+      expect(button).toBeInTheDocument();
+    });
+
+    it('shows active sound name when user is playing', () => {
+      useSoundboardStore.setState({
+        mutedSoundboardUsers: new Set<string>(),
+        activePlayers: new Map([['user-2', 'airhorn']]),
+        toggleUserSoundboardMute: mockToggleSoundboardMute,
+      });
+      render(<VoiceParticipant userId="user-2" />);
+
+      expect(screen.getByText('airhorn')).toBeInTheDocument();
     });
   });
 });

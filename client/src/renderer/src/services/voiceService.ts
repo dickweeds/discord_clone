@@ -62,6 +62,13 @@ export async function joinVoiceChannel(channelId: string): Promise<JoinVoiceResu
   // 6. Produce audio with selected device (or system default if null)
   await mediaService.produceAudio(sendTransport, selectedDeviceId);
 
+  // 6b. Create soundboard producer (silent until a sound is played)
+  try {
+    await mediaService.produceSoundboardAudio(sendTransport);
+  } catch (err) {
+    console.warn('[voiceService] Failed to create soundboard producer:', err);
+  }
+
   // 7. Start local VAD for speaking detection
   const localStream = mediaService.getLocalStream();
   if (localStream) {

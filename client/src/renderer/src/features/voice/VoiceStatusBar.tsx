@@ -1,11 +1,13 @@
-import React, { useEffect } from 'react';
-import { Mic, MicOff, Headphones, HeadphoneOff, Video, VideoOff, PhoneOff } from 'lucide-react';
+import React, { useEffect, useState } from 'react';
+import { Mic, MicOff, Headphones, HeadphoneOff, Video, VideoOff, PhoneOff, Music } from 'lucide-react';
 import { useVoiceStore } from '../../stores/useVoiceStore';
 import { useChannelStore } from '../../stores/useChannelStore';
+import { SoundboardPanel } from '../soundboard/SoundboardPanel';
 
 const ERROR_DISMISS_MS = 5000;
 
 export function VoiceStatusBar(): React.ReactNode {
+  const [showSoundboard, setShowSoundboard] = useState(false);
   const currentChannelId = useVoiceStore((s) => s.currentChannelId);
   const connectionState = useVoiceStore((s) => s.connectionState);
   const isMuted = useVoiceStore((s) => s.isMuted);
@@ -39,6 +41,8 @@ export function VoiceStatusBar(): React.ReactNode {
   const VideoIcon = isVideoEnabled ? Video : VideoOff;
 
   return (
+    <div className="flex flex-col">
+      {showSoundboard && isConnected && <SoundboardPanel />}
     <div
       className="h-[52px] w-full px-3 flex items-center justify-between bg-bg-tertiary border-t border-bg-hover animate-slideUp"
       role="region"
@@ -86,6 +90,20 @@ export function VoiceStatusBar(): React.ReactNode {
           <DeafenIcon size={18} />
         </button>
 
+        {isConnected && (
+          <button
+            onClick={() => setShowSoundboard(!showSoundboard)}
+            aria-label={showSoundboard ? 'Hide soundboard' : 'Show soundboard'}
+            className={`w-8 h-8 flex items-center justify-center rounded transition-colors duration-150 ${
+              showSoundboard
+                ? 'text-accent-primary'
+                : 'text-text-muted hover:bg-bg-hover hover:text-text-primary'
+            }`}
+          >
+            <Music size={18} />
+          </button>
+        )}
+
         <button
           onClick={() => toggleVideo()}
           aria-label={isVideoEnabled ? 'Turn off camera' : 'Turn on camera'}
@@ -106,6 +124,7 @@ export function VoiceStatusBar(): React.ReactNode {
           <PhoneOff size={18} />
         </button>
       </div>
+    </div>
     </div>
   );
 }

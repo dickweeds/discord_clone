@@ -1,4 +1,4 @@
-import { pgTable, pgEnum, text, uuid, timestamp, boolean, index } from 'drizzle-orm/pg-core';
+import { pgTable, pgEnum, text, uuid, timestamp, boolean, integer, index } from 'drizzle-orm/pg-core';
 import type { InferSelectModel, InferInsertModel } from 'drizzle-orm';
 
 // --- Enums ---
@@ -70,6 +70,20 @@ export const messages = pgTable('messages', {
   index('messages_channel_created_idx').on(table.channel_id, table.created_at, table.id),
 ]).enableRLS();
 
+// --- Sounds ---
+export const sounds = pgTable('sounds', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  name: text('name').notNull(),
+  s3_key: text('s3_key').notNull().unique(),
+  file_size: integer('file_size').notNull(),
+  duration_ms: integer('duration_ms').notNull(),
+  mime_type: text('mime_type').notNull(),
+  uploaded_by: uuid('uploaded_by').notNull().references(() => users.id, { onDelete: 'cascade' }),
+  created_at: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+}, (table) => [
+  index('idx_sounds_uploaded_by').on(table.uploaded_by),
+]).enableRLS();
+
 // --- Inferred Types ---
 export type User = InferSelectModel<typeof users>;
 export type NewUser = InferInsertModel<typeof users>;
@@ -88,3 +102,6 @@ export type NewChannel = InferInsertModel<typeof channels>;
 
 export type Message = InferSelectModel<typeof messages>;
 export type NewMessage = InferInsertModel<typeof messages>;
+
+export type Sound = InferSelectModel<typeof sounds>;
+export type NewSound = InferInsertModel<typeof sounds>;

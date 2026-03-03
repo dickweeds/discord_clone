@@ -15,6 +15,9 @@ import type {
   VoiceConsumeResponse,
   VoiceChannelPresencePayload,
   VoiceStatePayload,
+  SoundboardPlayPayload,
+  SoundboardStopPayload,
+  AudioProducerSource,
 } from 'discord-clone-shared';
 import { WS_TYPES, WS_RECONNECT_DELAY, WS_MAX_RECONNECT_DELAY } from 'discord-clone-shared';
 import { usePresenceStore } from '../stores/usePresenceStore';
@@ -168,6 +171,8 @@ class WsClient {
       return;
     }
 
+    const source: AudioProducerSource = payload.source || 'microphone';
+
     try {
       const consumeResponse = await this.request<VoiceConsumeResponse>(
         'voice:consume',
@@ -196,23 +201,38 @@ class WsClient {
       } else {
         const { useVoiceStore } = await import('../stores/useVoiceStore');
         const initialVolumeScalar = useVoiceStore.getState().getPeerVolume(payload.peerId) / 100;
+
+        // Check if this user's soundboard is muted
+        let isSoundboardMuted = false;
+        if (source === 'soundboard') {
+          const { useSoundboardStore } = await import('../stores/useSoundboardStore');
+          isSoundboardMuted = useSoundboardStore.getState().isUserSoundboardMuted(payload.peerId);
+        }
+
         const consumer = await mediaService.consumeAudio(recvTransport, {
           consumerId: consumeResponse.consumerId,
           producerId: consumeResponse.producerId,
           kind: consumeResponse.kind as 'audio',
           rtpParameters: consumeResponse.rtpParameters as Parameters<typeof mediaService.consumeAudio>[1]['rtpParameters'],
-        }, payload.peerId, initialVolumeScalar);
+        }, payload.peerId, initialVolumeScalar, source);
+
+        // Apply soundboard mute if needed
+        if (isSoundboardMuted) {
+          mediaService.muteSoundboardConsumer(payload.peerId, true);
+        }
 
         await this.request<void>('voice:consumer-resume', { consumerId: consumer.id });
 
-        // Start remote VAD for speaking detection
-        vadService.startRemoteVAD(consumer, payload.peerId, (peerId, speaking) => {
-          import('../stores/useVoiceStore').then(({ useVoiceStore }) => {
-            useVoiceStore.getState().setSpeaking(peerId, speaking);
-          }).catch((err) => {
-            console.warn('[wsClient] Failed to update speaking state:', err);
+        // Start remote VAD for speaking detection (only for mic producers)
+        if (source === 'microphone') {
+          vadService.startRemoteVAD(consumer, payload.peerId, (peerId, speaking) => {
+            import('../stores/useVoiceStore').then(({ useVoiceStore }) => {
+              useVoiceStore.getState().setSpeaking(peerId, speaking);
+            }).catch((err) => {
+              console.warn('[wsClient] Failed to update speaking state:', err);
+            });
           });
-        });
+        }
       }
     } catch (err) {
       console.warn('[wsClient] Failed to consume producer:', (err as Error).message);
@@ -370,6 +390,20 @@ class WsClient {
         useVoiceStore.getState().setRemoteMuteState(payload.userId, payload.muted, payload.deafened);
       }).catch((err) => {
         console.warn('[wsClient] Failed to set remote mute state:', err);
+      });
+    } else if (message.type === WS_TYPES.SOUNDBOARD_PLAY) {
+      const payload = message.payload as SoundboardPlayPayload;
+      import('../stores/useSoundboardStore').then(({ useSoundboardStore }) => {
+        useSoundboardStore.getState().setSoundPlaying(payload.userId, payload.soundName);
+      }).catch((err) => {
+        console.warn('[wsClient] Failed to set sound playing:', err);
+      });
+    } else if (message.type === WS_TYPES.SOUNDBOARD_STOP) {
+      const payload = message.payload as SoundboardStopPayload;
+      import('../stores/useSoundboardStore').then(({ useSoundboardStore }) => {
+        useSoundboardStore.getState().setSoundStopped(payload.userId);
+      }).catch((err) => {
+        console.warn('[wsClient] Failed to set sound stopped:', err);
       });
     }
 

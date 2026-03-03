@@ -22,3 +22,8 @@ output "assets_bucket_name" {
   description = "S3 bucket for download assets"
   value       = aws_s3_bucket.assets.id
 }
+
+output "soundboard_bucket_name" {
+  description = "S3 bucket for soundboard audio"
+  value       = aws_s3_bucket.soundboard.id
+}

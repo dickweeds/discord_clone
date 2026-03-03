@@ -37,15 +37,6 @@ resource "aws_security_group" "app" {
     cidr_blocks = ["0.0.0.0/0"]
   }
 
-  # SSH access (to be removed after SSM is verified — Task 4.7)
-  ingress {
-    description = "SSH access"
-    from_port   = 22
-    to_port     = 22
-    protocol    = "tcp"
-    cidr_blocks = ["0.0.0.0/0"]
-  }
-
   # TURN/STUN (coturn)
   ingress {
     description = "STUN"
@@ -86,7 +77,7 @@ resource "aws_security_group" "app" {
 
 resource "aws_instance" "app" {
   ami                    = var.ami_id
-  instance_type          = "t3a.medium"
+  instance_type          = var.instance_type
   iam_instance_profile   = aws_iam_instance_profile.ec2.name
   vpc_security_group_ids = [aws_security_group.app.id]
 
@@ -184,7 +175,12 @@ resource "aws_iam_role_policy" "ec2_ssm_params" {
       {
         Effect   = "Allow"
         Action   = "kms:Decrypt"
-        Resource = "*"
+        Resource = "arn:aws:kms:${var.aws_region}:*:key/*"
+        Condition = {
+          StringEquals = {
+            "kms:ViaService" = "ssm.${var.aws_region}.amazonaws.com"
+          }
+        }
       }
     ]
   })
@@ -205,6 +201,28 @@ resource "aws_iam_role_policy" "ec2_s3_assets" {
       Resource = [
         aws_s3_bucket.assets.arn,
         "${aws_s3_bucket.assets.arn}/*"
+      ]
+    }]
+  })
+}
+
+resource "aws_iam_role_policy" "ec2_s3_soundboard" {
+  name = "s3-soundboard-readwrite"
+  role = aws_iam_role.ec2.id
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [{
+      Effect = "Allow"
+      Action = [
+        "s3:GetObject",
+        "s3:PutObject",
+        "s3:DeleteObject",
+        "s3:ListBucket"
+      ]
+      Resource = [
+        aws_s3_bucket.soundboard.arn,
+        "${aws_s3_bucket.soundboard.arn}/*"
       ]
     }]
   })
@@ -264,6 +282,15 @@ resource "aws_iam_role_policy" "deploy_ssm" {
         Effect = "Allow"
         Action = [
           "ssm:SendCommand",
+        ]
+        Resource = [
+          aws_instance.app.arn,
+          "arn:aws:ssm:${var.aws_region}::document/AWS-RunShellScript"
+        ]
+      },
+      {
+        Effect = "Allow"
+        Action = [
           "ssm:GetCommandInvocation",
           "ssm:ListCommandInvocations"
         ]
@@ -300,6 +327,24 @@ resource "aws_s3_bucket" "assets" {
   bucket = var.assets_bucket_name
 }
 
+resource "aws_s3_bucket_public_access_block" "assets" {
+  bucket                  = aws_s3_bucket.assets.id
+  block_public_acls       = true
+  block_public_policy     = true
+  ignore_public_acls      = true
+  restrict_public_buckets = true
+}
+
+resource "aws_s3_bucket_server_side_encryption_configuration" "assets" {
+  bucket = aws_s3_bucket.assets.id
+  rule {
+    apply_server_side_encryption_by_default {
+      sse_algorithm = "AES256"
+    }
+    bucket_key_enabled = true
+  }
+}
+
 resource "aws_s3_bucket_versioning" "assets" {
   bucket = aws_s3_bucket.assets.id
   versioning_configuration {
@@ -323,5 +368,63 @@ resource "aws_s3_bucket_lifecycle_configuration" "assets" {
     noncurrent_version_expiration {
       noncurrent_days = 30
     }
+  }
+}
+
+# --- S3 Bucket for Soundboard Audio ---
+
+resource "aws_s3_bucket" "soundboard" {
+  bucket = var.soundboard_bucket_name
+}
+
+resource "aws_s3_bucket_public_access_block" "soundboard" {
+  bucket                  = aws_s3_bucket.soundboard.id
+  block_public_acls       = true
+  block_public_policy     = true
+  ignore_public_acls      = true
+  restrict_public_buckets = true
+}
+
+resource "aws_s3_bucket_server_side_encryption_configuration" "soundboard" {
+  bucket = aws_s3_bucket.soundboard.id
+  rule {
+    apply_server_side_encryption_by_default {
+      sse_algorithm = "AES256"
+    }
+    bucket_key_enabled = true
+  }
+}
+
+resource "aws_s3_bucket_versioning" "soundboard" {
+  bucket = aws_s3_bucket.soundboard.id
+  versioning_configuration {
+    status = "Enabled"
+  }
+}
+
+resource "aws_s3_bucket_lifecycle_configuration" "soundboard" {
+  bucket = aws_s3_bucket.soundboard.id
+
+  rule {
+    id     = "cleanup-noncurrent-versions"
+    status = "Enabled"
+
+    filter {}
+
+    noncurrent_version_expiration {
+      noncurrent_days = 30
+    }
+  }
+}
+
+resource "aws_s3_bucket_cors_configuration" "soundboard" {
+  bucket = aws_s3_bucket.soundboard.id
+
+  cors_rule {
+    allowed_headers = ["*"]
+    allowed_methods = ["PUT", "GET"]
+    # Electron uses custom protocol origins; presigned URLs are time-limited and IAM-authenticated
+    allowed_origins = ["*"]
+    max_age_seconds = 3600
   }
 }
