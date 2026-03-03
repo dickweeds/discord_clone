@@ -100,7 +100,7 @@ export async function requestUploadUrl(
     uploaded_by: userId,
   }).returning({ id: sounds.id });
 
-  const uploadUrl = await s3Service.getUploadUrl(s3Key, contentType, fileSize);
+  const uploadUrl = await s3Service.getUploadUrl(s3Key, contentType);
 
   return { uploadUrl, s3Key, soundId: inserted.id };
 }

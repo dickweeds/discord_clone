@@ -5,7 +5,7 @@ created: '2026-03-02'
 status: 'implementation-complete'
 stepsCompleted: [1, 2, 3, 4]
 tech_stack: ['TypeScript 5.x', 'Fastify v5.7.x', 'React 18+', 'Zustand v5.0.x', 'Drizzle ORM v0.45.x', 'mediasoup v3.19.x (server) / v3.18.x (client)', 'Terraform (AWS S3)', 'Vitest', 'React Testing Library', '@aws-sdk/client-s3', '@aws-sdk/s3-request-presigner']
-files_to_modify: ['infrastructure/main.tf', 'infrastructure/variables.tf', 'infrastructure/outputs.tf', 'server/src/db/schema.ts', 'server/drizzle/ (new migration)', 'server/src/plugins/voice/voiceService.ts', 'server/src/plugins/voice/voiceWsHandler.ts', 'shared/src/ws-messages.ts', 'shared/src/types.ts', 'client/src/renderer/src/services/mediaService.ts', 'client/src/renderer/src/services/voiceService.ts', 'client/src/renderer/src/services/wsClient.ts', 'client/src/renderer/src/stores/useVoiceStore.ts', 'server/src/app.ts', '.env.example']
+files_to_modify: ['infrastructure/main.tf', 'infrastructure/variables.tf', 'infrastructure/outputs.tf', 'server/src/db/schema.ts', 'server/drizzle/ (new migration)', 'server/src/plugins/voice/voiceService.ts', 'server/src/plugins/voice/voiceWsHandler.ts', 'shared/src/ws-messages.ts', 'shared/src/types.ts', 'shared/src/index.ts', 'client/src/renderer/src/services/mediaService.ts', 'client/src/renderer/src/services/voiceService.ts', 'client/src/renderer/src/services/wsClient.ts', 'client/src/renderer/src/services/soundboardApi.ts', 'server/src/app.ts', '.env.example']
 code_patterns: ['Fastify plugin: default async function export taking FastifyInstance', 'Service functions take db: AppDatabase as first param', 'Custom error classes per domain (e.g., SoundNotFoundError)', 'Auth via getAuthenticatedUser(request) / requireOwner()', 'REST envelope: { data } / { error: { code, message } }', 'WS envelope: { type: "namespace:action", payload }', 'Drizzle: pgTable() with uuid PK, timestamp with timezone, .enableRLS()', 'Terraform: aws_s3_bucket + versioning + lifecycle as separate resources', 'Feature-based frontend: features/{domain}/ with Zustand stores']
 test_patterns: ['Co-located tests: {SourceFile}.test.{ts,tsx}', 'Vitest as test runner', 'Fastify inject() for route testing', 'React Testing Library for component tests', 'PGlite for test database', 'Mock WebSocket in unit tests']
 ---
@@ -322,7 +322,7 @@ Add a global soundboard feature where users upload audio files to AWS S3, play t
 #### Phase 5: Client — Soundboard Store & API
 
 - [x] Task 16: Create soundboard API client
-  - File: `client/src/renderer/src/services/api/soundboardApi.ts` (new file, or add to existing API client file)
+  - File: `client/src/renderer/src/services/soundboardApi.ts` (new file)
   - Action: Create API functions using the existing `apiClient` pattern:
     - `fetchSounds(): Promise<SoundResponse[]>` — `GET /api/soundboard`
     - `requestUploadUrl(data: { fileName, contentType, fileSize, durationMs }): Promise<{ uploadUrl, s3Key, soundId }>` — `POST /api/soundboard/upload-url`
@@ -402,14 +402,14 @@ Add a global soundboard feature where users upload audio files to AWS S3, play t
   - Action: Style using Tailwind CSS matching the existing warm earthy theme. Use Radix UI primitives for interactive elements (buttons, dialogs)
   - Notes: The panel should be toggleable from the voice channel area. When not in a voice channel, the upload/manage functionality could still be accessible but play buttons should be disabled
 
-- [x] Task 20: Create SoundboardMuteControls component
-  - File: `client/src/renderer/src/features/soundboard/SoundboardMuteControls.tsx` (new file)
-  - Action: Create per-user soundboard mute controls. This could be integrated into the voice participant list or as a context menu:
-    - For each participant in the voice channel, show a soundboard mute/unmute toggle
-    - Icon: speaker icon with slash when muted
+- [x] Task 20: Integrate soundboard mute controls into VoiceParticipant
+  - File: `client/src/renderer/src/features/voice/VoiceParticipant.tsx` (modified)
+  - Action: Per-user soundboard mute controls integrated directly into VoiceParticipant component rather than a separate file:
+    - For each non-local participant, show a soundboard mute/unmute toggle icon
+    - Icon: Volume2/VolumeOff from lucide-react, shown on hover (always visible when muted)
     - Calls `useSoundboardStore.toggleUserSoundboardMute(userId)`
     - Visual state reflects `useSoundboardStore.isUserSoundboardMuted(userId)`
-  - Notes: This should be accessible from wherever voice participants are listed (VoiceParticipant component or a right-click context menu)
+  - Notes: Inlining into VoiceParticipant avoids creating a trivial single-button wrapper component
 
 - [x] Task 21: Create SoundboardUploadDialog component
   - File: `client/src/renderer/src/features/soundboard/SoundboardUploadDialog.tsx` (new file)

@@ -94,6 +94,8 @@ export interface AuthTokens {
 /** Base64-encoded sealed box containing the group encryption key encrypted for a specific user */
 export type EncryptedGroupKeyBlob = string;
 
+export type AudioProducerSource = 'microphone' | 'soundboard';
+
 export interface SoundResponse {
   id: string;
   name: string;

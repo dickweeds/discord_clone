@@ -27,7 +27,7 @@ export async function teardownApp(): Promise<void> {
  *  Uses TRUNCATE CASCADE — instant metadata-only operation, auto-handles FK ordering. */
 export async function truncateAll(db: AppDatabase): Promise<void> {
   await db.execute(
-    sql`TRUNCATE TABLE messages, sessions, bans, invites, channels, users CASCADE`
+    sql`TRUNCATE TABLE sounds, messages, sessions, bans, invites, channels, users CASCADE`
   );
 }
 

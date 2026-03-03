@@ -1,3 +1,5 @@
+import type { AudioProducerSource } from './types.js';
+
 export interface WsMessage<T = unknown> {
   type: string;
   payload: T;
@@ -99,8 +101,6 @@ export interface VoiceNewProducerPayload {
   kind: 'audio' | 'video';
   source?: AudioProducerSource;
 }
-
-export type AudioProducerSource = 'microphone' | 'soundboard';
 
 export interface VoiceProducerClosedPayload {
   producerId: string;

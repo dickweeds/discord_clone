@@ -117,7 +117,17 @@ export const useSoundboardStore = create<SoundboardState>((set, get) => ({
         return;
       }
 
-      mediaService.playSoundboardAudio(audioBuffer);
+      mediaService.playSoundboardAudio(audioBuffer, () => {
+        set({ isPlaying: false, currentSoundId: null });
+        try {
+          wsClient.send({
+            type: WS_TYPES.SOUNDBOARD_STOP,
+            payload: {},
+          });
+        } catch {
+          // WS not connected — non-critical
+        }
+      });
       set({ isPlaying: true, currentSoundId: soundId });
 
       // Send play notification
@@ -129,19 +139,6 @@ export const useSoundboardStore = create<SoundboardState>((set, get) => ({
       } catch {
         // WS not connected — non-critical
       }
-
-      // Set up ended callback
-      mediaService.onSoundboardEnded(() => {
-        set({ isPlaying: false, currentSoundId: null });
-        try {
-          wsClient.send({
-            type: WS_TYPES.SOUNDBOARD_STOP,
-            payload: {},
-          });
-        } catch {
-          // WS not connected — non-critical
-        }
-      });
     } catch (err) {
       set({ error: (err as Error).message, isPlaying: false, currentSoundId: null });
     }

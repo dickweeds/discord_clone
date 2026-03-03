@@ -80,8 +80,10 @@ export function VoiceParticipant({ userId }: VoiceParticipantProps): React.React
       {!isLocalUser && (
         <button
           onClick={(e) => { e.stopPropagation(); toggleSoundboardMute(userId); }}
-          className={`flex-shrink-0 w-4 h-4 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity ${
-            isSoundboardMuted ? 'text-text-muted opacity-100' : 'text-text-muted'
+          className={`flex-shrink-0 w-4 h-4 flex items-center justify-center transition-opacity ${
+            isSoundboardMuted
+              ? 'text-text-muted'
+              : 'text-text-muted opacity-0 group-hover:opacity-100'
           }`}
           aria-label={isSoundboardMuted ? 'Unmute soundboard' : 'Mute soundboard'}
           title={isSoundboardMuted ? 'Unmute soundboard' : 'Mute soundboard'}

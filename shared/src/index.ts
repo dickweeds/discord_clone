@@ -13,6 +13,7 @@ export type {
   EncryptedGroupKeyBlob,
   UserPublic,
   SoundResponse,
+  AudioProducerSource,
 } from './types.js';
 
 export type {
@@ -47,7 +48,6 @@ export type {
   MemberRemovedPayload,
   SoundboardPlayPayload,
   SoundboardStopPayload,
-  AudioProducerSource,
 } from './ws-messages.js';
 
 export { WS_TYPES } from './ws-messages.js';

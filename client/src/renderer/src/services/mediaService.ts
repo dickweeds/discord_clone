@@ -415,7 +415,7 @@ export async function produceSoundboardAudio(transport: types.Transport): Promis
   return newProducer;
 }
 
-export function playSoundboardAudio(audioBuffer: AudioBuffer): void {
+export function playSoundboardAudio(audioBuffer: AudioBuffer, onEnded?: () => void): void {
   if (!soundboardAudioContext || !soundboardDestination) return;
 
   // Stop any currently playing source
@@ -426,6 +426,14 @@ export function playSoundboardAudio(audioBuffer: AudioBuffer): void {
   soundboardSource = soundboardAudioContext.createBufferSource();
   soundboardSource.buffer = audioBuffer;
   soundboardSource.connect(soundboardDestination);
+
+  if (onEnded) {
+    soundboardSource.onended = () => {
+      soundboardSource = null;
+      onEnded();
+    };
+  }
+
   soundboardSource.start();
 }
 
@@ -442,15 +450,6 @@ export function getSoundboardAudioContext(): AudioContext | null {
 
 export function isSoundboardPlaying(): boolean {
   return soundboardSource !== null;
-}
-
-export function onSoundboardEnded(callback: () => void): void {
-  if (soundboardSource) {
-    soundboardSource.onended = () => {
-      soundboardSource = null;
-      callback();
-    };
-  }
 }
 
 export function muteSoundboardConsumer(peerId: string, muted: boolean): void {
