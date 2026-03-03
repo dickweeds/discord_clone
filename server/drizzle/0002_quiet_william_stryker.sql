@@ -12,6 +12,8 @@ CREATE TABLE "sounds" (
 --> statement-breakpoint
 ALTER TABLE "sounds" ADD CONSTRAINT "sounds_uploaded_by_users_id_fk" FOREIGN KEY ("uploaded_by") REFERENCES "public"."users"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 CREATE INDEX "idx_sounds_uploaded_by" ON "sounds" USING btree ("uploaded_by");--> statement-breakpoint
+-- RLS enabled as defense-in-depth; application connects as superuser (service role) which bypasses RLS.
+-- If Supabase PostgREST is ever exposed, add appropriate policies.
 ALTER TABLE sounds ENABLE ROW LEVEL SECURITY;--> statement-breakpoint
 ALTER TABLE sounds FORCE ROW LEVEL SECURITY;--> statement-breakpoint
 

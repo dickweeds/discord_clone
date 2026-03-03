@@ -2,10 +2,9 @@ import React, { useRef, useState } from 'react';
 import { Upload } from 'lucide-react';
 import { Dialog } from 'radix-ui';
 import { useSoundboardStore } from '../../stores/useSoundboardStore';
+import { SOUNDBOARD_MAX_FILE_SIZE, SOUNDBOARD_MAX_DURATION_S } from 'discord-clone-shared';
 
 const ACCEPTED_FORMATS = '.mp3,.wav,.ogg,.flac,.aac,.webm';
-const MAX_FILE_SIZE = 20 * 1024 * 1024; // 20MB
-const MAX_DURATION_S = 20;
 
 interface SoundboardUploadDialogProps {
   onClose: () => void;
@@ -26,20 +25,19 @@ export function SoundboardUploadDialog({ onClose }: SoundboardUploadDialogProps)
 
     setError(null);
 
-    if (selectedFile.size > MAX_FILE_SIZE) {
-      setError(`File size exceeds ${MAX_FILE_SIZE / (1024 * 1024)}MB limit`);
+    if (selectedFile.size > SOUNDBOARD_MAX_FILE_SIZE) {
+      setError(`File size exceeds ${SOUNDBOARD_MAX_FILE_SIZE / (1024 * 1024)}MB limit`);
       return;
     }
 
     // Decode audio to check duration
     try {
       const arrayBuffer = await selectedFile.arrayBuffer();
-      const audioContext = new AudioContext();
-      const audioBuffer = await audioContext.decodeAudioData(arrayBuffer);
-      await audioContext.close();
+      const offlineCtx = new OfflineAudioContext(1, 1, 44100);
+      const audioBuffer = await offlineCtx.decodeAudioData(arrayBuffer);
 
-      if (audioBuffer.duration > MAX_DURATION_S) {
-        setError(`Duration exceeds ${MAX_DURATION_S} seconds (${Math.round(audioBuffer.duration)}s)`);
+      if (audioBuffer.duration > SOUNDBOARD_MAX_DURATION_S) {
+        setError(`Duration exceeds ${SOUNDBOARD_MAX_DURATION_S} seconds (${Math.round(audioBuffer.duration)}s)`);
         return;
       }
 
@@ -102,7 +100,7 @@ export function SoundboardUploadDialog({ onClose }: SoundboardUploadDialogProps)
                 {file ? file.name : 'Choose audio file'}
               </button>
               <p className="mt-1 text-xs text-text-muted">
-                MP3, WAV, OGG, FLAC, AAC, WEBM — max {MAX_FILE_SIZE / (1024 * 1024)}MB, {MAX_DURATION_S}s
+                MP3, WAV, OGG, FLAC, AAC, WEBM — max {SOUNDBOARD_MAX_FILE_SIZE / (1024 * 1024)}MB, {SOUNDBOARD_MAX_DURATION_S}s
               </p>
             </div>
 

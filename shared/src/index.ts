@@ -48,6 +48,10 @@ export type {
   MemberRemovedPayload,
   SoundboardPlayPayload,
   SoundboardStopPayload,
+  SoundboardPlaySendPayload,
+  SoundboardPlayBroadcastPayload,
+  SoundboardStopBroadcastPayload,
+  VoiceSetRtpCapabilitiesPayload,
 } from './ws-messages.js';
 
 export { WS_TYPES } from './ws-messages.js';
@@ -72,4 +76,8 @@ export {
   X25519_PUBLIC_KEY_BYTES,
   X25519_SECRET_KEY_BYTES,
   NACL_SEALEDBOX_OVERHEAD,
+  SOUNDBOARD_MAX_FILE_SIZE,
+  SOUNDBOARD_MAX_DURATION_MS,
+  SOUNDBOARD_MAX_DURATION_S,
+  SOUNDBOARD_ALLOWED_MIME_TYPES,
 } from './constants.js';

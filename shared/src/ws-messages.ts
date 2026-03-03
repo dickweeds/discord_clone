@@ -205,13 +205,23 @@ export const WS_TYPES = {
   SOUNDBOARD_STOP: 'soundboard:stop',
 } as const;
 
-// Soundboard
-export interface SoundboardPlayPayload {
+// Soundboard — send (client → server) vs broadcast (server → clients)
+export interface SoundboardPlaySendPayload {
+  soundId: string;
+  soundName: string;
+}
+
+export interface SoundboardPlayBroadcastPayload {
   userId: string;
   soundId: string;
   soundName: string;
 }
 
-export interface SoundboardStopPayload {
+export interface SoundboardStopBroadcastPayload {
   userId: string;
 }
+
+/** @deprecated Use SoundboardPlayBroadcastPayload instead */
+export type SoundboardPlayPayload = SoundboardPlayBroadcastPayload;
+/** @deprecated Use SoundboardStopBroadcastPayload instead */
+export type SoundboardStopPayload = SoundboardStopBroadcastPayload;

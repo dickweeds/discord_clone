@@ -23,6 +23,19 @@ export const MAX_MEMBERS_PER_SERVER = 100;
 export const RATE_LIMIT_MESSAGES_PER_MINUTE = 30;
 export const RATE_LIMIT_API_PER_MINUTE = 60;
 
+// Soundboard
+export const SOUNDBOARD_MAX_FILE_SIZE = 20 * 1024 * 1024; // 20MB
+export const SOUNDBOARD_MAX_DURATION_MS = 20_000; // 20s
+export const SOUNDBOARD_MAX_DURATION_S = 20;
+export const SOUNDBOARD_ALLOWED_MIME_TYPES = [
+  'audio/mpeg',
+  'audio/wav',
+  'audio/ogg',
+  'audio/flac',
+  'audio/aac',
+  'audio/webm',
+] as const;
+
 // Encryption (libsodium constants)
 export const NACL_SECRETBOX_KEY_BYTES = 32;
 export const NACL_SECRETBOX_NONCE_BYTES = 24;

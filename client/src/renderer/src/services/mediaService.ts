@@ -205,9 +205,20 @@ export async function consumeAudio(
       // setSinkId may not be supported or device unavailable — use default
     }
   }
-  await audio.play();
 
+  // Store consumer before play() so it's always tracked for cleanup
   consumers.set(consumer.id, { consumer, audio, peerId, source, gainNode, audioContext });
+
+  try {
+    await audio.play();
+  } catch {
+    // Autoplay blocked or audio device error — clean up the consumer
+    consumers.delete(consumer.id);
+    consumer.close();
+    audio.srcObject = null;
+    if (audioContext) audioContext.close().catch(() => {});
+    throw new Error('Failed to play audio — autoplay may be blocked');
+  }
 
   return consumer;
 }
@@ -423,18 +434,22 @@ export function playSoundboardAudio(audioBuffer: AudioBuffer, onEnded?: () => vo
     try { soundboardSource.stop(); } catch { /* already stopped */ }
   }
 
-  soundboardSource = soundboardAudioContext.createBufferSource();
-  soundboardSource.buffer = audioBuffer;
-  soundboardSource.connect(soundboardDestination);
+  const source = soundboardAudioContext.createBufferSource();
+  source.buffer = audioBuffer;
+  source.connect(soundboardDestination);
+  soundboardSource = source;
 
   if (onEnded) {
-    soundboardSource.onended = () => {
-      soundboardSource = null;
-      onEnded();
+    source.onended = () => {
+      // Only null out if this source is still the current one (prevents race condition)
+      if (soundboardSource === source) {
+        soundboardSource = null;
+        onEnded();
+      }
     };
   }
 
-  soundboardSource.start();
+  source.start();
 }
 
 export function stopSoundboardAudio(): void {

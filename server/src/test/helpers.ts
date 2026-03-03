@@ -4,7 +4,7 @@ import { buildApp } from '../app.js';
 import { runMigrations } from '../db/migrate.js';
 import { hashPassword, generateAccessToken, generateRefreshToken } from '../plugins/auth/authService.js';
 import { createSession } from '../plugins/auth/sessionService.js';
-import { users, invites } from '../db/schema.js';
+import { users, invites, sounds } from '../db/schema.js';
 import type { AppDatabase } from '../db/connection.js';
 
 let currentApp: FastifyInstance | null = null;
@@ -64,6 +64,22 @@ export async function seedUserWithSession(app: FastifyInstance, username = 'sess
   const refreshToken = generateRefreshToken({ userId: user.id, role: 'user', username });
   await createSession(app.db, user.id, refreshToken);
   return { id: user.id, accessToken, refreshToken };
+}
+
+export async function seedSound(
+  app: FastifyInstance,
+  uploadedBy: string,
+  overrides: Partial<{ name: string; s3_key: string; file_size: number; duration_ms: number; mime_type: string }> = {},
+) {
+  const [sound] = await app.db.insert(sounds).values({
+    name: overrides.name ?? 'Test Sound',
+    s3_key: overrides.s3_key ?? `sounds/${crypto.randomUUID()}.mp3`,
+    file_size: overrides.file_size ?? 1024,
+    duration_ms: overrides.duration_ms ?? 5000,
+    mime_type: overrides.mime_type ?? 'audio/mpeg',
+    uploaded_by: uploadedBy,
+  }).returning();
+  return sound;
 }
 
 export async function seedInvite(app: FastifyInstance, createdBy: string, tokenValue = 'valid-invite-token'): Promise<string> {

@@ -99,7 +99,6 @@ export type AudioProducerSource = 'microphone' | 'soundboard';
 export interface SoundResponse {
   id: string;
   name: string;
-  s3Key: string;
   fileSize: number;
   durationMs: number;
   mimeType: string;

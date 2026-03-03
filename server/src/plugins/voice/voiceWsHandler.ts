@@ -28,6 +28,7 @@ import {
   clearAllVoiceState,
 } from './voiceService.js';
 import { getChannelById } from '../channels/channelService.js';
+import { getSoundById } from '../soundboard/soundboardService.js';
 
 let db: AppDatabase;
 let log: FastifyBaseLogger;
@@ -112,7 +113,7 @@ async function handleVoiceJoin(ws: WebSocket, message: WsMessage, userId: string
           payload: { producerId: existingPeer.producer.id, peerId, kind: 'audio', source: 'microphone' },
         }));
       } catch {
-        log.debug({ userId, peerId }, 'Failed to send existing audio producer');
+        log.warn({ userId, peerId }, 'Failed to send existing audio producer');
       }
     }
     if (existingPeer.soundboardProducer) {
@@ -122,7 +123,7 @@ async function handleVoiceJoin(ws: WebSocket, message: WsMessage, userId: string
           payload: { producerId: existingPeer.soundboardProducer.id, peerId, kind: 'audio', source: 'soundboard' },
         }));
       } catch {
-        log.debug({ userId, peerId }, 'Failed to send existing soundboard producer');
+        log.warn({ userId, peerId }, 'Failed to send existing soundboard producer');
       }
     }
     if (existingPeer.videoProducer) {
@@ -132,7 +133,7 @@ async function handleVoiceJoin(ws: WebSocket, message: WsMessage, userId: string
           payload: { producerId: existingPeer.videoProducer.id, peerId, kind: 'video' },
         }));
       } catch {
-        log.debug({ userId, peerId }, 'Failed to send existing video producer');
+        log.warn({ userId, peerId }, 'Failed to send existing video producer');
       }
     }
   }
@@ -343,7 +344,7 @@ async function handleConsume(ws: WebSocket, message: WsMessage, userId: string):
             payload: { producerId, peerId: producerPeerId, kind: consumer.kind },
           }));
         } catch {
-          log.debug({ userId }, 'Failed to send producer-closed notification');
+          log.warn({ userId }, 'Failed to send producer-closed notification');
         }
       }
     });
@@ -443,15 +444,19 @@ function handleSetRtpCapabilities(ws: WebSocket, message: WsMessage, userId: str
   if (requestId) respond(ws, requestId, {});
 }
 
-function handleSoundboardPlay(_ws: WebSocket, message: WsMessage, userId: string): void {
-  const { soundId, soundName } = message.payload as { soundId: string; soundName: string };
+async function handleSoundboardPlay(_ws: WebSocket, message: WsMessage, userId: string): Promise<void> {
+  const { soundId } = message.payload as { soundId: string };
   const peer = getPeer(userId);
   if (!peer) return;
+
+  // Validate soundId exists and use server-authoritative name
+  const sound = await getSoundById(db, soundId);
+  if (!sound) return;
 
   broadcastToChannel(peer.channelId, userId, WS_TYPES.SOUNDBOARD_PLAY, {
     userId,
     soundId,
-    soundName,
+    soundName: sound.name,
   });
 }
 
@@ -472,7 +477,7 @@ function broadcastToServer(excludeUserId: string, type: string, payload: unknown
       try {
         ws.send(JSON.stringify({ type, payload }));
       } catch {
-        log.debug({ userId, type }, 'Failed to broadcast to client');
+        log.warn({ userId, type }, 'Failed to broadcast to client');
       }
     }
   }
@@ -489,7 +494,7 @@ function broadcastToChannel(channelId: string, excludeUserId: string, type: stri
       try {
         ws.send(JSON.stringify({ type, payload }));
       } catch {
-        log.debug({ peerId, type }, 'Failed to broadcast to voice peer');
+        log.warn({ peerId, type }, 'Failed to broadcast to voice peer');
       }
     }
   }

@@ -5,6 +5,7 @@ import {
   requestUploadUrl,
   getDownloadUrl,
   deleteSound,
+  initSoundboardService,
   SoundNotFoundError,
   SoundValidationError,
   SoundPermissionError,
@@ -16,7 +17,6 @@ const soundResponseSchema = {
   properties: {
     id: { type: 'string' },
     name: { type: 'string' },
-    s3Key: { type: 'string' },
     fileSize: { type: 'number' },
     durationMs: { type: 'number' },
     mimeType: { type: 'string' },
@@ -40,6 +40,8 @@ const errorResponseSchema = {
 } as const;
 
 export default async function soundboardRoutes(fastify: FastifyInstance) {
+  initSoundboardService(fastify.log);
+
   // GET / — List all sounds
   fastify.get('/', {
     schema: {
@@ -56,7 +58,8 @@ export default async function soundboardRoutes(fastify: FastifyInstance) {
     },
   }, async (_request, reply) => {
     const soundList = await getAllSounds(fastify.db);
-    return reply.send({ data: soundList, count: soundList.length });
+    const sanitized = soundList.map(({ s3Key: _s3Key, ...rest }) => rest);
+    return reply.send({ data: sanitized, count: sanitized.length });
   });
 
   // POST /upload-url — Request presigned upload URL
@@ -65,11 +68,12 @@ export default async function soundboardRoutes(fastify: FastifyInstance) {
       body: {
         type: 'object',
         required: ['fileName', 'contentType', 'fileSize', 'durationMs'],
+        additionalProperties: false,
         properties: {
           fileName: { type: 'string', minLength: 1 },
           contentType: { type: 'string' },
-          fileSize: { type: 'number' },
-          durationMs: { type: 'number' },
+          fileSize: { type: 'integer', minimum: 1 },
+          durationMs: { type: 'integer', minimum: 1 },
         },
       },
       response: {
@@ -81,7 +85,6 @@ export default async function soundboardRoutes(fastify: FastifyInstance) {
               type: 'object',
               properties: {
                 uploadUrl: { type: 'string' },
-                s3Key: { type: 'string' },
                 soundId: { type: 'string' },
               },
             },
@@ -101,7 +104,7 @@ export default async function soundboardRoutes(fastify: FastifyInstance) {
 
     try {
       const result = await requestUploadUrl(fastify.db, userId, fileName, contentType, fileSize, durationMs);
-      return reply.status(201).send({ data: result });
+      return reply.status(201).send({ data: { uploadUrl: result.uploadUrl, soundId: result.soundId } });
     } catch (err) {
       if (err instanceof SoundValidationError) {
         return reply.status(400).send({
@@ -118,7 +121,7 @@ export default async function soundboardRoutes(fastify: FastifyInstance) {
       params: {
         type: 'object',
         required: ['soundId'],
-        properties: { soundId: { type: 'string' } },
+        properties: { soundId: { type: 'string', format: 'uuid' } },
       },
       response: {
         200: {
@@ -153,7 +156,7 @@ export default async function soundboardRoutes(fastify: FastifyInstance) {
       params: {
         type: 'object',
         required: ['soundId'],
-        properties: { soundId: { type: 'string' } },
+        properties: { soundId: { type: 'string', format: 'uuid' } },
       },
       response: {
         204: { type: 'null', description: 'Sound deleted' },

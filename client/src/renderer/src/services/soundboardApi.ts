@@ -10,26 +10,36 @@ export async function requestUploadUrl(data: {
   contentType: string;
   fileSize: number;
   durationMs: number;
-}): Promise<{ uploadUrl: string; s3Key: string; soundId: string }> {
-  return apiRequest<{ uploadUrl: string; s3Key: string; soundId: string }>(
+}): Promise<{ uploadUrl: string; soundId: string }> {
+  return apiRequest<{ uploadUrl: string; soundId: string }>(
     '/api/soundboard/upload-url',
     { method: 'POST', body: JSON.stringify(data) },
   );
 }
 
+const UPLOAD_TIMEOUT_MS = 120_000; // 2 minutes
+
 export async function uploadToS3(uploadUrl: string, file: File): Promise<void> {
-  const response = await fetch(uploadUrl, {
-    method: 'PUT',
-    headers: { 'Content-Type': file.type },
-    body: file,
-  });
-  if (!response.ok) {
-    throw new Error(`S3 upload failed: ${response.status}`);
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), UPLOAD_TIMEOUT_MS);
+
+  try {
+    const response = await fetch(uploadUrl, {
+      method: 'PUT',
+      headers: { 'Content-Type': file.type },
+      body: file,
+      signal: controller.signal,
+    });
+    if (!response.ok) {
+      throw new Error(`S3 upload failed: ${response.status}`);
+    }
+  } finally {
+    clearTimeout(timeout);
   }
 }
 
 export async function getDownloadUrl(soundId: string): Promise<string> {
-  const result = await apiGet<{ downloadUrl: string }>(`/api/soundboard/${soundId}/download-url`);
+  const result = await apiGet<{ downloadUrl: string }>(`/api/soundboard/${soundId}/download-url`, true);
   return result.downloadUrl;
 }
 

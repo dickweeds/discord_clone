@@ -90,17 +90,19 @@ export function VoiceStatusBar(): React.ReactNode {
           <DeafenIcon size={18} />
         </button>
 
-        <button
-          onClick={() => setShowSoundboard(!showSoundboard)}
-          aria-label={showSoundboard ? 'Hide soundboard' : 'Show soundboard'}
-          className={`w-8 h-8 flex items-center justify-center rounded transition-colors duration-150 ${
-            showSoundboard
-              ? 'text-accent-primary'
-              : 'text-text-muted hover:bg-bg-hover hover:text-text-primary'
-          }`}
-        >
-          <Music size={18} />
-        </button>
+        {isConnected && (
+          <button
+            onClick={() => setShowSoundboard(!showSoundboard)}
+            aria-label={showSoundboard ? 'Hide soundboard' : 'Show soundboard'}
+            className={`w-8 h-8 flex items-center justify-center rounded transition-colors duration-150 ${
+              showSoundboard
+                ? 'text-accent-primary'
+                : 'text-text-muted hover:bg-bg-hover hover:text-text-primary'
+            }`}
+          >
+            <Music size={18} />
+          </button>
+        )}
 
         <button
           onClick={() => toggleVideo()}

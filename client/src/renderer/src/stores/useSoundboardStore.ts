@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import type { SoundResponse } from 'discord-clone-shared';
-import { WS_TYPES } from 'discord-clone-shared';
+import { WS_TYPES, SOUNDBOARD_MAX_DURATION_S } from 'discord-clone-shared';
 import * as soundboardApi from '../services/soundboardApi';
 import * as mediaService from '../services/mediaService';
 import { wsClient } from '../services/wsClient';
@@ -19,7 +19,11 @@ function loadMutedUsers(): Set<string> {
 }
 
 function persistMutedUsers(users: Set<string>): void {
-  localStorage.setItem(MUTED_USERS_STORAGE_KEY, JSON.stringify([...users]));
+  try {
+    localStorage.setItem(MUTED_USERS_STORAGE_KEY, JSON.stringify([...users]));
+  } catch {
+    // localStorage full or unavailable — mute state still works in-session
+  }
 }
 
 interface SoundboardState {
@@ -32,6 +36,8 @@ interface SoundboardState {
 
   mutedSoundboardUsers: Set<string>;
   activePlayers: Map<string, string>;
+
+  _playAbort: AbortController | null;
 
   loadSounds: () => Promise<void>;
   uploadSound: (file: File, name: string, durationMs: number) => Promise<void>;
@@ -52,6 +58,7 @@ export const useSoundboardStore = create<SoundboardState>((set, get) => ({
   currentSoundId: null,
   mutedSoundboardUsers: loadMutedUsers(),
   activePlayers: new Map(),
+  _playAbort: null,
 
   loadSounds: async () => {
     set({ isLoading: true, error: null });
@@ -96,6 +103,11 @@ export const useSoundboardStore = create<SoundboardState>((set, get) => ({
     const sound = get().sounds.find((s) => s.id === soundId);
     if (!sound) return;
 
+    // Abort any in-flight play operation
+    get()._playAbort?.abort();
+    const abort = new AbortController();
+    set({ _playAbort: abort });
+
     // Stop any currently playing sound
     if (get().isPlaying) {
       get().stopSound();
@@ -103,17 +115,24 @@ export const useSoundboardStore = create<SoundboardState>((set, get) => ({
 
     try {
       const downloadUrl = await soundboardApi.getDownloadUrl(soundId);
-      const response = await fetch(downloadUrl);
+      if (abort.signal.aborted) return;
+
+      const response = await fetch(downloadUrl, { signal: abort.signal });
+      if (!response.ok) {
+        throw new Error('Failed to download sound — it may have been deleted');
+      }
       const arrayBuffer = await response.arrayBuffer();
+      if (abort.signal.aborted) return;
 
       const audioContext = mediaService.getSoundboardAudioContext();
       if (!audioContext) return;
 
       const audioBuffer = await audioContext.decodeAudioData(arrayBuffer);
+      if (abort.signal.aborted) return;
 
       // Validate duration
-      if (audioBuffer.duration > 20) {
-        set({ error: 'Sound exceeds maximum duration of 20 seconds' });
+      if (audioBuffer.duration > SOUNDBOARD_MAX_DURATION_S) {
+        set({ error: `Sound exceeds maximum duration of ${SOUNDBOARD_MAX_DURATION_S} seconds` });
         return;
       }
 
@@ -140,6 +159,7 @@ export const useSoundboardStore = create<SoundboardState>((set, get) => ({
         // WS not connected — non-critical
       }
     } catch (err) {
+      if ((err as Error).name === 'AbortError') return;
       set({ error: (err as Error).message, isPlaying: false, currentSoundId: null });
     }
   },
@@ -158,18 +178,16 @@ export const useSoundboardStore = create<SoundboardState>((set, get) => ({
   },
 
   toggleUserSoundboardMute: (userId: string) => {
-    set((state) => {
-      const mutedUsers = new Set(state.mutedSoundboardUsers);
-      const nowMuted = !mutedUsers.has(userId);
-      if (nowMuted) {
-        mutedUsers.add(userId);
-      } else {
-        mutedUsers.delete(userId);
-      }
-      persistMutedUsers(mutedUsers);
-      mediaService.muteSoundboardConsumer(userId, nowMuted);
-      return { mutedSoundboardUsers: mutedUsers };
-    });
+    const mutedUsers = new Set(get().mutedSoundboardUsers);
+    const nowMuted = !mutedUsers.has(userId);
+    if (nowMuted) {
+      mutedUsers.add(userId);
+    } else {
+      mutedUsers.delete(userId);
+    }
+    set({ mutedSoundboardUsers: mutedUsers });
+    persistMutedUsers(mutedUsers);
+    mediaService.muteSoundboardConsumer(userId, nowMuted);
   },
 
   isUserSoundboardMuted: (userId: string) => {

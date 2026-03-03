@@ -1,20 +1,20 @@
 import { eq } from 'drizzle-orm';
 import { randomUUID } from 'node:crypto';
+import type { FastifyBaseLogger } from 'fastify';
 import { sounds, users } from '../../db/schema.js';
 import type { AppDatabase } from '../../db/connection.js';
 import * as s3Service from '../../services/s3Service.js';
+import {
+  SOUNDBOARD_MAX_FILE_SIZE,
+  SOUNDBOARD_MAX_DURATION_MS,
+  SOUNDBOARD_ALLOWED_MIME_TYPES,
+} from 'discord-clone-shared';
 
-const ALLOWED_MIME_TYPES = [
-  'audio/mpeg',
-  'audio/wav',
-  'audio/ogg',
-  'audio/flac',
-  'audio/aac',
-  'audio/webm',
-];
+let log: FastifyBaseLogger;
 
-const MAX_FILE_SIZE = 20 * 1024 * 1024; // 20MB
-const MAX_DURATION_MS = 20_000; // 20s
+export function initSoundboardService(logger: FastifyBaseLogger): void {
+  log = logger;
+}
 
 function getExtensionFromMime(mimeType: string): string {
   const map: Record<string, string> = {
@@ -28,7 +28,7 @@ function getExtensionFromMime(mimeType: string): string {
   return map[mimeType] || 'bin';
 }
 
-export async function getAllSounds(db: AppDatabase) {
+export async function getAllSounds(db: AppDatabase, limit = 200) {
   const rows = await db
     .select({
       id: sounds.id,
@@ -42,7 +42,8 @@ export async function getAllSounds(db: AppDatabase) {
       createdAt: sounds.created_at,
     })
     .from(sounds)
-    .innerJoin(users, eq(sounds.uploaded_by, users.id));
+    .innerJoin(users, eq(sounds.uploaded_by, users.id))
+    .limit(limit);
 
   return rows;
 }
@@ -73,14 +74,20 @@ export async function requestUploadUrl(
   fileSize: number,
   durationMs: number,
 ): Promise<{ uploadUrl: string; s3Key: string; soundId: string }> {
-  if (!ALLOWED_MIME_TYPES.includes(contentType)) {
-    throw new SoundValidationError(`Unsupported audio format. Allowed: ${ALLOWED_MIME_TYPES.join(', ')}`);
+  if (!SOUNDBOARD_ALLOWED_MIME_TYPES.includes(contentType as typeof SOUNDBOARD_ALLOWED_MIME_TYPES[number])) {
+    throw new SoundValidationError(`Unsupported audio format. Allowed: ${SOUNDBOARD_ALLOWED_MIME_TYPES.join(', ')}`);
   }
-  if (fileSize > MAX_FILE_SIZE) {
-    throw new SoundValidationError(`File size exceeds maximum of ${MAX_FILE_SIZE / (1024 * 1024)}MB`);
+  if (fileSize <= 0 || !Number.isInteger(fileSize)) {
+    throw new SoundValidationError('File size must be a positive integer');
   }
-  if (durationMs > MAX_DURATION_MS) {
-    throw new SoundValidationError(`Duration exceeds maximum of ${MAX_DURATION_MS / 1000} seconds`);
+  if (fileSize > SOUNDBOARD_MAX_FILE_SIZE) {
+    throw new SoundValidationError(`File size exceeds maximum of ${SOUNDBOARD_MAX_FILE_SIZE / (1024 * 1024)}MB`);
+  }
+  if (durationMs <= 0 || !Number.isInteger(durationMs)) {
+    throw new SoundValidationError('Duration must be a positive integer');
+  }
+  if (durationMs > SOUNDBOARD_MAX_DURATION_MS) {
+    throw new SoundValidationError(`Duration exceeds maximum of ${SOUNDBOARD_MAX_DURATION_MS / 1000} seconds`);
   }
 
   const ext = getExtensionFromMime(contentType);
@@ -126,11 +133,10 @@ export async function deleteSound(
 
   await db.delete(sounds).where(eq(sounds.id, soundId));
 
-  // Delete from S3 — fire-and-forget, don't fail the request if S3 delete fails
   try {
     await s3Service.deleteObject(sound.s3Key);
-  } catch {
-    // S3 deletion failure is non-critical — the DB row is already gone
+  } catch (err) {
+    log.warn({ soundId, s3Key: sound.s3Key, err }, 'Failed to delete S3 object — orphaned');
   }
 }
 

@@ -19,7 +19,7 @@ export function VoiceParticipant({ userId }: VoiceParticipantProps): React.React
   const remoteMuteState = useVoiceStore((s) => s.remoteMuteState.get(userId));
   const currentUserId = useAuthStore((s) => s.user?.id);
   const isLocalUser = userId === currentUserId;
-  const isSoundboardMuted = useSoundboardStore((s) => s.isUserSoundboardMuted(userId));
+  const isSoundboardMuted = useSoundboardStore((s) => s.mutedSoundboardUsers.has(userId));
   const toggleSoundboardMute = useSoundboardStore((s) => s.toggleUserSoundboardMute);
   const activeSoundName = useSoundboardStore((s) => s.activePlayers.get(userId));
 
