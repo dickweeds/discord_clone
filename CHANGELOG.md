@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.99.152](https://github.com/dickweeds/discord_clone/compare/v0.99.151...v0.99.152) (2026-03-03)
+
+
+### Features
+
+* Add message reactions with emoji picker and real-time sync ([591a558](https://github.com/dickweeds/discord_clone/commit/591a5584eae77327e52629bb90d81cb7e5d71c1d))
+
 ## [0.99.151](https://github.com/dickweeds/discord_clone/compare/v0.99.150...v0.99.151) (2026-03-02)
 
 
